@@ -1,0 +1,21 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY ./backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./backend .
+
+ENV FLASK_APP=run.py
+ENV FLASK_ENV=production
+ENV DATABASE_URL=sqlite:///ladys_essence.db
+ENV JWT_SECRET_KEY=production-secret-key
+
+RUN flask db init || true
+RUN flask db migrate -m "Initial migration" || true
+RUN flask db upgrade || true
+
+EXPOSE 5000
+
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "run:app"]

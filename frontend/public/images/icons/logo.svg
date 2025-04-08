@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 80">
+  <style>
+    .primary { fill: #0F4C81; }
+    .secondary { fill: #36B37E; }
+    .accent { fill: #F5B700; }
+  </style>
+  <g>
+    <!-- Stylized "L" shape -->
+    <path class="primary" d="M30,10 L30,60 L60,60 L60,50 L40,50 L40,10 Z"/>
+    <!-- Stylized "E" shape -->
+    <path class="secondary" d="M70,10 L70,60 L100,60 L100,50 L80,50 L80,40 L95,40 L95,30 L80,30 L80,20 L100,20 L100,10 Z"/>
+  </g>
+  <text x="110" y="45" font-family="Montserrat, sans-serif" font-size="24" font-weight="700" class="primary">The Lady's</text>
+  <text x="110" y="70" font-family="Montserrat, sans-serif" font-size="28" font-weight="700" class="accent">Essence</text>
+</svg>
