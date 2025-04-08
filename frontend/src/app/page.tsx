@@ -39,6 +39,50 @@ export default function Home() {
           </div>
         </div>
       </section>
+      {/* Key Features Section */}
+      <section className="py-5">
+        <div className="container">
+          <h2 className="text-center mb-5">Key Features</h2>
+          <div className="row">
+            <div className="col-md-6 col-lg-3 mb-4">
+              <div className="card h-100">
+                <div className="card-body text-center">
+                  <img src="/images/icons/calendar.svg" alt="Cycle Tracking" className="mb-3" style={{ width: '64px', height: '64px' }} />
+                  <h3>Cycle Tracking</h3>
+                  <p>Track your menstrual cycle with personalized insights and predictions.</p>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-6 col-lg-3 mb-4">
+              <div className="card h-100">
+                <div className="card-body text-center">
+                  <img src="/images/icons/nutrition.svg" alt="Nutrition Guidance" className="mb-3" style={{ width: '64px', height: '64px' }} />
+                  <h3>Nutrition Guidance</h3>
+                  <p>Personalized nutrition plans and meal tracking for optimal health.</p>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-6 col-lg-3 mb-4">
+              <div className="card h-100">
+                <div className="card-body text-center">
+                  <img src="/images/icons/appointment.svg" alt="Appointments" className="mb-3" style={{ width: '64px', height: '64px' }} />
+                  <h3>Appointments</h3>
+                  <p>Schedule healthcare appointments and telehealth consultations.</p>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-6 col-lg-3 mb-4">
+              <div className="card h-100">
+                <div className="card-body text-center">
+                  <img src="/images/icons/user.svg" alt="Family Dashboard" className="mb-3" style={{ width: '64px', height: '64px' }} />
+                  <h3>Family Dashboard</h3>
+                  <p>Manage your family's health collectively with parental controls.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Multi-Platform Access */}
       <section className="py-5" style={{ backgroundColor: '#f5f7fa' }}>
