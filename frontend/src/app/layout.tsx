@@ -120,7 +120,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
             <div className="row pb-4">
               <div className="col-md-6 col-lg-4 mb-3">
                 <div className="footer-logo mb-2">
-                  <img src="/images/logo.svg" alt="The Lady's Essence" height="40" />
+                  <img src="/images/icons/logo.svg" alt="The Lady's Essence" height="40" />
                 </div>
                 <p>
                   Empowering Women, Enhancing Lives through personalized health insights, SMS
@@ -202,8 +202,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
               <div className="col-md-6 col-lg-3 mb-3">
                 <h4 className="footer-heading mb-3">Contact Us</h4>
                 <ul className="list-unstyled">
-                  <li>Email: info@ladysessence.com</li>
-                  <li>Phone: +123-456-7890</li>
+                  <li>Email: ladysessence1@gmail.com
+                  </li>
+                  <li>Phone: +250-780-784-924</li>
                 </ul>
               </div>
             </div>
