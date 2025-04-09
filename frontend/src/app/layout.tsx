@@ -55,8 +55,8 @@ export default function RootLayout({ children }: RootLayoutProps) {
                 </div>
               </a>
               
-              <button
-                className="navbar-toggler"
+                <button
+                className="navbar-toggler bg-dark navbar-toggler-custom"
                 type="button"
                 data-bs-toggle="collapse"
                 data-bs-target="#navbarNav"

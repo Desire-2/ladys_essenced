@@ -614,4 +614,49 @@ img {
 /* Optional: Adjusting the Navbar Toggler (if needed) */
 .navbar-toggler {
   border: none;
+  background-color: transparent;
+  cursor: pointer;
+  padding: var(--space-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.navbar-toggler-icon {
+  width: 30px;
+  height: 3px;
+  background-color: var(--primary);
+  transition: background-color var(--transition-fast);
+  color: rgb(11, 1, 1);
+}
+
+.navbar-toggler-custom .navbar-toggler-icon {
+  background-color: black;
+  transition: background-color var(--transition-fast);
+
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  box-shadow: var(--shadow-sm);
+
+  &:hover {
+    background-color: var(--primary-light);
+  }
+  &:active {
+    background-color: var(--primary-dark);
+  }
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(15, 76, 129, 0.25);
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(15, 76, 129, 0.25);
+  }
+  &:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(15, 76, 129, 0.25);
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(15, 76, 129, 0.25);
+  }
+  
 }
