@@ -3,235 +3,296 @@ import Image from 'next/image';
 
 export default function Home() {
   return (
-        <div>
+    <div className="overflow-hidden">
       {/* Hero Section */}
-      <section className="py-5" style={{ backgroundColor: '#0F4C81', color: 'white' }}>
+      <section className="hero-section position-relative" style={{
+        background: 'linear-gradient(135deg, #0F4C81 0%, #1a365d 100%)',
+        color: 'white',
+        padding: '6rem 0'
+      }}>
         <div className="container">
-          <div className="row">
-            <div className="col-md-6">
-              <h1 className="mb-4" style={{ color: 'white' }}>The Lady's Essence</h1>
-              <h2 className="mb-4" style={{ color: '#F5B700' }}>Empowering Women, Enhancing Lives</h2>
-              <p className="mb-4">
-                An inclusive health platform offering menstrual cycle tracking, pregnancy care guidance, 
-                and educational resources through a mobile app and USSD service.
+          <div className="row align-items-center">
+            <div className="col-lg-6 mb-5 mb-lg-0">
+              <h1 className="display-3 fw-bold mb-4 animate__animated animate__fadeInDown">
+                The Lady's Essence
+              </h1>
+              <h2 className="h2 mb-4" style={{ color: '#F5B700' }}>
+                <span className="typed-text">Empowering Women, Enhancing Lives</span>
+              </h2>
+              <p className="lead mb-5">
+                Your comprehensive health companion offering menstrual tracking, pregnancy care, 
+                and educational resources through mobile and USSD services.
               </p>
-              <div className="mt-4">
-                <Link href="/register" className="btn btn-accent btn-lg">Get Started</Link>
-                <Link href="/features" className="btn btn-outline btn-lg ml-2" style={{ color: 'white', borderColor: 'white' }}>Learn More</Link>
+              <div className="d-flex gap-3">
+                <Link href="/register" className="btn btn-accent btn-lg px-5 py-3 rounded-pill">
+                  Get Started Free
+                </Link>
+                <Link href="/features" className="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
+                  Learn More
+                </Link>
               </div>
             </div>
-            <div className="col-md-6">
-              <div className="text-center">
-                <img 
-                  src="/images/icons/log.png" 
-                  alt="The Lady's Essence" 
-                  className="img-fluid" 
-                  style={{
-                    maxWidth: '80%',
-                    border: '5px solid #F5B700',
-                    borderRadius: '15px',
-                    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-                    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-                  }}
+            <div className="col-lg-6">
+              <div className="hero-illustration position-relative">
+                <Image
+                  src="/images/icons/log.png"
+                  alt="Health Tracking"
+                  width={600}
+                  height={500}
+                  className="img-fluid floating-animation"
                 />
               </div>
             </div>
           </div>
         </div>
       </section>
+
       {/* Key Features Section */}
-      <section className="py-5">
+      <section className="py-6 bg-light">
         <div className="container">
-          <h2 className="text-center mb-5">Key Features</h2>
-          <div className="row">
-            <div className="col-md-6 col-lg-3 mb-4">
-              <div className="card h-100">
-                <div className="card-body text-center">
-                  <img src="/images/icons/calendar.svg" alt="Cycle Tracking" className="mb-3" style={{ width: '64px', height: '64px' }} />
-                  <h3>Cycle Tracking</h3>
-                  <p>Track your menstrual cycle with personalized insights and predictions.</p>
+          <div className="text-center mb-6">
+            <h2 className="display-5 fw-bold mb-4">Key Features</h2>
+            <p className="lead text-muted">Comprehensive tools for holistic women's health management</p>
+          </div>
+          <div className="row g-4">
+            {[
+              { 
+                icon: 'calendar',
+                title: 'Cycle Tracking',
+                text: 'AI-powered predictions and personalized health insights'
+              },
+              { 
+                icon: 'nutrition',
+                title: 'Nutrition Guidance',
+                text: 'Custom meal plans and dietary tracking'
+              },
+              { 
+                icon: 'appointment',
+                title: 'Appointments',
+                text: 'Seamless healthcare provider bookings'
+              },
+              { 
+                icon: 'user',
+                title: 'Family Dashboard',
+                text: 'Collaborative health management'
+              }
+            ].map((feature, index) => (
+              <div key={index} className="col-md-6 col-lg-3">
+                <div className="feature-card card h-100 border-0 shadow-lg hover-effect">
+                  <div className="card-body p-4 text-center">
+                    <div className="icon-wrapper mb-4">
+                      <Image
+                        src={`/images/icons/${feature.icon}.svg`}
+                        alt={feature.title}
+                        width={80}
+                        height={80}
+                      />
+                    </div>
+                    <h3 className="h5 fw-bold mb-3">{feature.title}</h3>
+                    <p className="text-muted mb-0">{feature.text}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="col-md-6 col-lg-3 mb-4">
-              <div className="card h-100">
-                <div className="card-body text-center">
-                  <img src="/images/icons/nutrition.svg" alt="Nutrition Guidance" className="mb-3" style={{ width: '64px', height: '64px' }} />
-                  <h3>Nutrition Guidance</h3>
-                  <p>Personalized nutrition plans and meal tracking for optimal health.</p>
-                </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Multi-Platform Section */}
+      <section className="py-6">
+        <div className="container">
+          <div className="row g-5 align-items-center">
+            <div className="col-lg-6 order-lg-1">
+              <div className="platform-illustration">
+                <Image
+                  src="/images/others/ussd.png"
+                  alt="Multi-Platform Access"
+                  width={600}
+                  height={250}
+                  className="img-fluid"
+                />
               </div>
             </div>
-            <div className="col-md-6 col-lg-3 mb-4">
-              <div className="card h-100">
-                <div className="card-body text-center">
-                  <img src="/images/icons/appointment.svg" alt="Appointments" className="mb-3" style={{ width: '64px', height: '64px' }} />
-                  <h3>Appointments</h3>
-                  <p>Schedule healthcare appointments and telehealth consultations.</p>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-6 col-lg-3 mb-4">
-              <div className="card h-100">
-                <div className="card-body text-center">
-                  <img src="/images/icons/user.svg" alt="Family Dashboard" className="mb-3" style={{ width: '64px', height: '64px' }} />
-                  <h3>Family Dashboard</h3>
-                  <p>Manage your family's health collectively with parental controls.</p>
-                </div>
+            <div className="col-lg-6">
+              <h2 className="display-6 fw-bold mb-4">Access Anywhere, Anytime</h2>
+              <div className="d-grid gap-4">
+                {[
+                  {icon: 'globe', text: 'Web & Mobile Applications'},
+                  {icon: 'phone', text: 'USSD Service for Feature Phones'},
+                  {icon: 'bell', text: 'SMS Reminders & Notifications'},
+                  {icon: 'wifi-off', text: 'Offline Functionality'}
+                ].map((item, index) => (
+                  <div key={index} className="d-flex gap-3">
+                    <div className="icon-box bg-primary text-white rounded-circle p-3">
+                      <i className={`bi bi-${item.icon} fs-4`}></i>
+                    </div>
+                    <div>
+                      <h3 className="h5 mb-0">{item.text}</h3>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Multi-Platform Access */}
-      <section className="py-5" style={{ backgroundColor: '#f5f7fa' }}>
+      {/* Waiting List Section */}
+      <section className="py-6 bg-gradient-waiting" style={{
+        background: 'linear-gradient(135deg, #F5B700 0%, #ffd700 100%)',
+        color: '#0F4C81'
+      }}>
         <div className="container">
-          <h2 className="text-center mb-5">Access Anywhere, Anytime</h2>
           <div className="row align-items-center">
-            <div className="col-md-6">
-              <h3>Multi-Platform Accessibility</h3>
-              <p className="mb-4">
-                The Lady's Essence is designed to be accessible to all women, regardless of their 
-                technological resources. Our platform offers:
-              </p>
-              <ul>
-                <li className="mb-2">Web application for desktop and mobile browsers</li>
-                <li className="mb-2">USSD service for feature phones without internet</li>
-                <li className="mb-2">SMS reminders and notifications</li>
-                <li className="mb-2">Offline mode for areas with limited connectivity</li>
-              </ul>
-            </div>
-            <div className="col-md-6 text-center">
-              <div className="card">
-                <div className="card-body">
-                  <h4 style={{ color: '#36B37E' }}>Inclusive by Design</h4>
-                  <p>
-                    Our dual-platform approach ensures that women in rural and underserved areas 
-                    can access vital health information and tracking tools, even without smartphones.
-                  </p>
-                </div>
+            <div className="col-lg-8 mx-auto text-center">
+              <div className="d-inline-block p-4 rounded-3 shadow-lg bg-white">
+                <h2 className="display-5 fw-bold mb-3">Join Our Early Access</h2>
+                <p className="lead mb-4">
+                  Be among the first to experience The Lady's Essence! Join our waiting list for
+                  exclusive early access and updates.
+                </p>
+                <a
+                  href="https://docs.google.com/forms/d/e/1FAIpQLScaT-0gsJd3yDhqaxRjAGAK8GwmnsyYYw9L8z-1tlXBEvjm6A/viewform?usp=sharing"
+                  className="btn btn-primary btn-lg px-5 py-3 rounded-pill"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <i className="bi bi-arrow-right-circle-fill me-2"></i>
+                  Join Waiting List
+                </a>
+              </div>
+              <div className="mt-4 text-white">
+                <small>Limited spots available - Priority access for early signups</small>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-5">
+
+      {/* Testimonials Section */}
+      <section className="py-6 bg-gradient-primary">
         <div className="container">
-          <h2 className="text-center mb-5">What Our Users Say</h2>
-          <div className="row">
-            <div className="col-md-4 mb-4">
-              <div className="card h-100">
-                <div className="card-body">
-                  <p className="font-italic">"The Lady's Essence has transformed how I manage my health. The cycle tracking is accurate and the nutrition guidance has been invaluable during my pregnancy."</p>
-                  <div className="mt-3">
-                    <strong>Sarah M.</strong><br />
-                    <small>User since 2023</small>
+          <div className="text-center mb-6">
+            <h2 className="display-5 fw-bold text-white mb-4">User Stories</h2>
+            <p className="lead text-light">Hear from our empowered community</p>
+          </div>
+          <div className="row g-4">
+            {[
+              {
+                text: "The Lady's Essence transformed how I manage my health. The cycle tracking is incredibly accurate!",
+                author: "Sarah M.",
+                role: "User since 2023"
+              },
+              {
+                text: "As a mother, the family dashboard helps me support my daughters' health journey.",
+                author: "Rebecca T.",
+                role: "Parent user"
+              },
+              {
+                text: "The USSD service is a lifeline in my rural community with limited internet access.",
+                author: "Grace K.",
+                role: "USSD user"
+              }
+            ].map((testimonial, index) => (
+              <div key={index} className="col-md-4">
+                <div className="testimonial-card card h-100 border-0 shadow-lg">
+                  <div className="card-body p-4">
+                    <div className="d-flex align-items-center mb-4">
+                      <div className="avatar-placeholder rounded-circle me-3"></div>
+                      <div>
+                        <h3 className="h6 fw-bold mb-0">{testimonial.author}</h3>
+                        <small className="text-muted">{testimonial.role}</small>
+                      </div>
+                    </div>
+                    <p className="mb-0">"{testimonial.text}"</p>
+                    <div className="quote-icon mt-4">
+                      <i className="bi bi-quote fs-1 text-primary opacity-25"></i>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="col-md-4 mb-4">
-              <div className="card h-100">
-                <div className="card-body">
-                  <p className="font-italic">"As a mother of two teenage daughters, the family dashboard helps me support them through their menstrual health journey while respecting their privacy."</p>
-                  <div className="mt-3">
-                    <strong>Rebecca T.</strong><br />
-                    <small>Parent user</small>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-4 mb-4">
-              <div className="card h-100">
-                <div className="card-body">
-                  <p className="font-italic">"I live in a rural area with limited internet. The USSD service has been a lifeline for tracking my cycle and receiving health reminders."</p>
-                  <div className="mt-3">
-                    <strong>Grace K.</strong><br />
-                    <small>USSD user</small>
-                  </div>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Subscription Plans */}
-      <section className="py-5" style={{ backgroundColor: '#f5f7fa' }}>
+      {/* Pricing Section */}
+      <section className="py-6">
         <div className="container">
-          <h2 className="text-center mb-5">Subscription Plans</h2>
-          <div className="row">
-            <div className="col-md-4 mb-4">
-              <div className="card h-100">
-                <div className="card-header text-center">
-                  <h3>Basic</h3>
-                  <p className="mb-0">Free</p>
-                </div>
-                <div className="card-body">
-                  <ul>
-                    <li>Basic cycle tracking</li>
-                    <li>Limited educational content</li>
-                    <li>Community forum access</li>
-                  </ul>
-                </div>
-                <div className="card-footer text-center">
-                  <Link href="/register" className="btn btn-outline">Sign Up Free</Link>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-4 mb-4">
-              <div className="card h-100" style={{ borderColor: '#36B37E' }}>
-                <div className="card-header text-center" style={{ backgroundColor: '#36B37E', color: 'white' }}>
-                  <h3>Menstrual Health</h3>
-                  <p className="mb-0">$5/year</p>
-                </div>
-                <div className="card-body">
-                  <ul>
-                    <li>Advanced cycle tracking</li>
-                    <li>Personalized health insights</li>
-                    <li>PMS management tools</li>
-                    <li>Full educational content</li>
-                    <li>Priority support</li>
-                  </ul>
-                </div>
-                <div className="card-footer text-center">
-                  <Link href="/register" className="btn btn-secondary">Subscribe Now</Link>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-4 mb-4">
-              <div className="card h-100" style={{ borderColor: '#F5B700' }}>
-                <div className="card-header text-center" style={{ backgroundColor: '#F5B700', color: 'white' }}>
-                  <h3>Family Support</h3>
-                  <p className="mb-0">$3/month</p>
-                </div>
-                <div className="card-body">
-                  <ul>
-                    <li>Full parent dashboard</li>
-                    <li>Health education resources</li>
-                    <li>Family health management</li>
-                    <li>Emergency support</li>
-                    <li>Premium educational content</li>
-                  </ul>
-                </div>
-                <div className="card-footer text-center">
-                  <Link href="/register" className="btn btn-accent">Subscribe Now</Link>
+          <div className="text-center mb-6">
+            <h2 className="display-5 fw-bold mb-4">Flexible Plans</h2>
+            <p className="lead text-muted">Choose the perfect plan for your needs</p>
+          </div>
+          <div className="row g-4">
+            {[
+              {
+                title: 'Basic',
+                price: 'Free',
+                features: ['Basic Cycle Tracking', 'Community Access', 'Limited Content'],
+                accent: false
+              },
+              {
+                title: 'Menstrual Health',
+                price: '$5/year',
+                features: ['Advanced Tracking', 'Health Insights', 'Full Content', 'Priority Support'],
+                accent: true
+              },
+              {
+                title: 'Family Support',
+                price: '$3/month',
+                features: ['Family Dashboard', 'Premium Content', 'Emergency Support', 'Health Management'],
+                accent: false
+              }
+            ].map((plan, index) => (
+              <div key={index} className="col-lg-4">
+                <div className={`pricing-card card h-100 border-0 ${plan.accent ? 'bg-primary text-white' : 'shadow-lg'} hover-effect`}>
+                  <div className="card-body p-4">
+                    <div className="text-center mb-4">
+                      <h3 className="h2 fw-bold mb-2">{plan.title}</h3>
+                      <div className="price-display mb-4">
+                        <span className="display-4 fw-bold">{plan.price}</span>
+                      </div>
+                    </div>
+                    <ul className="list-unstyled mb-4">
+                      {plan.features.map((feature, fIndex) => (
+                        <li key={fIndex} className="d-flex align-items-center mb-3">
+                          <i className={`bi bi-check2-circle me-2 ${plan.accent ? 'text-white' : 'text-primary'}`}></i>
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="text-center mt-auto">
+                      <Link href="/register" className={`btn btn-lg ${plan.accent ? 'btn-light' : 'btn-primary'} rounded-pill px-5`}>
+                        Get Started
+                      </Link>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Call to Action */}
-      <section className="py-5" style={{ backgroundColor: '#0F4C81', color: 'white' }}>
+      {/* CTA Section */}
+      <section className="cta-section py-6" style={{
+        background: 'linear-gradient(135deg, #0F4C81 0%, #1a365d 100%)',
+        color: 'white'
+      }}>
         <div className="container text-center">
-          <h2 className="mb-4" style={{ color: 'white' }}>Ready to Take Control of Your Health?</h2>
-          <p className="mb-4">Join thousands of women who are empowering themselves with personalized health insights.</p>
-          <Link href="/register" className="btn btn-accent btn-lg">Get Started Today</Link>
+          <div className="mx-auto" style={{ maxWidth: '800px' }}>
+            <h2 className="display-5 fw-bold mb-4">Start Your Health Journey Today</h2>
+            <p className="lead mb-5">Join thousands of women taking control of their health with personalized insights</p>
+            <div className="d-flex gap-3 justify-content-center">
+              <Link href="/register" className="btn btn-accent btn-lg px-5 py-3 rounded-pill">
+                Get Started Free
+              </Link>
+              <Link href="/features" className="btn btn-outline-light btn-lg px-5 py-3 rounded-pill">
+                Explore Features
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
     </div>

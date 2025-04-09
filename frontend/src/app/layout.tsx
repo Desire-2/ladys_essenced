@@ -13,7 +13,6 @@ interface RootLayoutProps {
 }
 
 export default function RootLayout({ children }: RootLayoutProps) {
-  // Load Bootstrap JS on client side
   useEffect(() => {
     import('bootstrap/dist/js/bootstrap.bundle.min.js');
   }, []);
@@ -21,8 +20,6 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
       <head>
-        <link rel="stylesheet" href="/css/styles.css" />
-        <script src="/js/main.js" defer></script>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>The Lady's Essence</title>
@@ -32,75 +29,60 @@ export default function RootLayout({ children }: RootLayoutProps) {
           href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@300;400;500;600&display=swap"
           rel="stylesheet"
         />
+        <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
       </head>
       <body className={inter.className}>
-        {/* Header */}
-        <header>
-          <nav className="navbar navbar-expand-lg navbar-light bg-light shadow-sm">
+        {/* Enhanced Header */}
+        <header className="sticky-top">
+          <nav className="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm" style={{
+            background: 'linear-gradient(135deg,rgb(250, 247, 248) 0%,rgb(249, 243, 246) 100%)'
+          }}>
             <div className="container">
-              {/* Branding: Logo + Company Name with Divider */}
               <a className="navbar-brand" href="/">
                 <div className="d-flex align-items-center">
                   <img
                     src="/images/icons/logo.svg"
                     alt="The Lady's Essence"
-                    className="brand-logo"
-                    height="40"
+                    className="brand-logo me-2"
+                    height="50"
                   />
-                  <div className="ms-3 ps-3 border-start">
-                    <span className="fw-bold text-uppercase brand-name">Lady's Essence</span>
-                  </div>
+                  <span className="h3 mb-0 fw-bold text-uppercase brand-name text-black">
+                    Lady's Essence
+                  </span>
                 </div>
               </a>
-              {/* Toggler Button */}
+              
               <button
                 className="navbar-toggler"
                 type="button"
                 data-bs-toggle="collapse"
                 data-bs-target="#navbarNav"
-                aria-controls="navbarNav"
-                aria-expanded="false"
-                aria-label="Toggle navigation"
               >
                 <span className="navbar-toggler-icon"></span>
               </button>
-              {/* Navigation Items & Authentication Buttons with Extra Left Margin */}
-              <div
-                className="collapse navbar-collapse justify-content-end ms-lg-5"
-                id="navbarNav"
-              >
-                <ul className=" navbar-nav me-rg mb-4 mb-lg-11">
-                  <li className="nav-item">
-                    <a className="nav-link active" aria-current="page" href="/">
+
+              <div className="collapse navbar-collapse" id="navbarNav">
+                <ul className="navbar-nav ms-auto mb-2 mb-lg-0">
+                  <li className="nav-item mx-2">
+                    <a className="nav-link text-black position-relative hover-underline" href="/">
                       Home
                     </a>
                   </li>
-                  <li className="nav-item">
-                    <a className="nav-link" href="/about">
+                  <li className="nav-item mx-2">
+                    <a className="nav-link text-black position-relative hover-underline" href="/about">
                       About
                     </a>
                   </li>
-                  <li className="nav-item">
-                    <a className="nav-link" href="/features">
-                      Features
-                    </a>
-                  </li>
-                  <li className="nav-item">
-                    <a className="nav-link" href="/pricing">
-                      Pricing
-                    </a>
-                  </li>
-                  <li className="nav-item">
-                    <a className="nav-link" href="/contact">
-                      Contact
-                    </a>
-                  </li>
                 </ul>
-                <div className="d-flex align-items-center">
-                  <a href="/login" className="btn btn-outline-primary me-2">
+                
+                <div className="d-flex ms-lg-4">
+                  <a href="/login" className="btn btn-outline-light text-primary btn-hover-effect me-2">
                     Login
                   </a>
-                  <a href="/register" className="btn btn-primary">
+                  <a href="/register" className="btn btn-light text-primary btn-hover-effect">
                     Register
                   </a>
                 </div>
@@ -109,109 +91,112 @@ export default function RootLayout({ children }: RootLayoutProps) {
           </nav>
         </header>
 
-        {/* Main Content */}
-        <main className="py-4">
-          <AppProviders>{children}</AppProviders>
+        {/* Main Content with Gradient Background */}
+        <main className="py-5" style={{
+          background: 'linear-gradient(to bottom right,rgb(4, 37, 110) 0%, #fff 100%)',
+          minHeight: 'calc(100vh - 160px)'
+        }}>
+          <div className="container mt-4 mb-5">
+            <AppProviders>
+              <div className="bg-white rounded-4 shadow-sm p-4 p-md-5">
+                {children}
+              </div>
+            </AppProviders>
+          </div>
         </main>
 
-        {/* Footer */}
-        <footer className="footer bg-dark text-light pt-5">
+        {/* Enhanced Footer */}
+        <footer className="footer bg-dark text-light pt-5 mt-auto">
           <div className="container">
-            <div className="row pb-4">
-              <div className="col-md-6 col-lg-4 mb-3">
-                <div className="footer-logo mb-2">
-                  <img src="/images/icons/logo.svg" alt="The Lady's Essence" height="40" />
+            <div className="row g-4 pb-4">
+              <div className="col-lg-4 mb-4">
+                <div className="footer-brand d-flex align-items-center mb-3">
+                  <img
+                    src="/images/icons/logo.svg"
+                    alt="Logo"
+                    className="me-3"
+                    height="40"
+                  />
+                  <h3 className="h5 mb-0 text-white">Lady's Essence</h3>
                 </div>
-                <p>
-                  Empowering Women, Enhancing Lives through personalized health insights, SMS
-                  reminders, and culturally sensitive content.
+                <p className="text-muted">
+                  Empowering women through holistic health management and community support.
                 </p>
+                <div className="social-icons mt-4">
+                  <a href="#" className="text-light me-3">
+                    <i className="fab fa-facebook fa-lg"></i>
+                  </a>
+                  <a href="#" className="text-light me-3">
+                    <i className="fab fa-twitter fa-lg"></i>
+                  </a>
+                  <a href="#" className="text-light me-3">
+                    <i className="fab fa-instagram fa-lg"></i>
+                  </a>
+                  <a href="#" className="text-light">
+                    <i className="fab fa-linkedin fa-lg"></i>
+                  </a>
+                </div>
               </div>
-              <div className="col-md-6 col-lg-2 mb-3">
-                <h4 className="footer-heading mb-3">Quick Links</h4>
+
+              <div className="col-lg-2 col-md-4 mb-4">
+                <h5 className="text-uppercase text-primary mb-3">Quick Links</h5>
                 <ul className="list-unstyled">
-                  <li>
-                    <a href="/" className="text-light text-decoration-none">
-                      Home
-                    </a>
-                  </li>
-                  <li>
-                    <a href="/about" className="text-light text-decoration-none">
-                      About
-                    </a>
-                  </li>
-                  <li>
-                    <a href="/features" className="text-light text-decoration-none">
-                      Features
-                    </a>
-                  </li>
-                  <li>
-                    <a href="/pricing" className="text-light text-decoration-none">
-                      Pricing
-                    </a>
-                  </li>
-                  <li>
-                    <a href="/contact" className="text-light text-decoration-none">
-                      Contact
-                    </a>
-                  </li>
+                  {['Home', 'About', 'Features', 'Contact'].map((item) => (
+                    <li key={item} className="mb-2">
+                      <a href={`/${item.toLowerCase()}`} className="text-light text-decoration-none hover-underline">
+                        {item}
+                      </a>
+                    </li>
+                  ))}
                 </ul>
               </div>
-              <div className="col-md-6 col-lg-3 mb-3">
-                <h4 className="footer-heading mb-3">Features</h4>
+
+              <div className="col-lg-3 col-md-4 mb-4">
+                <h5 className="text-uppercase text-primary mb-3">Resources</h5>
                 <ul className="list-unstyled">
-                  <li>
-                    <a
-                      href="/features#cycle-tracking"
-                      className="text-light text-decoration-none"
-                    >
-                      Cycle Tracking
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="/features#pregnancy-care"
-                      className="text-light text-decoration-none"
-                    >
-                      Pregnancy Care
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="/features#family-support"
-                      className="text-light text-decoration-none"
-                    >
-                      Family Support
-                    </a>
-                  </li>
-                  <li>
-                    <a href="/features#nutrition" className="text-light text-decoration-none">
-                      Nutrition Guidance
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="/features#appointments"
-                      className="text-light text-decoration-none"
-                    >
-                      Appointments
-                    </a>
-                  </li>
+                  {['Blog', 'Help Center', 'Privacy Policy', 'Terms of Service'].map((item) => (
+                    <li key={item} className="mb-2">
+                      <a href="#" className="text-light text-decoration-none hover-underline">
+                        {item}
+                      </a>
+                    </li>
+                  ))}
                 </ul>
               </div>
-              <div className="col-md-6 col-lg-3 mb-3">
-                <h4 className="footer-heading mb-3">Contact Us</h4>
+
+              <div className="col-lg-3 col-md-4 mb-4">
+                <h5 className="text-uppercase text-primary mb-3">Contact</h5>
                 <ul className="list-unstyled">
-                  <li>Email: ladysessence1@gmail.com
+                  <li className="mb-3">
+                    <i className="fas fa-envelope me-2 text-primary"></i>
+                    ladysessence1@gmail.com
                   </li>
-                  <li>Phone: +250-780-784-924</li>
+                  <li className="mb-3">
+                    <i className="fas fa-phone me-2 text-primary"></i>
+                    +250-780-784-924
+                  </li>
+                  <li className="mb-3">
+                    <i className="fas fa-map-marker-alt me-2 text-primary"></i>
+                    Kigali, Rwanda
+                  </li>
                 </ul>
               </div>
             </div>
-            <div className="footer-bottom border-top border-secondary pt-3">
-              <p className="mb-0 text-center">
-                &copy; {new Date().getFullYear()} The Lady's Essence. All rights reserved.
-              </p>
+
+            <div className="footer-bottom border-top border-dark pt-4">
+              <div className="row">
+                <div className="col-md-6 text-center text-md-start mb-3 mb-md-0">
+                  <p className="mb-0 text-muted">
+                    &copy; {new Date().getFullYear()} Lady's Essence. All rights reserved.
+                  </p>
+                </div>
+                <div className="col-md-6 text-center text-md-end">
+                  <div className="d-inline-flex">
+                    <a href="#" className="text-muted me-3 hover-underline">Privacy Policy</a>
+                    <a href="#" className="text-muted hover-underline">Terms of Use</a>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </footer>
