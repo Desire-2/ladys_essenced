@@ -14,23 +14,22 @@ export const AuthProvider = ({ children }) => {
   // Check if user is logged in on initial load
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token'); // Changed from 'token'
       if (token) {
         try {
           const response = await authAPI.getProfile();
           setUser(response.data);
         } catch (err) {
           console.error('Failed to fetch user profile:', err);
-          localStorage.removeItem('token');
+          localStorage.removeItem('access_token'); // Changed here
           localStorage.removeItem('refreshToken');
         }
       }
       setLoading(false);
     };
-
     checkAuth();
   }, []);
-
+  
   // Login function
   const login = async (credentials) => {
     try {
