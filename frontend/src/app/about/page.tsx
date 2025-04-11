@@ -183,14 +183,14 @@ export default function About() {
             }, {
               name: "Nina Joevanice Uwimpukwe",
               role: "Cofounder & Content Strategist",
-              image: "https://source.unsplash.com/featured/?woman,portrait",
+              image: "images/founders/Nina.jpeg",
               contact: "+250 (781) 300-826",
               email: "ninauwimpuhwe@gmail.com",
               bio: "Health communication specialist ensuring cultural relevance"
             }, {
               name: "Delphine Iradukunda",
               role: "Cofounder & Operations Lead",
-              image: "https://source.unsplash.com/featured/?woman,professional",
+              image: "images/founders/Delphine.jpeg",
               contact: "+250 (791) 305-400",
               email: "delphineiradukunda03@gmail.com",
               bio: "Strategic partnership developer and project coordinator"

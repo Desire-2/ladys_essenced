@@ -39,6 +39,8 @@ def create_app():
     from app.routes.notifications import notifications_bp
     from app.routes.content import content_bp
     from app.routes.parents import parents_bp
+    from app.routes.ussd import ussd_bp
+
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(cycle_logs_bp, url_prefix='/api/cycle-logs')
@@ -47,6 +49,7 @@ def create_app():
     app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
     app.register_blueprint(content_bp, url_prefix='/api/content')
     app.register_blueprint(parents_bp, url_prefix='/api/parents')
+    app.register_blueprint(ussd_bp, url_prefix='/api/ussd')
     
     # Create database tables
     with app.app_context():
