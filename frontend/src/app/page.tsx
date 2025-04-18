@@ -59,22 +59,22 @@ export default function Home() {
               { 
                 icon: 'calendar',
                 title: 'Cycle Tracking',
-                text: 'AI-powered predictions and personalized health insights'
+                text: 'Track your menstrual cycle with personalized insights and predictions.'
               },
               { 
                 icon: 'nutrition',
                 title: 'Nutrition Guidance',
-                text: 'Custom meal plans and dietary tracking'
+                text: 'Personalized nutrition plans and meal tracking for optimal health.'
               },
               { 
                 icon: 'appointment',
                 title: 'Appointments',
-                text: 'Seamless healthcare provider bookings'
+                text: 'Manage your family&s health collectively with parental controls.'
               },
               { 
                 icon: 'user',
                 title: 'Family Dashboard',
-                text: 'Collaborative health management'
+                text: 'Schedule healthcare appointments and telehealth consultations.'
               }
             ].map((feature, index) => (
               <div key={index} className="col-md-6 col-lg-3">
@@ -115,6 +115,20 @@ export default function Home() {
             </div>
             <div className="col-lg-6">
               <h2 className="display-6 fw-bold mb-4">Access Anywhere, Anytime</h2>
+              <p className="lead mb-4">
+                Whether on the go or offline, The Lady's Essence is available on multiple platforms
+                to ensure you never miss a beat in your health journey.
+              </p>
+              <p className="text-muted mb-4">
+                Our platform is designed to be accessible for everyone, including those with limited
+                internet access. With our USSD service, you can access essential features without
+                needing a smartphone or internet connection.
+              </p>
+
+              <p className="text-muted mb-4">
+                Our web and mobile applications are designed to provide a seamless experience,
+                ensuring you have all the tools you need at your fingertips.
+              </p>
               <div className="d-grid gap-4">
                 {[
                   {icon: 'globe', text: 'Web & Mobile Applications'},
@@ -137,44 +151,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Waiting List Section */}
-      <section className="py-6 bg-gradient-waiting" style={{
-        background: 'linear-gradient(135deg, #F5B700 0%, #ffd700 100%)',
-        color: '#0F4C81'
-      }}>
-        <div className="container">
-          <div className="row align-items-center">
-            <div className="col-lg-8 mx-auto text-center">
-              <div className="d-inline-block p-4 rounded-3 shadow-lg bg-white">
-                <h2 className="display-5 fw-bold mb-3">Join Our Early Access</h2>
-                <p className="lead mb-4">
-                  Be among the first to experience The Lady's Essence! Join our waiting list for
-                  exclusive early access and updates.
-                </p>
-                <a
-                  href="https://docs.google.com/forms/d/e/1FAIpQLScaT-0gsJd3yDhqaxRjAGAK8GwmnsyYYw9L8z-1tlXBEvjm6A/viewform?usp=sharing"
-                  className="btn btn-primary btn-lg px-5 py-3 rounded-pill"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <i className="bi bi-arrow-right-circle-fill me-2"></i>
-                  Join Waiting List
-                </a>
-              </div>
-              <div className="mt-4 text-white">
-                <small>Limited spots available - Priority access for early signups</small>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-
       {/* Testimonials Section */}
       <section className="py-6 bg-gradient-primary">
         <div className="container">
           <div className="text-center mb-6">
-            <h2 className="display-5 fw-bold text-white mb-4">User Stories</h2>
+            <h2 className="display-5 fw-bold text-black mb-4">User Stories</h2>
             <p className="lead text-light">Hear from our empowered community</p>
           </div>
           <div className="row g-4">
@@ -217,6 +198,40 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Waiting List Section */}
+      <section className="py-6 bg-gradient-waiting" style={{
+        background: 'linear-gradient(135deg, #F5B700 0%, #ffd700 100%)',
+        color: '#0F4C81'
+      }}>
+        <div className="container">
+          <div className="row align-items-center">
+            <div className="col-lg-8 mx-auto text-center">
+              <div className="d-inline-block p-4 rounded-3 shadow-lg bg-white">
+                <h2 className="display-5 fw-bold mb-3">Join Our Early Access</h2>
+                <p className="lead mb-4">
+                  Be among the first to experience The Lady's Essence! Join our waiting list for
+                  exclusive early access and updates.
+                </p>
+                <a
+                  href="https://docs.google.com/forms/d/e/1FAIpQLScaT-0gsJd3yDhqaxRjAGAK8GwmnsyYYw9L8z-1tlXBEvjm6A/viewform?usp=sharing"
+                  className="btn btn-primary btn-lg px-5 py-3 rounded-pill"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <i className="bi bi-arrow-right-circle-fill me-2"></i>
+                  Join Waiting List
+                </a>
+              </div>
+              <div className="mt-4 text-white">
+                <small>Limited spots available - Priority access for early signups</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      
       {/* Pricing Section */}
       <section className="py-6">
         <div className="container">
@@ -262,6 +277,8 @@ export default function Home() {
                         </li>
                       ))}
                     </ul>
+
+                    
                     <div className="text-center mt-auto">
                       <Link href="/register" className={`btn btn-lg ${plan.accent ? 'btn-light' : 'btn-primary'} rounded-pill px-5`}>
                         Get Started
@@ -274,6 +291,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+      
+      
 
       {/* CTA Section */}
       <section className="cta-section py-6" style={{
