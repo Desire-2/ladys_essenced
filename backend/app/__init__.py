@@ -5,6 +5,13 @@ from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+# Get the directory of this file and go up one level to find .env
+basedir = os.path.abspath(os.path.dirname(__file__))
+dotenv_path = os.path.join(os.path.dirname(basedir), '.env')
+load_dotenv(dotenv_path)
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -16,7 +23,12 @@ def create_app():
     app = Flask(__name__)
     
     # Configure the app
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///ladys_essence.db')
+    database_url = os.environ.get('DATABASE_URL')
+    if not database_url:
+        # Fallback to SQLite if no DATABASE_URL is set
+        database_url = 'sqlite:///instance/ladys_essence.db'
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'dev-secret-key')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 60 * 60  # 1 hour
