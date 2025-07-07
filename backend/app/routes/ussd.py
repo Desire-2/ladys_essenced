@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from flask_jwt_extended import create_access_token
 import re
 import logging
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,7 +35,7 @@ def format_content(content, max_length=160):
     return pages
 
 def check_backflow_navigation(user, input_list, current_step, service_name):
-    """Check for backflow navigation commands ('0' for back, '00' for main menu)"""
+    """Check for backflow navigation commands ('0' for back, '00' for main menu) with enhanced context awareness"""
     if not input_list:
         return None
     
@@ -43,6 +44,7 @@ def check_backflow_navigation(user, input_list, current_step, service_name):
     # Check for main menu return
     if current_input == '00':
         logger.info(f"Backflow: User requested main menu from {service_name}")
+        clear_session_state(user)  # Clear service-specific state
         return main_menu(user)
     
     # Check for back navigation
@@ -51,39 +53,173 @@ def check_backflow_navigation(user, input_list, current_step, service_name):
         
         if current_step <= 1:
             # If at first step of service, go back to main menu
+            clear_session_state(user)  # Clear service-specific state
             return main_menu(user)
+        elif current_step == 2:
+            # If at second step, going back usually means returning to main menu
+            # unless we're in a deep submenu that specifically needs to go back to service menu
+            if service_name in ['cycle_tracking', 'meal_logging', 'appointments', 'education', 'notifications', 'parent_dashboard', 'settings']:
+                # For most services, step 2 backflow should return to main menu to allow cross-service navigation
+                logger.info(f"Backflow: Returning to main menu from {service_name} step 2 for cross-service navigation")
+                clear_session_state(user)
+                return main_menu(user)
+            else:
+                # Go back to previous step within service
+                previous_input_list = input_list[:-1]
+                logger.info(f"Backflow: Going back within service with input_list: {previous_input_list}")
+                return route_to_service_handler(service_name, user, previous_input_list)
         else:
             # Go back to previous step by removing last input and calling handler again
             previous_input_list = input_list[:-1]
             logger.info(f"Backflow: Going back with input_list: {previous_input_list}")
-            
-            # Route back to appropriate handler based on service
-            if service_name == 'cycle_tracking':
-                return handle_cycle_tracking(user, previous_input_list)
-            elif service_name == 'meal_logging':
-                return handle_meal_logging(user, previous_input_list)
-            elif service_name == 'appointments':
-                return handle_appointments(user, previous_input_list)
-            elif service_name == 'notifications':
-                return handle_notifications(user, previous_input_list)
-            elif service_name == 'education':
-                return handle_education(user, previous_input_list)
-            elif service_name == 'parent_dashboard':
-                return handle_parent_dashboard(user, previous_input_list)
-            elif service_name == 'settings':
-                return handle_settings(user, previous_input_list)
-            elif service_name == 'feedback':
-                return handle_feedback_submission(user, previous_input_list)
-            elif service_name == 'help':
-                return handle_help_menu(user, previous_input_list)
-            else:
-                return main_menu(user)
+            return route_to_service_handler(service_name, user, previous_input_list)
     
     return None
 
+def route_to_service_handler(service_name, user, input_list):
+    """Route to appropriate service handler"""
+    if service_name == 'cycle_tracking':
+        return handle_cycle_tracking(user, input_list)
+    elif service_name == 'meal_logging':
+        return handle_meal_logging(user, input_list)
+    elif service_name == 'appointments':
+        return handle_appointments(user, input_list)
+    elif service_name == 'notifications':
+        return handle_notifications(user, input_list)
+    elif service_name == 'education':
+        return handle_education(user, input_list)
+    elif service_name == 'parent_dashboard':
+        return handle_parent_dashboard(user, input_list)
+    elif service_name == 'settings':
+        return handle_settings(user, input_list)
+    elif service_name == 'feedback':
+        return handle_feedback_submission(user, input_list)
+    elif service_name == 'help':
+        return handle_help_menu(user, input_list)
+    else:
+        clear_session_state(user)
+        return main_menu(user)
+
+def check_session_timeout(user):
+    """Check if user's session has timed out"""
+    if not user.last_activity:
+        return False
+    
+    # Use default timeout of 2 minutes if not set
+    timeout_minutes = user.session_timeout_minutes or 2
+    timeout_threshold = datetime.utcnow() - timedelta(minutes=timeout_minutes)
+    return user.last_activity < timeout_threshold
+
+def save_session_state(user, session_data):
+    """Save current session state for potential resume"""
+    try:
+        user.current_session_data = json.dumps(session_data)
+        user.last_activity = datetime.utcnow()
+        db.session.commit()
+        logger.info(f"Session state saved for user {user.phone_number}")
+    except Exception as e:
+        logger.error(f"Error saving session state: {e}")
+        db.session.rollback()
+
+def get_session_state(user):
+    """Get saved session state"""
+    try:
+        if user.current_session_data:
+            return json.loads(user.current_session_data)
+        return None
+    except Exception as e:
+        logger.error(f"Error retrieving session state: {e}")
+        return None
+
+def clear_session_state(user):
+    """Clear saved session state"""
+    try:
+        user.current_session_data = None
+        user.last_activity = datetime.utcnow()
+        db.session.commit()
+        logger.info(f"Session state cleared for user {user.phone_number}")
+    except Exception as e:
+        logger.error(f"Error clearing session state: {e}")
+        db.session.rollback()
+
+def update_last_activity(user):
+    """Update user's last activity timestamp"""
+    try:
+        user.last_activity = datetime.utcnow()
+        db.session.commit()
+    except Exception as e:
+        logger.error(f"Error updating last activity: {e}")
+        db.session.rollback()
+
+def handle_session_resume_prompt(user):
+    """Handle the prompt for resuming or starting new session"""
+    return ("CON Session Resume Options:\n"
+            "1. Resume previous session\n"
+            "2. Start new session\n"
+            "0. Exit")
+
+def handle_session_resume_choice(user, input_list):
+    """Handle user's choice to resume or start new session"""
+    if not input_list:
+        return handle_session_resume_prompt(user)
+    
+    current_input = input_list[-1]
+    
+    if current_input == '1':
+        # Resume previous session
+        session_data = get_session_state(user)
+        if session_data:
+            logger.info(f"Resuming session for user {user.phone_number}")
+            update_last_activity(user)
+            
+            # Reconstruct the previous state
+            service = session_data.get('service', 'main_menu')
+            previous_inputs = session_data.get('inputs', [])
+            
+            # Route to appropriate handler with previous inputs
+            if service == 'cycle_tracking':
+                return handle_cycle_tracking(user, previous_inputs)
+            elif service == 'meal_logging':
+                return handle_meal_logging(user, previous_inputs)
+            elif service == 'appointments':
+                return handle_appointments(user, previous_inputs)
+            elif service == 'notifications':
+                return handle_notifications(user, previous_inputs)
+            elif service == 'education':
+                return handle_education(user, previous_inputs)
+            elif service == 'parent_dashboard':
+                return handle_parent_dashboard(user, previous_inputs)
+            elif service == 'settings':
+                return handle_settings(user, previous_inputs)
+            elif service == 'feedback':
+                return handle_feedback_submission(user, previous_inputs)
+            elif service == 'help':
+                return handle_help_menu(user, previous_inputs)
+            else:
+                return main_menu(user)
+        else:
+            # No valid session data, start new
+            clear_session_state(user)
+            return main_menu(user)
+    
+    elif current_input == '2':
+        # Start new session
+        clear_session_state(user)
+        update_last_activity(user)
+        return main_menu(user)
+    
+    elif current_input == '0':
+        return "END Thank you for using Lady's Essence!"
+    
+    else:
+        return ("CON Invalid choice. Please select:\n"
+                "1. Resume previous session\n"
+                "2. Start new session\n"
+                "0. Exit")
+
 @ussd_bp.route('', methods=['POST'])
 def handle_ussd():
-    """Main USSD handler with improved error handling and state management"""
+    """Main USSD handler with session timeout and resume functionality"""
     try:
         session_id = request.form.get('sessionId')
         phone_number = request.form.get('phoneNumber', '').strip()
@@ -99,6 +235,24 @@ def handle_ussd():
         user = User.query.filter_by(phone_number=phone_number).first()
 
         logger.info(f"USSD Request: Phone={phone_number}, Step={current_step}, Input={input_list}, User={'Found' if user else 'Not Found'}")
+
+        # Check for session timeout for existing users
+        if user and current_step == 0:
+            # Fresh session start - check if previous session timed out
+            if check_session_timeout(user) and user.current_session_data:
+                logger.info(f"Session timeout detected for user {user.phone_number}")
+                return handle_session_resume_prompt(user)
+            else:
+                # Clear any old session data for fresh start
+                clear_session_state(user)
+        
+        # Handle session resume flow
+        if user and current_step == 1 and check_session_timeout(user) and user.current_session_data:
+            return handle_session_resume_choice(user, [user_input])
+        
+        # Update last activity for authenticated users
+        if user and current_step > 0:
+            update_last_activity(user)
 
         # Route to appropriate handler based on authentication state and step
         if current_step == 0:
@@ -261,7 +415,7 @@ def handle_login_flow(input_list, phone_number):
     return "END Invalid login attempt."
 
 def handle_menu_navigation(user, input_list):
-    """Handle main menu navigation for authenticated users"""
+    """Handle main menu navigation for authenticated users with enhanced backflow support"""
     # User is already authenticated at this point, no need to verify PIN again
     steps = len(input_list)
     
@@ -271,6 +425,41 @@ def handle_menu_navigation(user, input_list):
         return main_menu(user)
     
     current_selection = input_list[0]  # First element is the menu selection
+    
+    # Enhanced backflow detection: Check if user is trying to navigate to main menu after backflow
+    # This happens when:
+    # 1. User was in a service (e.g., cycle tracking)
+    # 2. Used backflow navigation ('0')
+    # 3. Now wants to select a different main menu option
+    if steps >= 2:
+        # Check if the last input suggests user wants to return to main menu level
+        last_input = input_list[-1]
+        
+        # If the last input is a main menu option (1-9) and we're deeper in navigation,
+        # it likely means user wants to navigate to a different service
+        if last_input in ['1', '2', '3', '4', '5', '6', '7', '8', '9'] and steps > 2:
+            # Check if current service context doesn't match the new selection
+            current_service_map = {
+                '1': 'cycle_tracking',
+                '2': 'meal_logging', 
+                '3': 'appointments',
+                '4': 'education',
+                '5': 'notifications',
+                '6': 'parent_dashboard',
+                '7': 'settings',
+                '8': 'feedback',
+                '9': 'help'
+            }
+            
+            requested_service = current_service_map.get(last_input)
+            current_service = current_service_map.get(current_selection)
+            
+            # If user is requesting a different service, treat it as main menu navigation
+            if requested_service and current_service and requested_service != current_service:
+                logger.info(f"Cross-service navigation detected: {current_service} -> {requested_service}")
+                # Redirect to the requested service with clean input
+                new_input_list = [last_input]
+                return handle_menu_navigation(user, new_input_list)
     
     try:
         logger.info(f"Processing menu selection: {current_selection}")
@@ -390,17 +579,37 @@ def get_terms_of_service():
 00. Main Menu"""
 
 def main_menu(user):
-    """Generate main menu based on user type"""
+    """Generate main menu based on user type and clear session state"""
+    # Clear session state when returning to main menu
+    if user:
+        clear_session_state(user)
     return enhanced_main_menu(user)
 
 def handle_cycle_tracking(user, input_list):
-    """Enhanced cycle tracking with better navigation and features"""
+    """Enhanced cycle tracking with session state management"""
     steps = len(input_list)
+    
+    # Save session state for potential resume, preserving existing prediction context
+    existing_session = get_session_state(user) or {}
+    session_data = {
+        'service': 'cycle_tracking',
+        'inputs': input_list,
+        'timestamp': datetime.utcnow().isoformat()
+    }
+    
+    # Preserve prediction navigation context if it exists
+    if 'prediction_month_offset' in existing_session:
+        session_data['prediction_month_offset'] = existing_session['prediction_month_offset']
+    if 'viewing_predictions' in existing_session:
+        session_data['viewing_predictions'] = existing_session['viewing_predictions']
+    
+    save_session_state(user, session_data)
     
     # Check for universal back navigation first
     if steps > 1:
         last_input = input_list[-1]
         if last_input == '00':
+            clear_session_state(user)
             return main_menu(user)
         elif last_input == '0' and steps > 1:
             # Go back to previous level
@@ -428,6 +637,7 @@ def handle_cycle_tracking(user, input_list):
             # Find current active cycle
             active_cycle = CycleLog.query.filter_by(user_id=user.id, end_date=None).order_by(CycleLog.start_date.desc()).first()
             if not active_cycle:
+                clear_session_state(user)
                 return "END No active period to end."
             return ("CON Log Period End\nEnter date (DD-MM-YYYY)\n"
                    "or press 1 for today:\n0. Back\n00. Main Menu")
@@ -439,15 +649,92 @@ def handle_cycle_tracking(user, input_list):
             return get_cycle_history(user)
         
         elif selection == '5':
-            return get_cycle_predictions(user)
+            # Get month offset from session state or default to 0
+            session_data = get_session_state(user) or {}
+            month_offset = 0
+            if 'prediction_month_offset' in session_data:
+                month_offset = session_data['prediction_month_offset']
+            
+            # Mark that user is viewing predictions for backflow context
+            session_data['viewing_predictions'] = True
+            session_data['prediction_month_offset'] = month_offset
+            save_session_state(user, session_data)
+            
+            return get_cycle_predictions(user, month_offset)
+        
+        # Handle navigation from predictions (when user enters 'n' or 'p')
+        # This includes navigation after backflow from predictions
+        elif selection == 'n' or selection == 'p':
+            session_data = get_session_state(user)
+            
+            # Check if user was previously viewing predictions or is navigating after backflow
+            if session_data and (session_data.get('viewing_predictions') or 'prediction_month_offset' in session_data):
+                if selection == 'n':  # Next month
+                    month_offset = session_data.get('prediction_month_offset', 0) + 1
+                    session_data['prediction_month_offset'] = month_offset
+                    session_data['viewing_predictions'] = True
+                    save_session_state(user, session_data)
+                    return get_cycle_predictions(user, month_offset)
+                
+                elif selection == 'p':  # Previous month or current cycle info
+                    current_offset = session_data.get('prediction_month_offset', 0)
+                    if current_offset == 0:
+                        # When at current month, 'p' shows current cycle info (same as current month)
+                        session_data['viewing_predictions'] = True
+                        save_session_state(user, session_data)
+                        return get_cycle_predictions(user, 0)
+                    else:
+                        # When viewing future months, 'p' goes to previous month
+                        month_offset = max(0, current_offset - 1)
+                        session_data['prediction_month_offset'] = month_offset
+                        session_data['viewing_predictions'] = True
+                        save_session_state(user, session_data)
+                        return get_cycle_predictions(user, month_offset)
+            else:
+                # User trying to navigate without prediction context
+                return "END Invalid selection. Enter 5 to view predictions first, then use 'n' or 'p' to navigate."
         
         elif selection == '6':
-            return ("CON 🔧 Update Cycle Info:\n"
-                   "Current info:\n"
-                   f"Cycle length: {user.personal_cycle_length or 'Not set'} days\n"
-                   f"Period length: {user.personal_period_length or 'Not set'} days\n\n"
-                   "1. Update cycle length\n2. Update period length\n"
-                   "3. Reset to use calculated averages\n0. Back\n00. Main Menu")
+            # Get user's cycle statistics for better display
+            completed_cycles = CycleLog.query.filter_by(user_id=user.id).filter(
+                CycleLog.end_date.isnot(None),
+                CycleLog.cycle_length.isnot(None)
+            ).count()
+            
+            avg_cycle = "Not calculated"
+            avg_period = "Not calculated"
+            
+            if completed_cycles >= 2:
+                recent_cycles = CycleLog.query.filter_by(user_id=user.id).filter(
+                    CycleLog.end_date.isnot(None),
+                    CycleLog.cycle_length.isnot(None)
+                ).order_by(CycleLog.start_date.desc()).limit(6).all()
+                
+                # Calculate average cycle length
+                if recent_cycles:
+                    avg_cycle_value = sum(c.cycle_length for c in recent_cycles) / len(recent_cycles)
+                    avg_cycle = f"{avg_cycle_value:.1f} days"
+                
+                # Calculate average period length (only from cycles that have period_length)
+                period_cycles = [c for c in recent_cycles if c.period_length is not None]
+                if period_cycles:
+                    avg_period_value = sum(c.period_length for c in period_cycles) / len(period_cycles)
+                    avg_period = f"{avg_period_value:.1f} days"
+                else:
+                    avg_period = "No period data"
+            
+            return (f"CON 🔧 Cycle Information Management:\n"
+                   f"📊 Current Settings:\n"
+                   f"Personal cycle: {user.personal_cycle_length or 'Not set'} days\n"
+                   f"Personal period: {user.personal_period_length or 'Not set'} days\n"
+                   f"Data provided: {'Yes' if user.has_provided_cycle_info else 'No'}\n\n"
+                   f"📈 Calculated from logs:\n"
+                   f"Avg cycle: {avg_cycle}\n"
+                   f"Avg period: {avg_period}\n"
+                   f"Completed cycles: {completed_cycles}\n\n"
+                   f"1. Update cycle length\n2. Update period length\n"
+                   f"3. View data sources\n4. Reset to calculated averages\n"
+                   f"0. Back\n00. Main Menu")
         
         elif selection == '0':
             return main_menu(user)
@@ -500,6 +787,24 @@ def handle_cycle_tracking(user, input_list):
                 return ("CON Enter new period length (3-8 days):\n"
                        "0. Back\n00. Main Menu")
             elif selection == '3':
+                # View data sources - show recent cycles used for calculations
+                recent_cycles = CycleLog.query.filter_by(user_id=user.id).filter(
+                    CycleLog.end_date.isnot(None),
+                    CycleLog.cycle_length.isnot(None)
+                ).order_by(CycleLog.start_date.desc()).limit(6).all()
+                
+                if not recent_cycles:
+                    return "END 📊 No completed cycles found. Start logging periods to see data sources."
+                
+                response = "CON 📊 Recent cycles used for calculations:\n\n"
+                for i, cycle in enumerate(recent_cycles, 1):
+                    period_info = f"{cycle.period_length}d" if cycle.period_length else "No period data"
+                    response += f"{i}. {cycle.start_date.strftime('%d %b %Y')}: {cycle.cycle_length}d cycle, {period_info}\n"
+                
+                response += f"\n💡 Using last {len(recent_cycles)} cycles for averages\n"
+                response += "0. Back\n00. Main Menu"
+                return response
+            elif selection == '4':
                 # Reset to use calculated averages
                 user.has_provided_cycle_info = False
                 user.personal_cycle_length = None
@@ -508,6 +813,26 @@ def handle_cycle_tracking(user, input_list):
                 return "END ✅ Cycle info reset! Future predictions will use your cycle history."
             else:
                 return "END Invalid selection."
+        
+        elif input_list[1] == '5':  # Handle prediction navigation
+            if selection == '0':
+                return handle_cycle_tracking(user, input_list[:2])
+            elif selection == '00':
+                return main_menu(user)
+            elif selection == 'n':  # Next month
+                session_data = get_session_state(user) or {}
+                month_offset = session_data.get('prediction_month_offset', 0) + 1
+                session_data['prediction_month_offset'] = month_offset
+                save_session_state(user, session_data)
+                return get_cycle_predictions(user, month_offset)
+            elif selection == 'p':  # Previous month
+                session_data = get_session_state(user) or {}
+                month_offset = max(0, session_data.get('prediction_month_offset', 0) - 1)
+                session_data['prediction_month_offset'] = month_offset
+                save_session_state(user, session_data)
+                return get_cycle_predictions(user, month_offset)
+            else:
+                return "END Invalid selection. Use 'n' for next month, 'p' for previous, or 0 for back."
     
     elif steps == 4:
         if input_list[1] == '1':  # Log period start flow
@@ -540,6 +865,13 @@ def handle_cycle_tracking(user, input_list):
                 return handle_cycle_tracking(user, input_list[:3])
             elif selection == '00':
                 return main_menu(user)
+            elif input_list[2] == '3':  # Data sources view navigation
+                if selection == '0':
+                    return handle_cycle_tracking(user, input_list[:2])  # Back to cycle info menu
+                elif selection == '00':
+                    return main_menu(user)
+                else:
+                    return "END Invalid selection."
             elif input_list[2] == '1':  # Update cycle length
                 try:
                     cycle_length = int(selection)
@@ -606,17 +938,58 @@ def handle_cycle_tracking(user, input_list):
     return "END Invalid flow. Try 0 for back or 00 for main menu."
 
 def handle_period_start(user, date_input):
-    """Handle period start logging with user's personal cycle info"""
+    """Enhanced period start logging with robust error handling"""
     try:
+        # Parse the date input
         if date_input == '1':
             start_date = datetime.now()
         else:
-            start_date = datetime.strptime(date_input, '%d-%m-%Y')
+            try:
+                start_date = datetime.strptime(date_input, '%d-%m-%Y')
+            except ValueError:
+                return "END ❌ Invalid date format. Please use DD-MM-YYYY (e.g., 15-03-2024) or press 1 for today."
         
-        # Check for overlapping cycles
-        existing = CycleLog.query.filter_by(user_id=user.id, end_date=None).first()
-        if existing:
-            return "END You have an active period. End it first before starting a new one."
+        # Validate date is not in the future
+        if start_date > datetime.now():
+            return "END ❌ Period start date cannot be in the future. Please enter a valid date."
+        
+        # Validate date is not too far in the past (more than 6 months)
+        six_months_ago = datetime.now() - timedelta(days=180)
+        if start_date < six_months_ago:
+            return "END ❌ Period start date is too far in the past. Please enter a date within the last 6 months."
+        
+        # Check for existing active cycle
+        existing_active = CycleLog.query.filter_by(user_id=user.id, end_date=None).first()
+        if existing_active:
+            # Convert start_date to date if it's a datetime for comparison
+            start_date_for_comparison = start_date.date() if isinstance(start_date, datetime) else start_date
+            existing_start_date = existing_active.start_date
+            
+            days_since_start = (start_date_for_comparison - existing_start_date).days
+            return (f"END ❌ You have an active period that started on {existing_active.start_date.strftime('%d %b %Y')} "
+                   f"({abs(days_since_start)} days ago). Please end it first before starting a new one.")
+        
+        # Check for duplicate cycles on the same date
+        start_date_only = start_date.date() if isinstance(start_date, datetime) else start_date
+        existing_same_date = CycleLog.query.filter_by(
+            user_id=user.id, 
+            start_date=start_date_only
+        ).first()
+        if existing_same_date:
+            return (f"END ❌ A cycle already exists for {start_date.strftime('%d %b %Y')}. "
+                   f"If you need to update it, please contact support or use a different date.")
+        
+        # Check for overlapping with recent cycles
+        recent_cycle = CycleLog.query.filter_by(user_id=user.id).filter(
+            CycleLog.start_date >= start_date_only - timedelta(days=45),
+            CycleLog.start_date <= start_date_only + timedelta(days=45)
+        ).filter(CycleLog.id != getattr(existing_same_date, 'id', 0)).first()
+        
+        if recent_cycle:
+            days_diff = abs((start_date_only - recent_cycle.start_date).days)
+            if days_diff < 15:  # Too close to another cycle
+                return (f"END ⚠️ This date is very close to an existing cycle on {recent_cycle.start_date.strftime('%d %b %Y')} "
+                       f"({days_diff} days apart). Cycles are usually 21-40 days apart. Please check your date.")
         
         # Use user's personal cycle length or calculate from history
         predicted_cycle_length = 28  # Default
@@ -626,77 +999,135 @@ def handle_period_start(user, date_input):
         else:
             # Calculate from history if available
             recent_cycles = CycleLog.query.filter_by(user_id=user.id).filter(
-                CycleLog.end_date.isnot(None)
+                CycleLog.end_date.isnot(None),
+                CycleLog.cycle_length.isnot(None)
             ).order_by(CycleLog.start_date.desc()).limit(3).all()
             
             if recent_cycles:
                 total_length = sum(c.cycle_length for c in recent_cycles if c.cycle_length)
                 predicted_cycle_length = total_length // len(recent_cycles) if total_length else 28
         
+        # Create the new cycle log
         new_cycle = CycleLog(
             user_id=user.id,
-            start_date=start_date,
+            start_date=start_date_only,
             cycle_length=predicted_cycle_length
         )
-        db.session.add(new_cycle)
         
-        # Create notification for period tracking
-        notification = Notification(
-            user_id=user.id,
-            message=f"Period started on {start_date.strftime('%d %b %Y')}. Remember to stay hydrated and take care!",
-            notification_type='cycle'
-        )
-        db.session.add(notification)
+        try:
+            db.session.add(new_cycle)
+            
+            # Create notification for period tracking
+            notification = Notification(
+                user_id=user.id,
+                message=f"Period started on {start_date.strftime('%d %b %Y')}. Remember to stay hydrated and take care!",
+                notification_type='cycle'
+            )
+            db.session.add(notification)
+            
+            db.session.commit()
+            
+            # Clear any session state related to cycle tracking
+            clear_session_state(user)
+            
+            return (f"END ✅ Period start logged successfully for {start_date.strftime('%d %b %Y')}!\n"
+                   f"💡 Remember to log when your period ends for better tracking.")
+            
+        except Exception as db_error:
+            db.session.rollback()
+            logger.error(f"Database error in period start logging: {str(db_error)}")
+            return "END ❌ Database error occurred. Please try again or contact support."
         
-        db.session.commit()
-        return f"END ✅ Period start logged for {start_date.strftime('%d %b %Y')}!"
-        
-    except ValueError:
-        return "END Invalid date format. Use DD-MM-YYYY"
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Period start error: {str(e)}")
-        return "END Error logging period start."
+        logger.error(f"Unexpected error in period start logging: {str(e)}")
+        return "END ❌ An unexpected error occurred. Please try again or contact support."
 
 def handle_period_end(user, date_input):
-    """Handle period end logging"""
+    """Enhanced period end logging with robust error handling"""
     try:
+        # Parse the date input
         if date_input == '1':
             end_date = datetime.now()
         else:
-            end_date = datetime.strptime(date_input, '%d-%m-%Y')
+            try:
+                end_date = datetime.strptime(date_input, '%d-%m-%Y')
+            except ValueError:
+                return "END ❌ Invalid date format. Please use DD-MM-YYYY (e.g., 20-03-2024) or press 1 for today."
+        
+        # Validate date is not in the future
+        if end_date > datetime.now():
+            return "END ❌ Period end date cannot be in the future. Please enter a valid date."
         
         # Find active cycle
         active_cycle = CycleLog.query.filter_by(user_id=user.id, end_date=None).order_by(CycleLog.start_date.desc()).first()
         if not active_cycle:
-            return "END No active period found to end."
+            return "END ❌ No active period found to end. Please start a period first before ending it."
         
-        if end_date < active_cycle.start_date:
-            return "END End date cannot be before start date."
+        # Validate end date is not before start date
+        if end_date.date() < active_cycle.start_date:
+            return (f"END ❌ Period end date ({end_date.strftime('%d %b %Y')}) cannot be before "
+                   f"the start date ({active_cycle.start_date.strftime('%d %b %Y')}). Please enter a valid end date.")
         
-        # Calculate period length
-        period_length = (end_date - active_cycle.start_date).days + 1
+        # Calculate period length and validate it's reasonable
+        period_length = (end_date.date() - active_cycle.start_date).days + 1
         
-        active_cycle.end_date = end_date
-        active_cycle.period_length = period_length
+        if period_length > 10:
+            return (f"END ⚠️ Period duration of {period_length} days seems unusually long. "
+                   f"Normal periods last 3-8 days. Please double-check your dates or consult a healthcare provider.")
         
-        # Create notification
-        notification = Notification(
-            user_id=user.id,
-            message=f"Period ended on {end_date.strftime('%d %b %Y')}. Duration: {period_length} days.",
-            notification_type='cycle'
-        )
-        db.session.add(notification)
+        if period_length < 1:
+            return "END ❌ Period duration must be at least 1 day. Please check your dates."
         
-        db.session.commit()
-        return f"END ✅ Period ended on {end_date.strftime('%d %b %Y')}!\nDuration: {period_length} days"
+        # Update the active cycle
+        try:
+            active_cycle.end_date = end_date.date()
+            active_cycle.period_length = period_length
+            
+            # Calculate cycle length if this isn't the first cycle
+            previous_cycle = CycleLog.query.filter_by(user_id=user.id).filter(
+                CycleLog.start_date < active_cycle.start_date,
+                CycleLog.end_date.isnot(None)
+            ).order_by(CycleLog.start_date.desc()).first()
+            
+            if previous_cycle:
+                cycle_length = (active_cycle.start_date - previous_cycle.start_date).days
+                active_cycle.cycle_length = cycle_length
+            
+            # Create notification
+            notification = Notification(
+                user_id=user.id,
+                message=f"Period ended on {end_date.strftime('%d %b %Y')}. Duration: {period_length} days.",
+                notification_type='cycle'
+            )
+            db.session.add(notification)
+            
+            db.session.commit()
+            
+            # Clear any session state
+            clear_session_state(user)
+            
+            # Provide helpful feedback
+            response = f"✅ Period ended on {end_date.strftime('%d %b %Y')}!\nDuration: {period_length} days"
+            
+            if period_length <= 3:
+                response += "\n💡 Your period was quite short. This can be normal but track your patterns."
+            elif period_length >= 7:
+                response += "\n💡 Your period was longer than average. Consider tracking symptoms."
+            else:
+                response += "\n💡 This is within the normal range for period duration."
+            
+            return f"END {response}"
+            
+        except Exception as db_error:
+            db.session.rollback()
+            logger.error(f"Database error in period end logging: {str(db_error)}")
+            return "END ❌ Database error occurred. Please try again or contact support."
         
-    except ValueError:
-        return "END Invalid date format. Use DD-MM-YYYY"
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Period end error: {str(e)}")
-        return "END Error logging period end."
+        logger.error(f"Unexpected error in period end logging: {str(e)}")
+        return "END ❌ An unexpected error occurred. Please try again or contact support."
 
 def get_cycle_status(user):
     """Get current cycle status"""
@@ -736,8 +1167,8 @@ def get_cycle_history(user):
     
     return response + "0. Back\n00. Main Menu"
 
-def get_cycle_predictions(user):
-    """Enhanced cycle predictions using personal info and completed cycles"""
+def get_cycle_predictions(user, month_offset=0):
+    """Enhanced cycle predictions with all phases displayed and optimized for small screens"""
     recent_cycles = CycleLog.query.filter_by(user_id=user.id).filter(
         CycleLog.end_date.isnot(None),
         CycleLog.cycle_length.isnot(None)
@@ -750,68 +1181,154 @@ def get_cycle_predictions(user):
     if completed_cycles_count >= 3:
         # Use actual cycle data for accurate predictions
         avg_cycle = sum(c.cycle_length for c in recent_cycles) / len(recent_cycles)
-        avg_period = sum(c.period_length for c in recent_cycles if c.period_length) / len([c for c in recent_cycles if c.period_length])
+        period_cycles = [c for c in recent_cycles if c.period_length]
+        avg_period = sum(c.period_length for c in period_cycles) / len(period_cycles) if period_cycles else 5
         prediction_source = "historical"
-        accuracy_note = "📊 Accurate predictions based on your cycle history"
+        accuracy_note = "📊 Based on your cycle data"
     elif use_personal_info:
         # Use personal cycle information
         avg_cycle = user.personal_cycle_length
         avg_period = user.personal_period_length if user.personal_period_length else 5
         prediction_source = "personal"
-        accuracy_note = "📋 Predictions based on your provided cycle info"
+        accuracy_note = "📋 Based on your cycle info"
     else:
         # Use standard estimates
         avg_cycle = 28
         avg_period = 5
         prediction_source = "standard"
-        accuracy_note = "⚠️ Estimated predictions using standard cycle lengths"
+        accuracy_note = "⚠️ Using standard estimates"
     
-    # Add accuracy disclaimer for non-historical predictions
-    if prediction_source != "historical":
-        accuracy_note += f"\n🔮 Complete 3 cycles for real accurate predictions"
+    # Calculate target month boundaries
+    today = datetime.now().date()
     
-    avg_luteal = 14  # Luteal phase is usually ~14 days
-    avg_follicular = avg_cycle - avg_luteal
-
-    # Get last cycle for prediction base
-    if recent_cycles:
-        last_cycle = recent_cycles[0]
-        next_start = last_cycle.start_date + timedelta(days=int(avg_cycle))
+    # Handle current cycle view (month_offset = 0 means current month)
+    if month_offset == 0:
+        target_month_start = today.replace(day=1)
+        month_label = "Current Month"
     else:
-        # If no cycles logged, use current date as base
-        next_start = datetime.now() + timedelta(days=int(avg_cycle))
-
-    response = f"CON 🔮 Cycle Predictions\n{accuracy_note}\n\n"
-    response += f"Avg Cycle: {avg_cycle:.0f} days | Period: {avg_period:.0f} days\n"
-    response += f"Data source: {prediction_source.title()}\n"
-    response += f"Completed cycles: {completed_cycles_count}\n\n"
+        target_month_start = (today.replace(day=1) + timedelta(days=32 * month_offset)).replace(day=1)
+        month_label = "Predictions"
     
-    response += "Next 3 cycles:\n"
-    for i in range(3):
-        cycle_start = next_start + timedelta(days=int(avg_cycle) * i)
-        period_start = cycle_start
-        period_end = period_start + timedelta(days=int(avg_period) - 1)
-        follicular_end = period_end
-        ovulation_day = cycle_start + timedelta(days=int(avg_follicular) - 1)
-        luteal_start = ovulation_day + timedelta(days=1)
+    # Get next month start
+    if target_month_start.month == 12:
+        next_month_start = target_month_start.replace(year=target_month_start.year + 1, month=1)
+    else:
+        next_month_start = target_month_start.replace(month=target_month_start.month + 1)
+
+    # Determine the prediction base date
+    if recent_cycles:
+        # Find the most recent cycle and calculate next expected start
+        last_cycle = recent_cycles[0]
+        # Convert date to datetime for calculation
+        last_start = datetime.combine(last_cycle.start_date, datetime.min.time())
+        prediction_base = last_start + timedelta(days=int(avg_cycle))
+    else:
+        # If no cycles logged, start predictions from today
+        prediction_base = datetime.combine(today, datetime.min.time())
+    
+    # Find cycles that fall within or span the target month
+    cycles_in_month = []
+    cycle_num = 0
+    max_cycles_to_check = 12  # Check up to 12 cycles ahead
+    
+    while cycle_num < max_cycles_to_check:
+        cycle_start_date = prediction_base + timedelta(days=int(avg_cycle) * cycle_num)
+        cycle_start = cycle_start_date.date()
+        
+        # Calculate cycle end
         cycle_end = cycle_start + timedelta(days=int(avg_cycle) - 1)
+        
+        # Stop if we've gone too far past the target month
+        if cycle_start >= next_month_start + timedelta(days=31):
+            break
+        
+        # Include if cycle starts in target month OR if any part of cycle overlaps with target month
+        cycle_overlaps = (cycle_start <= next_month_start - timedelta(days=1) and 
+                         cycle_end >= target_month_start)
+        
+        if cycle_overlaps or (cycle_start >= target_month_start and cycle_start < next_month_start):
+            cycles_in_month.append({
+                'cycle_num': cycle_num,
+                'start_date': cycle_start_date,
+                'start': cycle_start,
+                'end': cycle_end
+            })
+        
+        cycle_num += 1
 
-        response += f"\nCycle {i+1}: {cycle_start.strftime('%d %b')} - {cycle_end.strftime('%d %b')}\n"
-        response += f"• Menstrual: {period_start.strftime('%d %b')} - {period_end.strftime('%d %b')}\n"
-        response += f"• Follicular: {period_end.strftime('%d %b')} - {ovulation_day.strftime('%d %b')}\n"
-        response += f"• Ovulation: {ovulation_day.strftime('%d %b')}\n"
-        response += f"• Luteal: {luteal_start.strftime('%d %b')} - {cycle_end.strftime('%d %b')}\n"
-
-    if prediction_source == "standard":
-        response += "\n💡 Tip: Log your periods to get personalized predictions!"
-    elif prediction_source == "personal":
-        response += f"\n💡 After {3 - completed_cycles_count} more completed cycles, predictions will be based on your actual data!"
+    month_name = target_month_start.strftime('%b %Y')
+    response = f"CON 🔮 {month_label}: {month_name}\n"
+    response += f"{accuracy_note}\n"
+    response += f"Cycle: {avg_cycle:.0f}d | Period: {avg_period:.0f}d\n\n"
     
-    response += "\n\nPhases:\n"
-    response += "• Menstrual: Bleeding days\n"
-    response += "• Follicular: Prepares egg, ends at ovulation\n"
-    response += "• Ovulation: Most fertile day\n"
-    response += "• Luteal: After ovulation, before next period\n"
+    if not cycles_in_month:
+        response += "No cycle activity this month.\n\n"
+    else:
+        for i, cycle_info in enumerate(cycles_in_month):
+            cycle_start_date = cycle_info['start_date']
+            
+            # Calculate all cycle phases
+            period_start = cycle_start_date.date()
+            period_end = period_start + timedelta(days=int(avg_period) - 1)
+            
+            # Follicular phase: after period ends until ovulation
+            follicular_start = period_end + timedelta(days=1)
+            
+            # Ovulation typically occurs 14 days before next cycle
+            ovulation_day = period_start + timedelta(days=int(avg_cycle) - 14)
+            
+            # Fertile window is typically 5 days before ovulation to 1 day after
+            fertile_start = ovulation_day - timedelta(days=5)
+            fertile_end = ovulation_day + timedelta(days=1)
+            
+            # Luteal phase: after ovulation until next cycle
+            luteal_start = ovulation_day + timedelta(days=1)
+            luteal_end = period_start + timedelta(days=int(avg_cycle) - 1)
+            
+            # Only show cycle number if multiple cycles
+            if len(cycles_in_month) > 1:
+                response += f"=== Cycle {i+1} ===\n"
+            
+            # Always show all phases, but mark if outside target month
+            def format_date_range(start_date, end_date, phase_name):
+                # Check if dates fall within target month
+                start_in_month = target_month_start <= start_date < next_month_start
+                end_in_month = target_month_start <= end_date < next_month_start
+                
+                if start_in_month and end_in_month:
+                    return f"• {phase_name}: {start_date.strftime('%d')}-{end_date.strftime('%d %b')}"
+                elif start_in_month:
+                    return f"• {phase_name}: {start_date.strftime('%d %b')}→"
+                elif end_in_month:
+                    return f"• {phase_name}: →{end_date.strftime('%d %b')}"
+                else:
+                    # Phase spans outside month, show dates anyway
+                    return f"• {phase_name}: {start_date.strftime('%d')}-{end_date.strftime('%d %b')}"
+            
+            def format_single_date(date, phase_name):
+                if target_month_start <= date < next_month_start:
+                    return f"• {phase_name}: {date.strftime('%d %b')}"
+                else:
+                    return f"• {phase_name}: {date.strftime('%d %b')}"
+            
+            # Display all phases in chronological order
+            response += format_date_range(period_start, period_end, "Period") + "\n"
+            
+            if follicular_start <= ovulation_day - timedelta(days=1):
+                response += format_date_range(follicular_start, ovulation_day - timedelta(days=1), "Follicular") + "\n"
+            
+            response += format_date_range(fertile_start, fertile_end, "Fertile window") + "\n"
+            response += format_single_date(ovulation_day, "Ovulation") + "\n"
+            response += format_date_range(luteal_start, luteal_end, "Luteal") + "\n"
+            
+            response += "\n"
+
+    # Navigation options with improved labeling
+    response += "n. Next month\n"
+    if month_offset > 0:
+        response += "p. Previous month\n"
+    elif month_offset == 0:
+        response += "p. Current cycle info\n"
     response += "0. Back\n00. Main Menu"
     return response
 
@@ -1368,8 +1885,15 @@ def handle_child_health_summary(parent):
         return "END Error retrieving health summary."
 
 def handle_meal_logging(user, input_list):
-    """Enhanced meal logging with nutritional tracking and backflow navigation"""
+    """Enhanced meal logging with session state management"""
     steps = len(input_list)
+    
+    # Save session state for potential resume
+    save_session_state(user, {
+        'service': 'meal_logging',
+        'inputs': input_list,
+        'timestamp': datetime.utcnow().isoformat()
+    })
     
     # Check for backflow navigation
     backflow_result = check_backflow_navigation(user, input_list, steps, 'meal_logging')

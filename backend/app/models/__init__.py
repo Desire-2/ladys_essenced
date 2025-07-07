@@ -12,14 +12,18 @@ class User(db.Model):
     phone_number = db.Column(db.String(20), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     user_type = db.Column(db.String(20), nullable=False)  # 'parent' or 'adolescent'
-    
-    # Personal cycle information for better predictions
-    personal_cycle_length = db.Column(db.Integer, nullable=True)  # User's known cycle length
-    personal_period_length = db.Column(db.Integer, nullable=True)  # User's known period length
-    has_provided_cycle_info = db.Column(db.Boolean, default=False)  # Track if user provided info
-    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Cycle tracking enhanced fields
+    personal_cycle_length = db.Column(db.Integer, nullable=True)  # User's personal cycle length
+    personal_period_length = db.Column(db.Integer, nullable=True)  # User's personal period length
+    has_provided_cycle_info = db.Column(db.Boolean, default=False)  # Whether user has provided their cycle info
+    
+    # Session management fields
+    last_activity = db.Column(db.DateTime, nullable=True)  # Last USSD activity timestamp
+    current_session_data = db.Column(db.Text, nullable=True)  # JSON string of current session state
+    session_timeout_minutes = db.Column(db.Integer, default=2)  # Session timeout in minutes
     
     # Relationships
     cycle_logs = db.relationship('CycleLog', backref='user', lazy=True)
