@@ -32,7 +32,8 @@ if __name__ == '__main__':
     with app.app_context():
         try:
             # Test database connection
-            db.engine.execute('SELECT 1')
+            from sqlalchemy import text
+            db.session.execute(text('SELECT 1'))
             print("✅ Database connection verified")
         except Exception as e:
             print(f"⚠️  Database connection issue: {e}")

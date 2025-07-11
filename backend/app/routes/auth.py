@@ -3,7 +3,7 @@ from app import db, bcrypt
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from datetime import datetime
-from datetime import datetime
+from werkzeug.security import check_password_hash, generate_password_hash
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -26,7 +26,7 @@ def register():
         return jsonify({'message': 'Invalid user type. Must be "parent" or "adolescent"'}), 400
     
     # Hash password
-    password_hash = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+    password_hash = generate_password_hash(data['password'])
     
     # Create new user
     new_user = User(
@@ -70,7 +70,7 @@ def login():
         user = User.query.filter_by(phone_number=data['phone_number']).first()
         
         # Check if user exists and password is correct
-        if not user or not bcrypt.check_password_hash(user.password_hash, data['password']):
+        if not user or not check_password_hash(user.password_hash, data['password']):
             return jsonify({'message': 'Invalid phone number or password'}), 401
         
         # Create access and refresh tokens with a string identity
