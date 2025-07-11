@@ -10,22 +10,16 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     phone_number = db.Column(db.String(20), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=True)  # Added email field
     password_hash = db.Column(db.String(128), nullable=False)
-    user_type = db.Column(db.String(20), nullable=False)  # 'parent', 'adolescent', 'admin', 'content_writer', 'health_provider'
-    is_active = db.Column(db.Boolean, default=True)  # Added for user management
+    user_type = db.Column(db.String(20), nullable=False)  # 'parent' or 'adolescent'
+    
+    # Personal cycle information for better predictions
+    personal_cycle_length = db.Column(db.Integer, nullable=True)  # User's known cycle length
+    personal_period_length = db.Column(db.Integer, nullable=True)  # User's known period length
+    has_provided_cycle_info = db.Column(db.Boolean, default=False)  # Track if user provided info
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Cycle tracking enhanced fields
-    personal_cycle_length = db.Column(db.Integer, nullable=True)
-    personal_period_length = db.Column(db.Integer, nullable=True)
-    has_provided_cycle_info = db.Column(db.Boolean, default=False)
-    
-    # Session management fields
-    last_activity = db.Column(db.DateTime, nullable=True)
-    current_session_data = db.Column(db.Text, nullable=True)
-    session_timeout_minutes = db.Column(db.Integer, default=2)
     
     # Relationships
     cycle_logs = db.relationship('CycleLog', backref='user', lazy=True)
@@ -35,63 +29,6 @@ class User(db.Model):
     
     def __repr__(self):
         return f'<User {self.name}>'
-
-
-class Admin(db.Model):
-    __tablename__ = 'admins'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    permissions = db.Column(db.Text, nullable=True)  # JSON string of permissions
-    department = db.Column(db.String(100), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship
-    user = db.relationship('User', backref='admin_profile', uselist=False)
-    
-    def __repr__(self):
-        return f'<Admin {self.id}>'
-
-
-class ContentWriter(db.Model):
-    __tablename__ = 'content_writers'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    specialization = db.Column(db.String(100), nullable=True)  # e.g., 'menstrual_health', 'nutrition'
-    bio = db.Column(db.Text, nullable=True)
-    is_approved = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship
-    user = db.relationship('User', backref='content_writer_profile', uselist=False)
-    content_items = db.relationship('ContentItem', backref='author', lazy=True)
-    
-    def __repr__(self):
-        return f'<ContentWriter {self.id}>'
-
-
-class HealthProvider(db.Model):
-    __tablename__ = 'health_providers'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    license_number = db.Column(db.String(50), nullable=True)
-    specialization = db.Column(db.String(100), nullable=True)
-    clinic_name = db.Column(db.String(200), nullable=True)
-    clinic_address = db.Column(db.Text, nullable=True)
-    phone = db.Column(db.String(20), nullable=True)
-    email = db.Column(db.String(120), nullable=True)
-    is_verified = db.Column(db.Boolean, default=False)
-    availability_hours = db.Column(db.Text, nullable=True)  # JSON string
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship
-    user = db.relationship('User', backref='health_provider_profile', uselist=False)
-    managed_appointments = db.relationship('Appointment', backref='health_provider', lazy=True, foreign_keys='Appointment.provider_id')
-    
-    def __repr__(self):
-        return f'<HealthProvider {self.id}>'
 
 
 class Parent(db.Model):
@@ -142,7 +79,6 @@ class CycleLog(db.Model):
     end_date = db.Column(db.DateTime, nullable=True)
     cycle_length = db.Column(db.Integer, nullable=True)
     period_length = db.Column(db.Integer, nullable=True)
-    flow_intensity = db.Column(db.String(20), nullable=True)  # 'light', 'medium', 'heavy'
     symptoms = db.Column(db.Text, nullable=True)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -176,15 +112,11 @@ class Appointment(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    provider_id = db.Column(db.Integer, db.ForeignKey('health_providers.id'), nullable=True)  # Assigned health provider
     appointment_for = db.Column(db.String(100), nullable=True)  # Could be 'self' or name of child
     appointment_date = db.Column(db.DateTime, nullable=False)
-    preferred_date = db.Column(db.DateTime, nullable=True)  # User's preferred date
     issue = db.Column(db.Text, nullable=False)
-    priority = db.Column(db.String(20), default='normal')  # 'low', 'normal', 'high', 'urgent'
-    status = db.Column(db.String(50), nullable=False, default='pending')  # 'pending', 'confirmed', 'cancelled', 'completed'
+    status = db.Column(db.String(50), nullable=False, default='pending')  # 'pending', 'confirmed', 'cancelled'
     notes = db.Column(db.Text, nullable=True)
-    provider_notes = db.Column(db.Text, nullable=True)  # Notes from health provider
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -225,14 +157,10 @@ class ContentItem(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     category_id = db.Column(db.Integer, db.ForeignKey('content_categories.id'), nullable=False)
-    author_id = db.Column(db.Integer, db.ForeignKey('content_writers.id'), nullable=True)  # Content writer who created this
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
     summary = db.Column(db.Text, nullable=True)
     image_url = db.Column(db.String(255), nullable=True)
-    status = db.Column(db.String(20), default='draft')  # 'draft', 'published', 'archived'
-    views = db.Column(db.Integer, default=0)  # Track content views
-    tags = db.Column(db.Text, nullable=True)  # JSON string of tags
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -254,51 +182,3 @@ class Feedback(db.Model):
     
     def __repr__(self):
         return f'<Feedback {self.id}>'
-
-
-class SystemLog(db.Model):
-    __tablename__ = 'system_logs'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    action = db.Column(db.String(100), nullable=False)  # e.g., 'login', 'logout', 'create_appointment'
-    details = db.Column(db.Text, nullable=True)  # JSON string with additional details
-    ip_address = db.Column(db.String(50), nullable=True)
-    user_agent = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship
-    user = db.relationship('User', backref='system_logs', lazy=True)
-    
-    def __repr__(self):
-        return f'<SystemLog {self.action}>'
-
-
-class Analytics(db.Model):
-    __tablename__ = 'analytics'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    metric_name = db.Column(db.String(100), nullable=False)  # e.g., 'daily_active_users', 'content_views'
-    metric_value = db.Column(db.Float, nullable=False)
-    date = db.Column(db.DateTime, nullable=False)
-    additional_data = db.Column(db.Text, nullable=True)  # JSON string for additional metrics
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    def __repr__(self):
-        return f'<Analytics {self.metric_name}>'
-
-
-class UserSession(db.Model):
-    __tablename__ = 'user_sessions'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    session_token = db.Column(db.String(255), nullable=False, unique=True)
-    device_info = db.Column(db.Text, nullable=True)
-    ip_address = db.Column(db.String(50), nullable=True)
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime, nullable=False)
-    
-    def __repr__(self):
-        return f'<UserSession {self.id}>'

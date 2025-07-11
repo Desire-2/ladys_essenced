@@ -183,7 +183,7 @@ def update_appointment(appointment_id):
         
         return jsonify({
             'message': 'Appointment updated successfully'
-        }), 200
+        }, 200)
         
     except ValueError as e:
         return jsonify({'message': f'Invalid date format: {str(e)}'}), 400
@@ -219,25 +219,22 @@ def delete_appointment(appointment_id):
 def get_upcoming_appointments():
     current_user_id = get_jwt_identity()
     
-    # Get current date and time
-    now = datetime.utcnow()
-    
-    # Query upcoming appointments
-    upcoming = Appointment.query.filter_by(user_id=current_user_id)\
-        .filter(Appointment.appointment_date >= now)\
-        .filter(Appointment.status != 'cancelled')\
-        .order_by(Appointment.appointment_date)\
-        .limit(5)\
-        .all()
+    # Get upcoming appointments (from today forward)
+    today = datetime.now().date()
+    appointments = Appointment.query.filter(
+        Appointment.user_id == current_user_id,
+        Appointment.appointment_date >= today
+    ).order_by(Appointment.appointment_date).limit(5).all()
     
     # Format the response
     result = [{
         'id': appointment.id,
-        'appointment_for': appointment.appointment_for,
+        'date': appointment.appointment_date.isoformat(),
         'appointment_date': appointment.appointment_date.isoformat(),
         'issue': appointment.issue,
         'status': appointment.status,
-        'days_until': (appointment.appointment_date.date() - now.date()).days
-    } for appointment in upcoming]
+        'for_user': appointment.appointment_for,
+        'notes': appointment.notes
+    } for appointment in appointments]
     
     return jsonify(result), 200

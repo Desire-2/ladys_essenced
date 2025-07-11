@@ -44,11 +44,13 @@ def get_meal_logs():
     
     # Format the response
     result = {
-        'items': [{
+        'logs': [{
             'id': log.id,
             'meal_type': log.meal_type,
             'meal_time': log.meal_time.isoformat(),
+            'date': log.meal_time.isoformat(),  # For backward compatibility
             'description': log.description,
+            'details': log.description,  # For backward compatibility
             'calories': log.calories,
             'protein': log.protein,
             'carbs': log.carbs,

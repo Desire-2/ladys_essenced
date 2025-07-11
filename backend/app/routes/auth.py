@@ -2,6 +2,8 @@ from app.models import User
 from app import db, bcrypt
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
+from datetime import datetime
+from datetime import datetime
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -57,100 +59,125 @@ def register():
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    
-    # Validate required fields
-    if not data or 'phone_number' not in data or 'password' not in data:
-        return jsonify({'message': 'Missing phone number or password'}), 400
-    
-    # Find user by phone number
-    user = User.query.filter_by(phone_number=data['phone_number']).first()
-    
-    # Check if user exists and password is correct
-    if not user or not bcrypt.check_password_hash(user.password_hash, data['password']):
-        return jsonify({'message': 'Invalid phone number or password'}), 401
-    
-    # Create access and refresh tokens
-    access_token = create_access_token(identity=user.id)
-    refresh_token = create_refresh_token(identity=user.id)
-    
-    return jsonify({
-        'message': 'Login successful',
-        'user_id': user.id,
-        'user_type': user.user_type,
-        'token': access_token,
-        'refresh_token': refresh_token
-    }), 200
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data or 'phone_number' not in data or 'password' not in data:
+            return jsonify({'message': 'Missing phone number or password'}), 400
+        
+        # Find user by phone number
+        user = User.query.filter_by(phone_number=data['phone_number']).first()
+        
+        # Check if user exists and password is correct
+        if not user or not bcrypt.check_password_hash(user.password_hash, data['password']):
+            return jsonify({'message': 'Invalid phone number or password'}), 401
+        
+        # Create access and refresh tokens with a string identity
+        user_identity = str(user.id)
+        print(f"Login: Creating tokens for user_id: {user.id}, identity: '{user_identity}' (type: {type(user_identity)})")
+        access_token = create_access_token(identity=user_identity)
+        refresh_token = create_refresh_token(identity=user_identity)
+        
+        return jsonify({
+            'message': 'Login successful',
+            'user_id': user.id,
+            'user_type': user.user_type,
+            'token': access_token,
+            'refresh_token': refresh_token
+        }), 200
+        
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        return jsonify({'message': 'Internal server error', 'error': str(e)}), 500
 
 @auth_bp.route('/refresh', methods=['POST'])
 @jwt_required(refresh=True)
 def refresh():
-    current_user_id = get_jwt_identity()
-    access_token = create_access_token(identity=current_user_id)
-    
-    return jsonify({
-        'token': access_token
-    }), 200
+    print("Refresh endpoint called")
+    try:
+        current_user_id = get_jwt_identity()
+        print(f"Refresh: Identity from token: {current_user_id} (type: {type(current_user_id)})")
+        
+        # Ensure identity is a string for the new access token
+        new_identity = str(current_user_id)
+        print(f"Refresh: Creating new access token with identity: '{new_identity}' (type: {type(new_identity)})")
+        access_token = create_access_token(identity=new_identity)
+        
+        return jsonify({
+            'token': access_token
+        }), 200
+    except Exception as e:
+        print(f"Refresh endpoint error: {str(e)}")
+        return jsonify({'message': 'Internal server error during refresh', 'error': str(e)}), 500
 
 @auth_bp.route('/profile', methods=['GET'])
 @jwt_required()
 def get_profile():
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
-    
-    if not user:
-        return jsonify({'message': 'User not found'}), 404
-    
-    # Get additional profile information based on user type
-    additional_info = {}
-    if user.user_type == 'parent':
-        from app.models import Parent, ParentChild, Adolescent
-        parent = Parent.query.filter_by(user_id=user.id).first()
-        if parent:
-            # Get children information
-            children = []
-            parent_child_relations = ParentChild.query.filter_by(parent_id=parent.id).all()
-            for relation in parent_child_relations:
-                adolescent = Adolescent.query.get(relation.adolescent_id)
-                if adolescent:
-                    adolescent_user = User.query.get(adolescent.user_id)
-                    if adolescent_user:
-                        children.append({
-                            'id': adolescent.id,
-                            'name': adolescent_user.name,
-                            'date_of_birth': adolescent.date_of_birth.isoformat() if adolescent.date_of_birth else None,
-                            'relationship': relation.relationship_type
-                        })
-            additional_info['children'] = children
-    elif user.user_type == 'adolescent':
-        from app.models import Adolescent, ParentChild, Parent
-        adolescent = Adolescent.query.filter_by(user_id=user.id).first()
-        if adolescent:
-            additional_info['date_of_birth'] = adolescent.date_of_birth.isoformat() if adolescent.date_of_birth else None
-            
-            # Get parent information
-            parents = []
-            parent_child_relations = ParentChild.query.filter_by(adolescent_id=adolescent.id).all()
-            for relation in parent_child_relations:
-                parent = Parent.query.get(relation.parent_id)
-                if parent:
-                    parent_user = User.query.get(parent.user_id)
-                    if parent_user:
-                        parents.append({
-                            'id': parent.id,
-                            'name': parent_user.name,
-                            'relationship': relation.relationship_type
-                        })
-            additional_info['parents'] = parents
-    
-    return jsonify({
-        'id': user.id,
-        'name': user.name,
-        'phone_number': user.phone_number,
-        'user_type': user.user_type,
-        'created_at': user.created_at.isoformat(),
-        **additional_info
-    }), 200
+    try:
+        print("Profile endpoint called")
+        current_user_id = get_jwt_identity()
+        print(f"Current user ID: {current_user_id}")
+        user = User.query.get(current_user_id)
+        print(f"User found: {user.name if user else 'None'}")
+        
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+
+        # Get additional profile information based on user type
+        additional_info = {}
+        if user.user_type == 'parent':
+            from app.models import Parent, ParentChild, Adolescent
+            parent = Parent.query.filter_by(user_id=user.id).first()
+            if parent:
+                # Get children information
+                children = []
+                parent_child_relations = ParentChild.query.filter_by(parent_id=parent.id).all()
+                for relation in parent_child_relations:
+                    adolescent = Adolescent.query.get(relation.adolescent_id)
+                    if adolescent:
+                        adolescent_user = User.query.get(adolescent.user_id)
+                        if adolescent_user:
+                            children.append({
+                                'id': adolescent.id,
+                                'name': adolescent_user.name,
+                                'date_of_birth': adolescent.date_of_birth.isoformat() if adolescent.date_of_birth else None,
+                                'relationship': relation.relationship_type
+                            })
+                additional_info['children'] = children
+        elif user.user_type == 'adolescent':
+            from app.models import Adolescent, ParentChild, Parent
+            adolescent = Adolescent.query.filter_by(user_id=user.id).first()
+            if adolescent:
+                additional_info['date_of_birth'] = adolescent.date_of_birth.isoformat() if adolescent.date_of_birth else None
+                
+                # Get parent information
+                parents = []
+                parent_child_relations = ParentChild.query.filter_by(adolescent_id=adolescent.id).all()
+                for relation in parent_child_relations:
+                    parent = Parent.query.get(relation.parent_id)
+                    if parent:
+                        parent_user = User.query.get(parent.user_id)
+                        if parent_user:
+                            parents.append({
+                                'id': parent.id,
+                                'name': parent_user.name,
+                                'relationship': relation.relationship_type
+                            })
+                additional_info['parents'] = parents
+
+        return jsonify({
+            'id': user.id,
+            'name': user.name,
+            'phone_number': user.phone_number,
+            'user_type': user.user_type,
+            'created_at': user.created_at.isoformat(),
+            **additional_info
+        }), 200
+        
+    except Exception as e:
+        print(f"Profile endpoint error: {str(e)}")
+        return jsonify({'message': 'Internal server error', 'error': str(e)}), 500
 
 @auth_bp.route('/profile', methods=['PUT'])
 @jwt_required()
@@ -182,4 +209,14 @@ def update_profile():
     
     return jsonify({
         'message': 'Profile updated successfully'
+    }, 200)
+
+@auth_bp.route('/test-jwt', methods=['GET'])
+@jwt_required()
+def test_jwt():
+    current_user_id = get_jwt_identity()
+    return jsonify({
+        'message': 'JWT is working correctly',
+        'user_id': current_user_id,
+        'timestamp': datetime.now().isoformat()
     }), 200

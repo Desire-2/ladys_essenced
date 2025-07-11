@@ -1,7 +1,38 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
+import { useAuth } from '../contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function Home() {
+  const { user, loading, getDashboardRoute } = useAuth();
+  const router = useRouter();
+
+  // Redirect logged-in users to their dashboard
+  useEffect(() => {
+    if (!loading && user) {
+      const dashboardRoute = getDashboardRoute();
+      router.push(dashboardRoute);
+    }
+  }, [user, loading, router, getDashboardRoute]);
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="d-flex justify-content-center align-items-center min-vh-100">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Only show home page if user is not logged in
+  if (user) {
+    return null; // Will redirect via useEffect
+  }
   return (
     <div className="overflow-hidden">
       {/* Hero Section */}

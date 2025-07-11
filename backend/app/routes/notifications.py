@@ -181,3 +181,25 @@ def update_notification_settings():
         'message': 'Notification settings updated successfully',
         'settings': data
     }), 200
+
+@notifications_bp.route('/recent', methods=['GET'])
+@jwt_required()
+def get_recent_notifications():
+    current_user_id = get_jwt_identity()
+    
+    # Get the 5 most recent notifications
+    notifications = Notification.query.filter_by(user_id=current_user_id)\
+        .order_by(Notification.created_at.desc())\
+        .limit(5)\
+        .all()
+    
+    # Format the response
+    result = [{
+        'id': notification.id,
+        'message': notification.message,
+        'notification_type': notification.notification_type,
+        'is_read': notification.read,
+        'date': notification.created_at.isoformat()
+    } for notification in notifications]
+    
+    return jsonify(result), 200

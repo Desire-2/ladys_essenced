@@ -82,6 +82,12 @@ def create_cycle_log():
         if 'end_date' in data and data['end_date']:
             end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
         
+        # Prepare symptoms: accept list or string
+        symptoms_raw = data.get('symptoms')
+        if isinstance(symptoms_raw, list):
+            symptoms_str = ','.join(symptoms_raw)
+        else:
+            symptoms_str = symptoms_raw
         # Create new cycle log
         new_log = CycleLog(
             user_id=current_user_id,
@@ -89,7 +95,7 @@ def create_cycle_log():
             end_date=end_date,
             cycle_length=data.get('cycle_length'),
             period_length=data.get('period_length'),
-            symptoms=data.get('symptoms'),
+            symptoms=symptoms_str,
             notes=data.get('notes')
         )
         
@@ -155,7 +161,12 @@ def update_cycle_log(log_id):
             log.period_length = data['period_length']
         
         if 'symptoms' in data:
-            log.symptoms = data['symptoms']
+            # Accept symptoms as list or string
+            symptoms_raw = data['symptoms']
+            if isinstance(symptoms_raw, list):
+                log.symptoms = ','.join(symptoms_raw)
+            else:
+                log.symptoms = symptoms_raw
         
         if 'notes' in data:
             log.notes = data['notes']
@@ -164,7 +175,7 @@ def update_cycle_log(log_id):
         
         return jsonify({
             'message': 'Cycle log updated successfully'
-        }), 200
+        }, 200)
         
     except ValueError as e:
         return jsonify({'message': f'Invalid date format: {str(e)}'}), 400
@@ -199,38 +210,180 @@ def delete_cycle_log(log_id):
 @jwt_required()
 def get_cycle_stats():
     current_user_id = get_jwt_identity()
+    print(f"Cycle stats called for user: {current_user_id}")
     
     # Get all cycle logs for the user
     logs = CycleLog.query.filter_by(user_id=current_user_id).order_by(CycleLog.start_date).all()
+    print(f"Found {len(logs)} cycle logs for user {current_user_id}")
     
     if not logs:
+        print("No cycle logs found, returning empty stats")
         return jsonify({
             'message': 'No cycle data available',
             'average_cycle_length': None,
             'average_period_length': None,
-            'total_logs': 0
+            'total_logs': 0,
+            'next_period_prediction': None,
+            'latest_period_start': None
         }), 200
     
     # Calculate statistics
     cycle_lengths = [log.cycle_length for log in logs if log.cycle_length]
     period_lengths = [log.period_length for log in logs if log.period_length]
     
+    print(f"Cycle lengths: {cycle_lengths}")
+    print(f"Period lengths: {period_lengths}")
+    
     avg_cycle_length = sum(cycle_lengths) / len(cycle_lengths) if cycle_lengths else None
     avg_period_length = sum(period_lengths) / len(period_lengths) if period_lengths else None
     
     # Get the most recent log
     latest_log = logs[-1]
+    print(f"Latest log: {latest_log.start_date} - {latest_log.end_date}")
     
     # Predict next period if possible
     next_period_prediction = None
     if latest_log and avg_cycle_length:
         import datetime as dt
         next_period_prediction = latest_log.start_date + dt.timedelta(days=int(avg_cycle_length))
+        print(f"Next period prediction: {next_period_prediction}")
     
-    return jsonify({
+    stats = {
         'average_cycle_length': avg_cycle_length,
         'average_period_length': avg_period_length,
         'total_logs': len(logs),
         'next_period_prediction': next_period_prediction.isoformat() if next_period_prediction else None,
         'latest_period_start': latest_log.start_date.isoformat() if latest_log else None
-    }), 200
+    }
+    
+    print(f"Returning stats: {stats}")
+    return jsonify(stats), 200
+
+@cycle_logs_bp.route('/calendar', methods=['GET'])
+@jwt_required()
+def get_calendar_data():
+    current_user_id = get_jwt_identity()
+    
+    # Get query parameters for month/year
+    year = request.args.get('year', datetime.now().year, type=int)
+    month = request.args.get('month', datetime.now().month, type=int)
+    
+    print(f"Calendar data requested for user {current_user_id}, {year}-{month:02d}")
+    
+    # Get start and end dates for the month
+    from calendar import monthrange
+    import datetime as dt
+    
+    start_date = dt.date(year, month, 1)
+    _, last_day = monthrange(year, month)
+    end_date = dt.date(year, month, last_day)
+    
+    # Extend to show full weeks (previous and next month days)
+    start_calendar = start_date - dt.timedelta(days=start_date.weekday() + 1)  # Start from Sunday
+    end_calendar = end_date + dt.timedelta(days=(6 - end_date.weekday()))
+    
+    print(f"Calendar range: {start_calendar} to {end_calendar}")
+    
+    # Get all cycle logs for the user
+    logs = CycleLog.query.filter_by(user_id=current_user_id).all()
+    
+    # Calculate average cycle length for predictions
+    cycle_lengths = [log.cycle_length for log in logs if log.cycle_length]
+    avg_cycle_length = sum(cycle_lengths) / len(cycle_lengths) if cycle_lengths else 28
+    
+    print(f"Found {len(logs)} logs, average cycle: {avg_cycle_length}")
+    
+    # Build calendar data
+    calendar_days = []
+    current_date = start_calendar
+    
+    while current_date <= end_calendar:
+        day_data = {
+            'date': current_date.isoformat(),
+            'day': current_date.day,
+            'is_current_month': current_date.month == month,
+            'is_today': current_date == dt.date.today(),
+            'period_day': False,
+            'ovulation_day': False,
+            'fertile_day': False,
+            'flow_intensity': None,
+            'symptoms': [],
+            'notes': None
+        }
+        
+        # Check if this date falls within any logged cycles
+        for log in logs:
+            log_start = log.start_date.date()
+            log_end = log.end_date.date() if log.end_date else log_start
+            
+            # Check if it's a period day
+            if log_start <= current_date <= log_end:
+                day_data['period_day'] = True
+                day_data['flow_intensity'] = 'medium'  # Default flow intensity
+                if log.symptoms:
+                    # Parse symptoms string into array
+                    if isinstance(log.symptoms, str):
+                        day_data['symptoms'] = [s.strip() for s in log.symptoms.split(',') if s.strip()]
+                    else:
+                        day_data['symptoms'] = log.symptoms
+                if log.notes:
+                    day_data['notes'] = log.notes
+                break
+            
+            # Calculate ovulation and fertile window
+            if log.cycle_length:
+                ovulation_date = log_start + dt.timedelta(days=log.cycle_length // 2)
+                fertile_start = ovulation_date - dt.timedelta(days=2)
+                fertile_end = ovulation_date + dt.timedelta(days=2)
+                
+                if current_date == ovulation_date:
+                    day_data['ovulation_day'] = True
+                elif fertile_start <= current_date <= fertile_end:
+                    day_data['fertile_day'] = True
+        
+        # Predict future periods based on the last cycle
+        if logs and not day_data['period_day']:
+            latest_log = max(logs, key=lambda x: x.start_date)
+            next_period_date = latest_log.start_date.date() + dt.timedelta(days=int(avg_cycle_length))
+            
+            # Check for predicted future periods (next 3 cycles)
+            for i in range(3):
+                predicted_start = next_period_date + dt.timedelta(days=int(avg_cycle_length) * i)
+                predicted_end = predicted_start + dt.timedelta(days=5)  # Assume 5-day period
+                
+                if predicted_start <= current_date <= predicted_end:
+                    day_data['period_day'] = True
+                    day_data['predicted'] = True
+                    break
+                
+                # Predicted ovulation and fertile window
+                predicted_ovulation = predicted_start + dt.timedelta(days=int(avg_cycle_length) // 2)
+                predicted_fertile_start = predicted_ovulation - dt.timedelta(days=2)
+                predicted_fertile_end = predicted_ovulation + dt.timedelta(days=2)
+                
+                if current_date == predicted_ovulation:
+                    day_data['ovulation_day'] = True
+                    day_data['predicted'] = True
+                    break
+                elif predicted_fertile_start <= current_date <= predicted_fertile_end:
+                    day_data['fertile_day'] = True
+                    day_data['predicted'] = True
+                    break
+        
+        calendar_days.append(day_data)
+        current_date += dt.timedelta(days=1)
+    
+    result = {
+        'year': year,
+        'month': month,
+        'month_name': dt.date(year, month, 1).strftime('%B'),
+        'days': calendar_days,
+        'stats': {
+            'total_logs': len(logs),
+            'average_cycle_length': avg_cycle_length,
+            'next_predicted_period': logs and (max(logs, key=lambda x: x.start_date).start_date.date() + dt.timedelta(days=int(avg_cycle_length))).isoformat()
+        }
+    }
+    
+    print(f"Returning calendar data with {len(calendar_days)} days")
+    return jsonify(result), 200

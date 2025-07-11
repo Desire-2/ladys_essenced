@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '../../contexts/AuthContext'; // Import useAuth
 
 export default function Login() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -11,6 +11,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { login, getDashboardRoute } = useAuth(); // Add getDashboardRoute
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,23 +24,24 @@ export default function Login() {
       return;
     }
 
-        try {
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+    try {
+      const result = await login({
         phone_number: phoneNumber,
         password,
       });
 
-      const { token, user_type, user_id } = response.data;
-      
-      localStorage.setItem('access_token', token);
-      localStorage.setItem('user_type', user_type);
-      localStorage.setItem('user_id', user_id);
-
-      router.push('/dashboard');
-    } catch (err: any) {
+      if (result.success) {
+        // Redirect to appropriate dashboard based on user type
+        const dashboardRoute = getDashboardRoute();
+        router.push(dashboardRoute);
+      } else {
+        setError(result.error || 'An error occurred. Please try again.');
+        setIsLoading(false);
+      }
+    } catch (err) {
+      // Fallback error handling
+      setError('An unexpected error occurred during login.');
       setIsLoading(false);
-      const errorMessage = err.response?.data?.message || 'An error occurred. Please try again.';
-      setError(errorMessage);
     }
   };
 

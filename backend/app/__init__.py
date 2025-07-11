@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
@@ -6,6 +6,7 @@ from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 import os
 import logging
+from datetime import timedelta
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -66,10 +67,14 @@ def create_app():
     
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'dev-secret-key')
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.environ.get('JWT_SECRET_KEY', 'dev-secret-key'))
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 60 * 60  # 1 hour
-    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = 30 * 24 * 60 * 60  # 30 days
+    
+    # JWT Configuration with debug info
+    jwt_secret = os.environ.get('JWT_SECRET_KEY', 'dev-secret-key')
+    print(f"JWT_SECRET_KEY loaded: {jwt_secret[:10]}..." if jwt_secret else "JWT_SECRET_KEY not found!")
+    app.config['JWT_SECRET_KEY'] = jwt_secret
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', jwt_secret)
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)  # 1 hour
+    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)  # 30 days
     
     # Environment-specific configuration
     app.config['ENV'] = os.environ.get('FLASK_ENV', 'development')
@@ -81,9 +86,29 @@ def create_app():
     jwt.init_app(app)
     bcrypt.init_app(app)
     
+    # JWT error handlers
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        print(f"JWT expired token: {jwt_payload}")
+        return jsonify({'message': 'Token has expired'}), 401
+    
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error):
+        print(f"JWT invalid token error: {error}")
+        return jsonify({'message': 'Invalid token'}), 401
+    
+    @jwt.unauthorized_loader
+    def missing_token_callback(error):
+        print(f"JWT missing token error: {error}")
+        return jsonify({'message': 'Authorization token is required'}), 401
+    
     # Enable CORS with environment-specific origins
-    allowed_origins = os.environ.get('ALLOWED_ORIGINS', '*').split(',')
-    CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
+    allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002,http://localhost:3003,http://127.0.0.1:3003,http://localhost:3004,http://127.0.0.1:3004,http://localhost:3005,http://127.0.0.1:3005').split(',')
+    CORS(app, 
+         resources={r"/api/*": {"origins": allowed_origins}},
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         supports_credentials=True)
     
     # Register blueprints
     from app.routes.auth import auth_bp
@@ -94,6 +119,9 @@ def create_app():
     from app.routes.content import content_bp
     from app.routes.parents import parents_bp
     from app.routes.ussd import ussd_bp
+    from app.routes.admin import admin_bp
+    from app.routes.content_writer import content_writer_bp
+    from app.routes.health_provider import health_provider_bp
 
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -104,6 +132,9 @@ def create_app():
     app.register_blueprint(content_bp, url_prefix='/api/content')
     app.register_blueprint(parents_bp, url_prefix='/api/parents')
     app.register_blueprint(ussd_bp, url_prefix='/api/ussd')
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    app.register_blueprint(content_writer_bp, url_prefix='/api/content-writer')
+    app.register_blueprint(health_provider_bp, url_prefix='/api/health-provider')
     
     # Create database tables and ensure proper schema
     with app.app_context():

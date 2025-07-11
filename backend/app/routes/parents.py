@@ -79,10 +79,10 @@ def get_child(adolescent_id):
     return jsonify(child_data), 200
 
 @parents_bp.route('/children', methods=['POST'])
+@parents_bp.route('/children/add', methods=['POST'])
 @jwt_required()
 def add_child():
     current_user_id = get_jwt_identity()
-    data = request.get_json()
     
     # Check if user is a parent
     user = User.query.get(current_user_id)
@@ -94,8 +94,10 @@ def add_child():
     if not parent:
         return jsonify({'message': 'Parent record not found'}), 404
     
+    data = request.get_json()
+    
     # Validate required fields
-    required_fields = ['name', 'phone_number', 'password']
+    required_fields = ['name', 'phone_number', 'password', 'relationship_type']
     for field in required_fields:
         if field not in data:
             return jsonify({'message': f'Missing required field: {field}'}), 400
@@ -104,58 +106,58 @@ def add_child():
     if User.query.filter_by(phone_number=data['phone_number']).first():
         return jsonify({'message': 'Phone number already registered'}), 409
     
+    # Validate relationship type
+    valid_relationships = ['mother', 'father', 'guardian']
+    if data['relationship_type'] not in valid_relationships:
+        return jsonify({'message': 'Invalid relationship type'}), 400
+    
     try:
-        # Create new user for the adolescent
+        # Create user account for the child
         from app import bcrypt
         password_hash = bcrypt.generate_password_hash(data['password']).decode('utf-8')
         
-        new_user = User(
+        child_user = User(
             name=data['name'],
             phone_number=data['phone_number'],
             password_hash=password_hash,
             user_type='adolescent'
         )
-        
-        db.session.add(new_user)
-        db.session.flush()  # Get the ID without committing
+        db.session.add(child_user)
+        db.session.flush()  # Get the user_id
         
         # Create adolescent record
-        date_of_birth = None
-        if 'date_of_birth' in data and data['date_of_birth']:
-            date_of_birth = datetime.fromisoformat(data['date_of_birth'].replace('Z', '+00:00'))
-        
-        new_adolescent = Adolescent(
-            user_id=new_user.id,
-            date_of_birth=date_of_birth
+        adolescent = Adolescent(
+            user_id=child_user.id,
+            date_of_birth=datetime.fromisoformat(data['date_of_birth']) if data.get('date_of_birth') else None
         )
-        
-        db.session.add(new_adolescent)
-        db.session.flush()  # Get the ID without committing
+        db.session.add(adolescent)
+        db.session.flush()  # Get the adolescent_id
         
         # Create parent-child relationship
-        relationship_type = data.get('relationship_type', 'parent')
-        
-        new_relation = ParentChild(
+        parent_child = ParentChild(
             parent_id=parent.id,
-            adolescent_id=new_adolescent.id,
-            relationship_type=relationship_type
+            adolescent_id=adolescent.id,
+            relationship_type=data['relationship_type']
         )
+        db.session.add(parent_child)
         
-        db.session.add(new_relation)
         db.session.commit()
         
         return jsonify({
             'message': 'Child added successfully',
-            'child_id': new_adolescent.id,
-            'user_id': new_user.id
+            'child': {
+                'id': adolescent.id,
+                'user_id': child_user.id,
+                'name': child_user.name,
+                'phone_number': child_user.phone_number,
+                'date_of_birth': adolescent.date_of_birth.isoformat() if adolescent.date_of_birth else None,
+                'relationship': parent_child.relationship_type
+            }
         }), 201
         
-    except ValueError as e:
-        db.session.rollback()
-        return jsonify({'message': f'Invalid date format: {str(e)}'}), 400
     except Exception as e:
         db.session.rollback()
-        return jsonify({'message': f'Error adding child: {str(e)}'}), 500
+        return jsonify({'message': 'Failed to add child', 'error': str(e)}), 500
 
 @parents_bp.route('/children/<int:adolescent_id>', methods=['PUT'])
 @jwt_required()
@@ -206,13 +208,44 @@ def update_child(adolescent_id):
         return jsonify({
             'message': 'Child information updated successfully'
         }), 200
-        
     except ValueError as e:
         db.session.rollback()
         return jsonify({'message': f'Invalid date format: {str(e)}'}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({'message': f'Error updating child information: {str(e)}'}), 500
+
+@parents_bp.route('/children/<int:adolescent_id>', methods=['DELETE'])
+@jwt_required()
+def delete_child(adolescent_id):
+    current_user_id = get_jwt_identity()
+    # Check if user is a parent
+    user = User.query.get(current_user_id)
+    if not user or user.user_type != 'parent':
+        return jsonify({'message': 'Only parent accounts can access this endpoint'}), 403
+    # Get parent record
+    parent = Parent.query.filter_by(user_id=current_user_id).first()
+    if not parent:
+        return jsonify({'message': 'Parent record not found'}), 404
+    # Check if this adolescent is a child of the parent
+    relation = ParentChild.query.filter_by(parent_id=parent.id, adolescent_id=adolescent_id).first()
+    if not relation:
+        return jsonify({'message': 'Child not found or not associated with this parent'}), 404
+    # Get adolescent and user records
+    adolescent = Adolescent.query.get(adolescent_id)
+    adolescent_user = User.query.get(adolescent.user_id) if adolescent else None
+    try:
+        # Remove records
+        db.session.delete(relation)
+        if adolescent:
+            db.session.delete(adolescent)
+        if adolescent_user:
+            db.session.delete(adolescent_user)
+        db.session.commit()
+        return jsonify({'message': 'Child deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error deleting child: {str(e)}'}), 500
 
 @parents_bp.route('/children/<int:adolescent_id>/cycle-logs', methods=['GET'])
 @jwt_required()
