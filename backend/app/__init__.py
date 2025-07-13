@@ -368,12 +368,7 @@ def create_app():
         return jsonify({'message': 'Authorization token is required'}), 401
     
     # Enable CORS with environment-specific origins
-    allowed_origins = os.environ.get('ALLOWED_ORIGINS').split(',')
-    CORS(app, 
-         resources={r"/api/*": {"origins": allowed_origins}},
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         supports_credentials=True)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
     
     # Register blueprints
     from app.routes.auth import auth_bp
