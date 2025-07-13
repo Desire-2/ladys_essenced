@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
@@ -369,11 +369,34 @@ def create_app():
     
     # Enable CORS with environment-specific origins
     allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002,http://localhost:3003,http://127.0.0.1:3003,http://localhost:3004,http://127.0.0.1:3004,http://localhost:3005,http://127.0.0.1:3005,https://ladys-essenced.vercel.app').split(',')
-    CORS(app, 
-         resources={r"/api/*": {"origins": allowed_origins}},
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         supports_credentials=True)
+    
+    # Debug CORS configuration
+    print(f"[CORS] Allowed origins: {allowed_origins}")
+    print(f"[CORS] Environment: {app.config.get('ENV', 'unknown')}")
+    
+    # Configure CORS with explicit settings
+    cors_config = {
+        'origins': allowed_origins,
+        'methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        'allow_headers': ['Content-Type', 'Authorization', 'Access-Control-Allow-Origin', 'Accept', 'Origin', 'X-Requested-With'],
+        'supports_credentials': True,
+        'max_age': 86400,  # 24 hours for preflight cache
+        'send_wildcard': False,
+        'automatic_options': True
+    }
+    
+    CORS(app, resources={r"/api/*": cors_config})
+    
+    # Add response headers for all requests
+    @app.after_request
+    def after_request(response):
+        origin = request.headers.get('Origin')
+        if origin in allowed_origins:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, Origin, X-Requested-With'
+        return response
     
     # Register blueprints
     from app.routes.auth import auth_bp
@@ -457,6 +480,17 @@ def create_app():
             'status': 'healthy',
             'message': 'Lady\'s Essence API is running',
             'timestamp': datetime.utcnow().isoformat()
+        })
+    
+    @app.route('/api/test-cors')
+    def test_cors():
+        """Simple endpoint to test CORS configuration"""
+        from datetime import datetime
+        return jsonify({
+            'message': 'CORS test successful',
+            'timestamp': datetime.utcnow().isoformat(),
+            'origin': request.headers.get('Origin', 'No origin header'),
+            'method': request.method
         })
     
     return app

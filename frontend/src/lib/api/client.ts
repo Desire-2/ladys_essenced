@@ -1,7 +1,5 @@
 // API utility functions for dashboard interactions
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
 class APIClient {
   private getHeaders() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
