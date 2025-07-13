@@ -10,6 +10,11 @@ export const useAuth = () => {
   return useContext(AuthContext);
 };
 
+// API Base URL - use environment variable in production, relative path in development
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
+  : '';
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -22,7 +27,7 @@ export const AuthProvider = ({ children }) => {
       throw new Error('No authentication token');
     }
 
-    const response = await fetch(endpoint, {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -37,10 +42,25 @@ export const AuthProvider = ({ children }) => {
         logout();
         throw new Error('Authentication expired');
       }
+      const errorText = await response.text();
+      console.error(`API Error: ${response.status}`, errorText);
       throw new Error(`API Error: ${response.status}`);
     }
 
-    return response.json();
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await response.text();
+      console.error(`Expected JSON but received:`, text.substring(0, 200));
+      throw new Error(`Expected JSON response but received: ${contentType || 'unknown content type'}`);
+    }
+
+    try {
+      return await response.json();
+    } catch (parseError) {
+      const text = await response.text();
+      console.error('JSON parse error:', parseError, 'Response text:', text.substring(0, 200));
+      throw new Error('Invalid JSON response from server');
+    }
   };
 
   // Check if user is logged in on initial load and fetch profile based on user type
@@ -99,7 +119,7 @@ export const AuthProvider = ({ children }) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
       
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,7 +165,7 @@ export const AuthProvider = ({ children }) => {
             break;
         }
         
-        const profileResponse = await fetch(profileEndpoint, {
+        const profileResponse = await fetch(`${API_BASE_URL}${profileEndpoint}`, {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,

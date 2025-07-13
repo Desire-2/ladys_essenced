@@ -1,9 +1,33 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { buildHealthProviderApiUrl } from '../../utils/apiConfig';
+
+// Helper function to handle API responses safely
+const handleApiResponse = async (response: Response, errorMessage: string = 'API request failed') => {
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`${errorMessage}:`, response.status, errorText);
+    throw new Error(`${errorMessage}: ${response.status}`);
+  }
+
+  const contentType = response.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    const text = await response.text();
+    console.error(`Expected JSON but received:`, text.substring(0, 200));
+    throw new Error(`Expected JSON response but received: ${contentType || 'unknown content type'}`);
+  }
+
+  try {
+    return await response.json();
+  } catch (parseError) {
+    const text = await response.text();
+    console.error('JSON parse error:', parseError, 'Response text:', text.substring(0, 200));
+    throw new Error('Invalid JSON response from server');
+  }
+};
 
 interface ProviderStats {
   appointment_stats: {
@@ -93,9 +117,9 @@ export default function HealthProviderDashboard() {
   const [error, setError] = useState('');
 
   // Filter states
-  const [statusFilter, setStatusFilter] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [priorityFilter, setPriorityFilter] = useState<string>('');
+  const [dateFilter, setDateFilter] = useState<string>('');
 
   const router = useRouter();
   const { user, loading: authLoading, hasRole, getDashboardRoute } = useAuth();
@@ -136,10 +160,8 @@ export default function HealthProviderDashboard() {
         }
       });
 
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStats(statsData);
-      }
+      const statsData = await handleApiResponse(statsResponse, 'Failed to load dashboard stats');
+      setStats(statsData);
 
       setError('');
     } catch (err: any) {
@@ -150,31 +172,37 @@ export default function HealthProviderDashboard() {
     }
   };
 
-  const loadAppointments = async () => {
+  const loadAppointments = useCallback(async () => {
     try {
       const token = localStorage.getItem('access_token');
       const params = new URLSearchParams();
-      if (statusFilter) params.append('status', statusFilter);
-      if (priorityFilter) params.append('priority', priorityFilter);
-      if (dateFilter) params.append('date_filter', dateFilter);
+      
+      // Defensive checks for filter states
+      if (statusFilter && typeof statusFilter === 'string') {
+        params.append('status', statusFilter);
+      }
+      if (priorityFilter && typeof priorityFilter === 'string') {
+        params.append('priority', priorityFilter);
+      }
+      if (dateFilter && typeof dateFilter === 'string') {
+        params.append('date_filter', dateFilter);
+      }
 
-      const response = await fetch(`/api/health-provider/appointments?${params}`, {
+      const response = await fetch(buildHealthProviderApiUrl(`/appointments?${params}`), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setAppointments(data.appointments);
-      }
+      const data = await handleApiResponse(response, 'Failed to load appointments');
+      setAppointments(data.appointments);
     } catch (err) {
       console.error('Failed to load appointments:', err);
     }
-  };
+  }, [statusFilter, priorityFilter, dateFilter]);
 
-  const loadUnassignedAppointments = async () => {
+  const loadUnassignedAppointments = useCallback(async () => {
     try {
       const token = localStorage.getItem('access_token');
       const response = await fetch(buildHealthProviderApiUrl('/appointments/unassigned'), {
@@ -184,61 +212,55 @@ export default function HealthProviderDashboard() {
         }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setUnassignedAppointments(data.appointments);
-      }
+      const data = await handleApiResponse(response, 'Failed to load unassigned appointments');
+      setUnassignedAppointments(data.appointments);
     } catch (err) {
       console.error('Failed to load unassigned appointments:', err);
     }
-  };
+  }, []);
 
-  const loadPatients = async () => {
+  const loadPatients = useCallback(async () => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/health-provider/patients', {
+      const response = await fetch(buildHealthProviderApiUrl('/patients'), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setPatients(data.patients);
-      }
+      const data = await handleApiResponse(response, 'Failed to load patients');
+      setPatients(data.patients);
     } catch (err) {
       console.error('Failed to load patients:', err);
     }
-  };
+  }, []);
 
-  const loadSchedule = async () => {
+  const loadSchedule = useCallback(async () => {
     try {
       const token = localStorage.getItem('access_token');
       const today = new Date();
       const endDate = new Date(today);
       endDate.setDate(today.getDate() + 7);
 
-      const response = await fetch(`/api/health-provider/schedule?start_date=${today.toISOString().split('T')[0]}&end_date=${endDate.toISOString().split('T')[0]}`, {
+      const response = await fetch(buildHealthProviderApiUrl(`/schedule?start_date=${today.toISOString().split('T')[0]}&end_date=${endDate.toISOString().split('T')[0]}`), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setSchedule(data.schedule);
-      }
+      const data = await handleApiResponse(response, 'Failed to load schedule');
+      setSchedule(data.schedule);
     } catch (err) {
       console.error('Failed to load schedule:', err);
     }
-  };
+  }, []);
 
   const claimAppointment = async (appointmentId: number) => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(`/api/health-provider/appointments/${appointmentId}/claim`, {
+      const response = await fetch(buildHealthProviderApiUrl(`/appointments/${appointmentId}/claim`), {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -246,11 +268,10 @@ export default function HealthProviderDashboard() {
         }
       });
 
-      if (response.ok) {
-        loadUnassignedAppointments();
-        loadAppointments();
-        loadDashboardData();
-      }
+      await handleApiResponse(response, 'Failed to claim appointment');
+      loadUnassignedAppointments();
+      loadAppointments();
+      loadDashboardData();
     } catch (err) {
       console.error('Failed to claim appointment:', err);
     }
@@ -259,7 +280,7 @@ export default function HealthProviderDashboard() {
   const updateAppointment = async (appointmentId: number, updates: any) => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(`/api/health-provider/appointments/${appointmentId}/update`, {
+      const response = await fetch(buildHealthProviderApiUrl(`/appointments/${appointmentId}/update`), {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -268,16 +289,20 @@ export default function HealthProviderDashboard() {
         body: JSON.stringify(updates)
       });
 
-      if (response.ok) {
-        loadAppointments();
-        loadDashboardData();
-      }
+      await handleApiResponse(response, 'Failed to update appointment');
+      loadAppointments();
+      loadDashboardData();
     } catch (err) {
       console.error('Failed to update appointment:', err);
     }
   };
 
   useEffect(() => {
+    // Ensure all filter states are initialized before proceeding
+    if (typeof statusFilter === 'undefined' || typeof priorityFilter === 'undefined' || typeof dateFilter === 'undefined') {
+      return;
+    }
+    
     if (activeTab === 'appointments') {
       loadAppointments();
     } else if (activeTab === 'unassigned') {
@@ -287,7 +312,7 @@ export default function HealthProviderDashboard() {
     } else if (activeTab === 'schedule') {
       loadSchedule();
     }
-  }, [activeTab, statusFilter, priorityFilter, dateFilter]);
+  }, [activeTab, loadAppointments, loadUnassignedAppointments, loadPatients, loadSchedule]);
 
   if (loading) {
     return (

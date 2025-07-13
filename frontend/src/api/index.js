@@ -2,7 +2,9 @@ import axios from 'axios';
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: '',  // Use relative URLs to leverage Next.js rewrites
+  baseURL: process.env.NODE_ENV === 'production' 
+    ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
+    : '',  // Use relative URLs in development
   headers: {
     'Content-Type': 'application/json',
   },
@@ -56,7 +58,10 @@ api.interceptors.response.use(
         }
         
         console.log('Attempting token refresh...');
-        const response = await axios.post('/api/auth/refresh', {}, {
+        const refreshBaseURL = process.env.NODE_ENV === 'production' 
+          ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
+          : '';
+        const response = await axios.post(`${refreshBaseURL}/api/auth/refresh`, {}, {
           headers: {
             'Authorization': `Bearer ${refreshToken}`
           }

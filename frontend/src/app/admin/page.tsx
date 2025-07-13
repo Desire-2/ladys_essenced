@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
+import { buildAuthApiUrl } from '../../utils/apiConfig';
 
 interface DashboardStats {
   users: {
@@ -1275,7 +1276,7 @@ export default function AdminDashboard() {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch(buildAuthApiUrl('/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginForm)

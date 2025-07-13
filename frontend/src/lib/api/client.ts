@@ -1,5 +1,10 @@
 // API utility functions for dashboard interactions
 
+// API Base URL - use environment variable in production, relative path in development
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
+  : '';
+
 class APIClient {
   private getHeaders() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -10,7 +15,7 @@ class APIClient {
   }
 
   private async request(endpoint: string, options: RequestInit = {}) {
-    const url = endpoint; // Use relative URLs to leverage Next.js rewrites
+    const url = `${API_BASE_URL}${endpoint}`;
     const response = await fetch(url, {
       ...options,
       headers: {

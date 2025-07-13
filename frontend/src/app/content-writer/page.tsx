@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { buildContentWriterApiUrl } from '../../utils/apiConfig';
 
 // Interfaces
 interface ContentItem {
@@ -460,10 +461,6 @@ export default function ContentWriterDashboard() {
     } finally {
       setRequestEditLoading(false);
     }
-  };
-  // API utility function
-  const buildContentWriterApiUrl = (endpoint: string) => {
-    return `/api/content-writer${endpoint}`;
   };
 
   // State management
