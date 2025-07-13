@@ -61,6 +61,13 @@ class ContentWriter(db.Model):
     specialization = db.Column(db.String(100), nullable=True)  # e.g., 'menstrual_health', 'nutrition'
     bio = db.Column(db.Text, nullable=True)
     is_approved = db.Column(db.Boolean, default=False)
+    rank = db.Column(db.String(50), default='Beginner')  # 'Beginner', 'Intermediate', 'Expert', 'Master'
+    experience_level = db.Column(db.String(50), default='Entry')  # 'Entry', 'Mid', 'Senior', 'Lead'
+    total_earnings = db.Column(db.Float, default=0.0)  # Total earnings from content
+    rating = db.Column(db.Float, default=0.0)  # Writer's average rating
+    portfolio_url = db.Column(db.String(255), nullable=True)  # Portfolio website
+    social_links = db.Column(db.Text, nullable=True)  # JSON string of social media links
+    preferences = db.Column(db.Text, nullable=True)  # JSON string of preferences
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationship
@@ -69,6 +76,25 @@ class ContentWriter(db.Model):
     
     def __repr__(self):
         return f'<ContentWriter {self.id}>'
+
+    def to_dict(self):
+        """Convert content writer to dictionary for API responses"""
+        return {
+            'id': self.id,
+            'name': self.user.name if self.user else None,
+            'email': self.user.email if self.user else None,
+            'specialization': self.specialization,
+            'bio': self.bio,
+            'is_approved': self.is_approved,
+            'rank': self.rank,
+            'experience_level': self.experience_level,
+            'total_earnings': self.total_earnings or 0.0,
+            'rating': self.rating or 0.0,
+            'portfolio_url': self.portfolio_url,
+            'social_links': self.social_links,
+            'preferences': self.preferences,
+            'created_at': self.created_at.isoformat()
+        }
 
 
 class HealthProvider(db.Model):
@@ -230,14 +256,49 @@ class ContentItem(db.Model):
     content = db.Column(db.Text, nullable=False)
     summary = db.Column(db.Text, nullable=True)
     image_url = db.Column(db.String(255), nullable=True)
-    status = db.Column(db.String(20), default='draft')  # 'draft', 'published', 'archived'
+    featured_image = db.Column(db.String(255), nullable=True)  # Featured image URL
+    status = db.Column(db.String(20), default='draft')  # 'draft', 'pending_review', 'published', 'rejected', 'archived'
     views = db.Column(db.Integer, default=0)  # Track content views
+    likes = db.Column(db.Integer, default=0)  # Track content likes
+    comments = db.Column(db.Integer, default=0)  # Track content comments
+    rating = db.Column(db.Float, default=0.0)  # Average rating (1-5 stars)
+    word_count = db.Column(db.Integer, default=0)  # Word count
+    reading_time = db.Column(db.Integer, default=0)  # Estimated reading time in minutes
     tags = db.Column(db.Text, nullable=True)  # JSON string of tags
+    seo_keywords = db.Column(db.Text, nullable=True)  # JSON string of SEO keywords
+    social_shares = db.Column(db.Integer, default=0)  # Track social media shares
+    review_notes = db.Column(db.Text, nullable=True)  # Admin review notes
+    published_at = db.Column(db.DateTime, nullable=True)  # When content was published
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     def __repr__(self):
         return f'<ContentItem {self.title}>'
+
+    def to_dict(self):
+        """Convert content item to dictionary for API responses"""
+        return {
+            'id': self.id,
+            'title': self.title,
+            'summary': self.summary,
+            'content': self.content,
+            'status': self.status,
+            'views': self.views or 0,
+            'likes': self.likes or 0,
+            'comments': self.comments or 0,
+            'rating': self.rating or 0.0,
+            'category': self.category.name if self.category else None,
+            'category_id': self.category_id,
+            'tags': self.tags,
+            'seo_keywords': self.seo_keywords,
+            'word_count': self.word_count or 0,
+            'reading_time': self.reading_time or 0,
+            'featured_image': self.featured_image,
+            'review_notes': self.review_notes,
+            'published_at': self.published_at.isoformat() if self.published_at else None,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
+        }
 
 
 class Feedback(db.Model):
@@ -302,3 +363,123 @@ class UserSession(db.Model):
     
     def __repr__(self):
         return f'<UserSession {self.id}>'
+
+
+class Course(db.Model):
+    __tablename__ = 'courses'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('content_writers.id'), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('content_categories.id'), nullable=True)
+    level = db.Column(db.String(20), nullable=False, default='beginner')  # beginner, intermediate, advanced
+    duration = db.Column(db.String(100), nullable=False)  # e.g., "4 weeks", "2 hours"
+    price = db.Column(db.Float, default=0.0)
+    featured_image = db.Column(db.String(500), nullable=True)
+    status = db.Column(db.String(20), default='draft')  # draft, pending_review, published, rejected
+    views = db.Column(db.Integer, default=0)
+    likes = db.Column(db.Integer, default=0)
+    rating = db.Column(db.Float, default=0.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    published_at = db.Column(db.DateTime, nullable=True)
+    
+    # Relationships
+    author = db.relationship('ContentWriter', backref='courses')
+    category = db.relationship('ContentCategory', backref='courses')
+    modules = db.relationship('Module', backref='course', lazy=True, cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<Course {self.title}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'author_id': self.author_id,
+            'category_id': self.category_id,
+            'level': self.level,
+            'duration': self.duration,
+            'price': self.price,
+            'featured_image': self.featured_image,
+            'status': self.status,
+            'views': self.views,
+            'likes': self.likes,
+            'rating': self.rating,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'published_at': self.published_at.isoformat() if self.published_at else None,
+            'author_name': self.author.user.name if self.author else None,
+            'category_name': self.category.name if self.category else None,
+            'modules_count': len(self.modules),
+            'modules': [module.to_dict() for module in self.modules] if hasattr(self, '_modules_loaded') else []
+        }
+
+
+class Module(db.Model):
+    __tablename__ = 'modules'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
+    order_index = db.Column(db.Integer, nullable=False, default=0)
+    duration = db.Column(db.String(50), nullable=True)  # e.g., "30 minutes"
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    chapters = db.relationship('Chapter', backref='module', lazy=True, cascade='all, delete-orphan', order_by='Chapter.order_index')
+    
+    def __repr__(self):
+        return f'<Module {self.title}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'course_id': self.course_id,
+            'order_index': self.order_index,
+            'duration': self.duration,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'chapters_count': len(self.chapters),
+            'chapters': [chapter.to_dict() for chapter in self.chapters] if hasattr(self, '_chapters_loaded') else []
+        }
+
+
+class Chapter(db.Model):
+    __tablename__ = 'chapters'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=True)
+    module_id = db.Column(db.Integer, db.ForeignKey('modules.id'), nullable=False)
+    order_index = db.Column(db.Integer, nullable=False, default=0)
+    content_type = db.Column(db.String(20), default='text')  # text, video, audio, quiz
+    video_url = db.Column(db.String(500), nullable=True)
+    audio_url = db.Column(db.String(500), nullable=True)
+    duration = db.Column(db.String(50), nullable=True)  # e.g., "15 minutes"
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<Chapter {self.title}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'content': self.content,
+            'module_id': self.module_id,
+            'order_index': self.order_index,
+            'content_type': self.content_type,
+            'video_url': self.video_url,
+            'audio_url': self.audio_url,
+            'duration': self.duration,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }

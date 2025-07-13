@@ -1,0 +1,2698 @@
+'use client';
+
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../../contexts/AuthContext';
+import AIWritingAssistant from '../../components/AIWritingAssistant';
+import TemplateLibrary from '../../components/TemplateLibrary';
+import ContentEditor from '../../components/ContentEditor';
+import AnalyticsDashboard from '../../components/AnalyticsDashboard';
+import ContentCalendar from '../../components/ContentCalendar';
+
+interface WriterStats {
+  content_stats: {
+    total: number;
+    published: number;
+    draft: number;
+    pending_review: number;
+    rejected: number;
+    total_views: number;
+    total_likes: number;
+    total_comments: number;
+    avg_rating: number;
+  };
+  recent_content: Array<{
+    id: number;
+    title: string;
+    status: string;
+    views: number;
+    likes: number;
+    comments: number;
+    rating: number;
+    created_at: string;
+  }>;
+  monthly_performance: Array<{
+    month: string;
+    content_created: number;
+    total_views: number;
+    total_engagement: number;
+  }>;
+  writer_info: {
+    specialization: string;
+    is_approved: boolean;
+    rank: string;
+    experience_level: string;
+    total_earnings: number;
+  };
+  trending_topics: Array<{
+    topic: string;
+    demand: number;
+    avg_views: number;
+  }>;
+}
+
+interface ContentItem {
+  id: number;
+  title: string;
+  summary: string;
+  content: string;
+  status: string;
+  views: number;
+  likes: number;
+  comments: number;
+  rating: number;
+  category: string;
+  category_id: number;
+  tags: string[];
+  seo_keywords: string[];
+  word_count: number;
+  reading_time: number;
+  created_at: string;
+  updated_at: string;
+  published_at: string;
+  review_notes: string;
+  featured_image: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+  description: string;
+}
+
+interface Profile {
+  name: string;
+  email: string;
+  specialization: string;
+  bio: string;
+  is_approved: boolean;
+  rank: string;
+  experience_level: string;
+  total_earnings: number;
+  rating: number;
+  portfolio_url: string;
+  social_links: {
+    twitter: string;
+    linkedin: string;
+    website: string;
+  };
+  preferences: {
+    email_notifications: boolean;
+    content_suggestions: boolean;
+    performance_alerts: boolean;
+  };
+  created_at: string;
+}
+
+export default function ContentWriterDashboard() {
+  // Helper function to build content writer API URLs
+  const buildContentWriterApiUrl = (endpoint: string) => {
+    return `/api/content-writer${endpoint}`;
+  };
+
+  const [activeTab, setActiveTab] = useState('overview');
+  const [stats, setStats] = useState<WriterStats | null>(null);
+  const [content, setContent] = useState<ContentItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Form states
+  const [isCreating, setIsCreating] = useState(false);
+  const [editingContent, setEditingContent] = useState<ContentItem | null>(null);
+  const [viewingContent, setViewingContent] = useState<ContentItem | null>(null);
+  const [formData, setFormData] = useState({
+    title: '',
+    summary: '',
+    content: '',
+    category_id: '',
+    tags: [] as string[],
+    seo_keywords: [] as string[],
+    featured_image: ''
+  });
+  const [tagInput, setTagInput] = useState('');
+  const [seoKeywordInput, setSeoKeywordInput] = useState('');
+  const [keywordInput, setKeywordInput] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+
+  // Analytics states
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [contentSuggestions, setContentSuggestions] = useState<any[]>([]);
+  const [performanceInsights, setPerformanceInsights] = useState<any>(null);
+
+  // Enhanced states
+  const [aiWritingAssistant, setAiWritingAssistant] = useState(false);
+  const [contentTemplates, setContentTemplates] = useState<any[]>([]);
+  const [collaborators, setCollaborators] = useState<any[]>([]);
+  const [darkMode, setDarkMode] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [contentHistory, setContentHistory] = useState<any[]>([]);
+  const [plagiarismCheck, setPlagiarismCheck] = useState<any>(null);
+  const [seoScore, setSeoScore] = useState<number>(0);
+  const [grammarCheck, setGrammarCheck] = useState<any[]>([]);
+  const [publishSchedule, setPublishSchedule] = useState('');
+  const [targetAudience, setTargetAudience] = useState('');
+  const [contentGoals, setContentGoals] = useState<any[]>([]);
+  const [socialMediaPreview, setSocialMediaPreview] = useState<any>({});
+  const [exportFormat, setExportFormat] = useState('pdf');
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
+  const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
+  const [editorContent, setEditorContent] = useState('');
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [success, setSuccess] = useState('');
+
+  const resetFormData = () => ({
+    title: '',
+    summary: '',
+    content: '',
+    category_id: '',
+    tags: [] as string[],
+    seo_keywords: [] as string[],
+    featured_image: ''
+  });
+
+  const router = useRouter();
+  const { user, loading: authLoading, hasRole, getDashboardRoute } = useAuth();
+
+  // Role-based access control
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+      return;
+    }
+    
+    if (!authLoading && user && !hasRole('content_writer')) {
+      // Redirect to appropriate dashboard based on user type
+      const correctRoute = getDashboardRoute();
+      router.push(correctRoute);
+      return;
+    }
+    
+    if (!authLoading && user && hasRole('content_writer')) {
+      loadDashboardData();
+      loadCategories();
+      loadContentSuggestions();
+      initializeEnhancedFeatures();
+    }
+  }, [user, authLoading, router, hasRole, getDashboardRoute]);
+
+  // Initialize enhanced features with mock data
+  const initializeEnhancedFeatures = () => {
+    // Mock notifications
+    setNotifications([
+      { message: 'Your article "Beauty Trends 2024" has been approved!', time: '2 hours ago' },
+      { message: 'New collaboration request from Sarah Johnson', time: '1 day ago' },
+      { message: 'Weekly analytics report is ready', time: '3 days ago' }
+    ]);
+
+    // Mock active collaborators
+    setCollaborators([
+      { id: '1', name: 'Sarah Johnson', avatar: 'SJ', cursor_position: 0, is_typing: false, color: '#3B82F6' },
+      { id: '2', name: 'Mark Davis', avatar: 'MD', cursor_position: 0, is_typing: false, color: '#10B981' }
+    ]);
+
+    // Mock calendar events
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+
+    setCalendarEvents([
+      {
+        id: '1',
+        title: 'Article Deadline: Beauty Trends 2024',
+        description: 'Submit final draft for review',
+        date: tomorrow.toISOString().split('T')[0],
+        time: '10:00',
+        type: 'deadline',
+        status: 'upcoming'
+      },
+      {
+        id: '2',
+        title: 'Editorial Meeting',
+        description: 'Monthly content planning meeting',
+        date: nextWeek.toISOString().split('T')[0],
+        time: '14:00',
+        type: 'meeting',
+        status: 'upcoming'
+      },
+      {
+        id: '3',
+        title: 'Publish: Skincare Routine Guide',
+        description: 'Schedule publication on main website',
+        date: new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        time: '09:00',
+        type: 'publish',
+        status: 'upcoming'
+      }
+    ]);
+  };
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (autoSaveEnabled && (formData.title || formData.content) && (isCreating || editingContent)) {
+      const autoSaveTimer = setTimeout(() => {
+        saveDraft();
+      }, 30000); // Auto-save every 30 seconds
+
+      return () => clearTimeout(autoSaveTimer);
+    }
+  }, [autoSaveEnabled, formData.title, formData.content, isCreating, editingContent]);
+
+  // Auto-hide success and error messages
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  // Dark mode effect
+  useEffect(() => {
+    localStorage.setItem('darkMode', darkMode.toString());
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  // Word count and reading time calculation
+  const wordCount = useMemo(() => {
+    return formData.content.split(/\s+/).filter(word => word.length > 0).length;
+  }, [formData.content]);
+
+  const readingTime = useMemo(() => {
+    return Math.ceil(wordCount / 200); // Average reading speed: 200 words per minute
+  }, [wordCount]);
+
+  // Filtered and sorted content
+  const filteredContent = useMemo(() => {
+    let filtered = content.filter(item => {
+      const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           item.summary.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    filtered.sort((a, b) => {
+      let aValue = a[sortBy as keyof ContentItem];
+      let bValue = b[sortBy as keyof ContentItem];
+      
+      if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+      if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+      
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
+    return filtered;
+  }, [content, searchTerm, statusFilter, sortBy, sortOrder]);
+
+  const makeApiCall = useCallback(async (url: string, options?: RequestInit) => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      router.push('/login');
+      throw new Error('No authentication token');
+    }
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...options?.headers,
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Token expired, redirect to login
+          localStorage.removeItem('access_token');
+          router.push('/login');
+          throw new Error('Session expired');
+        }
+        
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `API call failed: ${response.statusText}`);
+      }
+
+      return response.json();
+    } catch (error: any) {
+      console.error('API call error:', error);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout');
+      }
+      throw error;
+    }
+  }, [router]);
+
+  const saveDraft = useCallback(async () => {
+    if (!formData.title && !formData.content) return;
+    
+    try {
+      const url = editingContent 
+        ? buildContentWriterApiUrl(`/content/${editingContent.id}`)
+        : buildContentWriterApiUrl('/content/draft');
+      
+      await makeApiCall(url, {
+        method: editingContent ? 'PUT' : 'POST',
+        body: JSON.stringify({
+          ...formData,
+          status: 'draft',
+          auto_save: true
+        })
+      });
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+    }
+  }, [formData, editingContent, makeApiCall]);
+
+  const loadContentSuggestions = useCallback(async () => {
+    try {
+      const data = await makeApiCall(buildContentWriterApiUrl('/suggestions'));
+      setContentSuggestions(data.suggestions || []);
+    } catch (error) {
+      console.error('Failed to load content suggestions:', error);
+    }
+  }, [makeApiCall]);
+
+  const loadAnalytics = useCallback(async () => {
+    try {
+      const data = await makeApiCall(buildContentWriterApiUrl('/analytics'));
+      setAnalyticsData(data);
+    } catch (error) {
+      console.error('Failed to load analytics:', error);
+    }
+  }, [makeApiCall]);
+
+  const loadPerformanceInsights = useCallback(async () => {
+    try {
+      const data = await makeApiCall(buildContentWriterApiUrl('/insights'));
+      setPerformanceInsights(data);
+    } catch (error) {
+      console.error('Failed to load performance insights:', error);
+    }
+  }, [makeApiCall]);
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const statsData = await makeApiCall(buildContentWriterApiUrl('/dashboard/stats'));
+      setStats(statsData);
+      
+    } catch (err: any) {
+      console.error('Failed to load content writer dashboard:', err);
+      setError(err.message || 'Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadContent = async () => {
+    try {
+      const data = await makeApiCall(buildContentWriterApiUrl('/content'));
+      setContent(data.content || []);
+    } catch (err: any) {
+      console.error('Failed to load content:', err);
+      setError(err.message || 'Failed to load content');
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const data = await makeApiCall(buildContentWriterApiUrl('/categories'));
+      setCategories(data.categories || []);
+    } catch (err: any) {
+      console.error('Failed to load categories:', err);
+      // Don't show error for categories as it's not critical
+    }
+  };
+
+  const loadProfile = async () => {
+    try {
+      const data = await makeApiCall(buildContentWriterApiUrl('/profile'));
+      setProfile(data.profile || data);
+    } catch (err: any) {
+      console.error('Failed to load profile:', err);
+      setError(err.message || 'Failed to load profile');
+    }
+  };
+
+  const handleCreateContent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setError('');
+      const data = await makeApiCall(buildContentWriterApiUrl('/content'), {
+        method: 'POST',
+        body: JSON.stringify(formData)
+      });
+
+      setFormData(resetFormData());
+      setIsCreating(false);
+      setSuccess('Content created successfully!');
+      
+      // Reload data
+      loadContent();
+      loadDashboardData();
+      
+    } catch (err: any) {
+      console.error('Failed to create content:', err);
+      setError(err.message || 'Failed to create content');
+    }
+  };
+
+  const handleUpdateContent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingContent) return;
+
+    try {
+      setError('');
+      const data = await makeApiCall(buildContentWriterApiUrl(`/content/${editingContent.id}`), {
+        method: 'PUT',
+        body: JSON.stringify(formData)
+      });
+
+      setFormData(resetFormData());
+      setEditingContent(null);
+      setSuccess('Content updated successfully!');
+      
+      // Reload data
+      loadContent();
+      loadDashboardData();
+      
+    } catch (err: any) {
+      console.error('Failed to update content:', err);
+      setError(err.message || 'Failed to update content');
+    }
+  };
+
+  const submitForReview = async (contentId: number) => {
+    try {
+      setActionLoading({...actionLoading, [`submit-${contentId}`]: true});
+      
+      await makeApiCall(buildContentWriterApiUrl(`/content/${contentId}/submit`), {
+        method: 'PATCH'
+      });
+
+      setSuccess('Content submitted for review successfully!');
+      loadContent();
+      loadDashboardData();
+      
+    } catch (err: any) {
+      console.error('Failed to submit content:', err);
+      setError(err.message || 'Failed to submit content for review');
+    } finally {
+      setActionLoading({...actionLoading, [`submit-${contentId}`]: false});
+    }
+  };
+
+  const deleteContent = async (contentId: number) => {
+    if (!confirm('Are you sure you want to delete this content? This action cannot be undone.')) return;
+
+    try {
+      setActionLoading({...actionLoading, [`delete-${contentId}`]: true});
+      
+      await makeApiCall(buildContentWriterApiUrl(`/content/${contentId}`), {
+        method: 'DELETE'
+      });
+
+      setSuccess('Content deleted successfully!');
+      loadContent();
+      loadDashboardData();
+      
+    } catch (err: any) {
+      console.error('Failed to delete content:', err);
+      setError(err.message || 'Failed to delete content');
+    } finally {
+      setActionLoading({...actionLoading, [`delete-${contentId}`]: false});
+    }
+  };
+
+  const publishContent = async (contentId: number) => {
+    try {
+      setActionLoading({...actionLoading, [`publish-${contentId}`]: true});
+      
+      await makeApiCall(buildContentWriterApiUrl(`/content/${contentId}/publish`), {
+        method: 'PATCH'
+      });
+
+      setSuccess('Content published successfully!');
+      loadContent();
+      loadDashboardData();
+      
+    } catch (err: any) {
+      console.error('Failed to publish content:', err);
+      setError(err.message || 'Failed to publish content');
+    } finally {
+      setActionLoading({...actionLoading, [`publish-${contentId}`]: false});
+    }
+  };
+
+  const viewContent = (item: ContentItem) => {
+    // Set the content to view mode - for now, we'll show it in the create tab
+    setEditingContent(item);
+    setFormData({
+      title: item.title,
+      summary: item.summary,
+      content: item.content || '',
+      category_id: item.category_id?.toString() || '',
+      tags: item.tags || [],
+      seo_keywords: item.seo_keywords || [],
+      featured_image: item.featured_image || ''
+    });
+    setActiveTab('create');
+  };
+
+  const startEditing = (item: ContentItem) => {
+    setEditingContent(item);
+    setFormData({
+      title: item.title,
+      summary: item.summary,
+      content: item.content || '',
+      category_id: item.category_id?.toString() || '',
+      tags: item.tags || [],
+      seo_keywords: item.seo_keywords || [],
+      featured_image: item.featured_image || ''
+    });
+    setActiveTab('create'); // Switch to create tab for editing
+    setSuccess(`Editing: ${item.title}`);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'content') {
+      loadContent();
+    } else if (activeTab === 'profile') {
+      loadProfile();
+    }
+  }, [activeTab]);
+
+  if (loading) {
+    return (
+      <div className={`min-h-screen d-flex align-items-center justify-content-center ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="text-center">
+          <div className="spinner-border text-primary mb-3" role="status" style={{width: '3rem', height: '3rem'}}>
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <h5 className={darkMode ? 'text-white' : 'text-gray-800'}>Loading Content Writer Dashboard...</h5>
+          <p className={`text-muted ${darkMode ? 'text-gray-300' : ''}`}>Please wait while we prepare your workspace</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !stats) {
+    return (
+      <div className={`min-h-screen d-flex align-items-center justify-content-center ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="container">
+          <div className="row justify-content-center">
+            <div className="col-md-6">
+              <div className="card border-danger">
+                <div className="card-body text-center">
+                  <i className="fas fa-exclamation-triangle text-danger fa-3x mb-3"></i>
+                  <h5 className="card-title text-danger">Dashboard Error</h5>
+                  <p className="card-text">{error}</p>
+                  <button 
+                    className="btn btn-primary me-2"
+                    onClick={() => {
+                      setError('');
+                      loadDashboardData();
+                    }}
+                  >
+                    <i className="fas fa-redo me-2"></i>
+                    Retry
+                  </button>
+                  <button 
+                    className="btn btn-outline-secondary"
+                    onClick={() => {
+                      localStorage.removeItem('access_token');
+                      router.push('/login');
+                    }}
+                  >
+                    <i className="fas fa-sign-out-alt me-2"></i>
+                    Logout
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
+      <div className="container py-4">
+        {/* Header */}
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+          <div className="mb-3 mb-md-0">
+            <h1 className={`mb-1 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+              <span className="d-none d-md-inline">Content Writer Dashboard</span>
+              <span className="d-md-none">Writer Dashboard</span>
+            </h1>
+            <p className={`mb-0 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              <span className="d-none d-lg-inline">Create, manage, and optimize your content with advanced AI tools</span>
+              <span className="d-lg-none">Manage your content and tools</span>
+            </p>
+          </div>
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className={`btn ${darkMode ? 'btn-outline-light' : 'btn-outline-dark'}`}
+              title="Toggle Dark Mode"
+            >
+              {darkMode ? '☀️' : '🌙'}
+            </button>
+            
+            {/* Notifications */}
+            <div className="position-relative">
+              <button
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="btn btn-outline-primary position-relative"
+                title="Notifications"
+              >
+                <i className="fas fa-bell"></i>
+                {notifications.length > 0 && (
+                  <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {notifications.length}
+                  </span>
+                )}
+              </button>
+              
+              {showNotifications && (
+                <div className="position-absolute end-0 mt-2 w-80 bg-white shadow-lg rounded-lg border z-50">
+                  <div className="p-3 border-bottom">
+                    <h6 className="mb-0">Notifications</h6>
+                  </div>
+                  <div className="max-h-80 overflow-auto">
+                    {notifications.length > 0 ? notifications.map((notification, index) => (
+                      <div key={index} className="p-3 border-bottom hover:bg-gray-50">
+                        <div className="d-flex align-items-start">
+                          <div className="flex-shrink-0 me-3">
+                            <span className="badge bg-primary">!</span>
+                          </div>
+                          <div className="flex-grow-1">
+                            <p className="mb-1 small">{notification.message}</p>
+                            <small className="text-muted">{notification.time}</small>
+                          </div>
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="p-4 text-center text-muted">
+                        No new notifications
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* User Menu */}
+            <button 
+              className="btn btn-outline-secondary"
+              onClick={() => {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('user_id');
+                localStorage.removeItem('user_type');
+                router.push('/login');
+              }}
+              title="Logout"
+            >
+              <i className="fas fa-sign-out-alt me-2 d-none d-md-inline"></i>
+              <span className="d-none d-md-inline">Logout</span>
+              <i className="fas fa-sign-out-alt d-md-none"></i>
+            </button>
+          </div>
+        </div>
+
+      {/* Approval Status Alert */}
+      {stats && !stats.writer_info.is_approved && (
+        <div className="alert alert-warning alert-enhanced mb-4" role="alert">
+          <i className="fas fa-exclamation-triangle me-2"></i>
+          Your content writer account is pending approval. You can create content, but it won't be published until your account is approved.
+        </div>
+      )}
+
+      {/* Enhanced Navigation */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <ul className="nav nav-pills nav-fill flex-column flex-md-row nav-tabs-enhanced">
+            <li className="nav-item mb-2 mb-md-0">
+              <a 
+                className={`nav-link ${activeTab === 'overview' ? 'active' : ''}`} 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('overview');
+                }}
+              >
+                <i className="fas fa-chart-line me-2"></i>
+                <span className="d-none d-sm-inline">Overview</span>
+                <span className="d-sm-none">Stats</span>
+              </a>
+            </li>
+            <li className="nav-item mb-2 mb-md-0">
+              <a 
+                className={`nav-link ${activeTab === 'content' ? 'active' : ''}`} 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('content');
+                }}
+              >
+                <i className="fas fa-file-alt me-2"></i>
+                <span className="d-none d-sm-inline">My Content</span>
+                <span className="d-sm-none">Content</span>
+              </a>
+            </li>
+            <li className="nav-item mb-2 mb-md-0">
+              <a 
+                className={`nav-link ${activeTab === 'create' ? 'active' : ''}`} 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('create');
+                }}
+              >
+                <i className="fas fa-plus me-2"></i>
+                <span className="d-none d-sm-inline">Create Content</span>
+                <span className="d-sm-none">Create</span>
+              </a>
+            </li>
+            <li className="nav-item mb-2 mb-md-0">
+              <a 
+                className={`nav-link ${activeTab === 'analytics' ? 'active' : ''}`} 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('analytics');
+                  loadAnalytics();
+                }}
+              >
+                <i className="fas fa-chart-bar me-2"></i>
+                <span className="d-none d-sm-inline">Analytics</span>
+                <span className="d-sm-none">Stats</span>
+              </a>
+            </li>
+            <li className="nav-item mb-2 mb-md-0">
+              <a 
+                className={`nav-link ${activeTab === 'ai-tools' ? 'active' : ''}`} 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('ai-tools');
+                }}
+              >
+                <i className="fas fa-robot me-2"></i>
+                <span className="d-none d-lg-inline">AI Tools</span>
+                <span className="d-lg-none">AI</span>
+              </a>
+            </li>
+            <li className="nav-item mb-2 mb-md-0">
+              <a 
+                className={`nav-link ${activeTab === 'templates' ? 'active' : ''}`} 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('templates');
+                }}
+              >
+                <i className="fas fa-file-text me-2"></i>
+                <span className="d-none d-lg-inline">Templates</span>
+                <span className="d-lg-none">Temp</span>
+              </a>
+            </li>
+            <li className="nav-item mb-2 mb-md-0">
+              <a 
+                className={`nav-link ${activeTab === 'collaboration' ? 'active' : ''}`} 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('collaboration');
+                }}
+              >
+                <i className="fas fa-users me-2"></i>
+                <span className="d-none d-lg-inline">Collaboration</span>
+                <span className="d-lg-none">Team</span>
+              </a>
+            </li>
+            <li className="nav-item mb-2 mb-md-0">
+              <a 
+                className={`nav-link ${activeTab === 'calendar' ? 'active' : ''}`} 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('calendar');
+                }}
+              >
+                <i className="fas fa-calendar me-2"></i>
+                <span className="d-none d-sm-inline">Calendar</span>
+                <span className="d-sm-none">Cal</span>
+              </a>
+            </li>
+            <li className="nav-item">
+              <a 
+                className={`nav-link ${activeTab === 'profile' ? 'active' : ''}`} 
+                href="#" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('profile');
+                }}
+              >
+                <i className="fas fa-user me-2"></i>
+                <span className="d-none d-sm-inline">Profile</span>
+                <span className="d-sm-none">User</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Overview Tab */}
+      {activeTab === 'overview' && (
+        <div>
+          {stats ? (
+            <>
+              {/* Statistics Cards */}
+              <div className="row mb-4">
+                <div className="col-lg-2 col-md-4 mb-3">
+                  <div className="card card-enhanced bg-primary text-white h-100">
+                    <div className="card-body">
+                      <div className="d-flex justify-content-between">
+                        <div>
+                          <h4>{stats.content_stats.total}</h4>
+                          <p className="mb-0 small">Total Content</p>
+                        </div>
+                        <div className="fs-1 opacity-75">
+                          <i className="fas fa-file-alt"></i>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            <div className="col-lg-2 col-md-4 mb-3">
+              <div className="card card-enhanced bg-success text-white h-100">
+                <div className="card-body">
+                  <div className="d-flex justify-content-between">
+                    <div>
+                      <h4>{stats.content_stats.published}</h4>
+                      <p className="mb-0 small">Published</p>
+                    </div>
+                    <div className="fs-1 opacity-75">
+                      <i className="fas fa-check-circle"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="col-lg-2 col-md-4 mb-3">
+              <div className="card card-enhanced bg-warning text-white h-100">
+                <div className="card-body">
+                  <div className="d-flex justify-content-between">
+                    <div>
+                      <h4>{stats.content_stats.draft}</h4>
+                      <p className="mb-0 small">Drafts</p>
+                    </div>
+                    <div className="fs-1 opacity-75">
+                      <i className="fas fa-edit"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="col-lg-2 col-md-4 mb-3">
+              <div className="card card-enhanced bg-info text-white h-100">
+                <div className="card-body">
+                  <div className="d-flex justify-content-between">
+                    <div>
+                      <h4>{stats.content_stats.total_views}</h4>
+                      <p className="mb-0 small">Total Views</p>
+                    </div>
+                    <div className="fs-1 opacity-75">
+                      <i className="fas fa-eye"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="col-lg-2 col-md-4 mb-3">
+              <div className="card bg-secondary text-white h-100">
+                <div className="card-body">
+                  <div className="d-flex justify-content-between">
+                    <div>
+                      <h4>{stats.content_stats.total_likes || 0}</h4>
+                      <p className="mb-0 small">Total Likes</p>
+                    </div>
+                    <div className="fs-1 opacity-75">
+                      <i className="fas fa-heart"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="col-lg-2 col-md-4 mb-3">
+              <div className="card card-enhanced bg-dark text-white h-100">
+                <div className="card-body">
+                  <div className="d-flex justify-content-between">
+                    <div>
+                      <h4>{stats.content_stats.avg_rating?.toFixed(1) || '0.0'}</h4>
+                      <p className="mb-0 small">Avg Rating</p>
+                    </div>
+                    <div className="fs-1 opacity-75">
+                      <i className="fas fa-star"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="row mb-4">
+            <div className="col-12">
+              <div className="card">
+                <div className="card-header">
+                  <h5><i className="fas fa-bolt me-2"></i>Quick Actions</h5>
+                </div>
+                <div className="card-body">
+                  <div className="row">
+                    <div className="col-md-3 mb-2">
+                      <button 
+                        className="btn btn-primary btn-enhanced w-100"
+                        onClick={() => setActiveTab('create')}
+                      >
+                        <i className="fas fa-plus me-2"></i>New Article
+                      </button>
+                    </div>
+                    <div className="col-md-3 mb-2">
+                      <button 
+                        className="btn btn-outline-primary w-100"
+                        onClick={() => setActiveTab('content')}
+                      >
+                        <i className="fas fa-list me-2"></i>Manage Content
+                      </button>
+                    </div>
+                    <div className="col-md-3 mb-2">
+                      <button 
+                        className="btn btn-outline-success w-100"
+                        onClick={() => setActiveTab('analytics')}
+                      >
+                        <i className="fas fa-chart-line me-2"></i>View Analytics
+                      </button>
+                    </div>
+                    <div className="col-md-3 mb-2">
+                      <button 
+                        className="btn btn-outline-info w-100"
+                        onClick={() => loadPerformanceInsights()}
+                      >
+                        <i className="fas fa-lightbulb me-2"></i>Get Insights
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Content Suggestions */}
+          {contentSuggestions.length > 0 && (
+            <div className="row mb-4">
+              <div className="col-12">
+                <div className="card">
+                  <div className="card-header">
+                    <h5><i className="fas fa-lightbulb me-2"></i>Content Suggestions</h5>
+                  </div>
+                  <div className="card-body">
+                    <div className="row">
+                      {contentSuggestions.map((suggestion, index) => (
+                        <div key={index} className="col-md-4 mb-3">
+                          <div className="card bg-light">
+                            <div className="card-body">
+                              <h6 className="card-title">{suggestion.topic}</h6>
+                              <p className="card-text small">{suggestion.description}</p>
+                              <div className="d-flex justify-content-between align-items-center">
+                                <span className="badge bg-primary">{suggestion.category}</span>
+                                <button 
+                                  className="btn btn-sm btn-outline-primary"
+                                  onClick={() => {
+                                    setFormData({
+                                      ...resetFormData(),
+                                      title: suggestion.title || suggestion.topic,
+                                      summary: suggestion.description
+                                    });
+                                    setActiveTab('create');
+                                  }}
+                                >
+                                  Use
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Recent Content and Performance */}
+          <div className="row">
+            <div className="col-md-6">
+              <div className="card h-100">
+                <div className="card-header">
+                  <h5><i className="fas fa-clock me-2"></i>Recent Content</h5>
+                </div>
+                <div className="card-body">
+                  {stats.recent_content.length > 0 ? stats.recent_content.map(item => (
+                    <div key={item.id} className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                      <div className="flex-grow-1">
+                        <strong className="d-block">{item.title}</strong>
+                        <div className="d-flex align-items-center mt-1">
+                          <span className={`badge bg-${item.status === 'published' ? 'success' : item.status === 'draft' ? 'warning' : 'secondary'} me-2`}>
+                            {item.status}
+                          </span>
+                          <small className="text-muted me-2">
+                            <i className="fas fa-eye me-1"></i>{item.views}
+                          </small>
+                          <small className="text-muted me-2">
+                            <i className="fas fa-heart me-1"></i>{item.likes || 0}
+                          </small>
+                          <small className="text-muted">
+                            <i className="fas fa-star me-1"></i>{item.rating?.toFixed(1) || '0.0'}
+                          </small>
+                        </div>
+                      </div>
+                      <small className="text-muted">{new Date(item.created_at).toLocaleDateString()}</small>
+                    </div>
+                  )) : (
+                    <p className="text-muted">No recent content available</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="col-md-6">
+              <div className="card h-100">
+                <div className="card-header">
+                  <h5><i className="fas fa-chart-bar me-2"></i>Monthly Performance</h5>
+                </div>
+                <div className="card-body">
+                  {stats.monthly_performance.length > 0 ? stats.monthly_performance.map((month, index) => (
+                    <div key={index} className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                      <div>
+                        <strong className="d-block">{month.month}</strong>
+                        <small className="text-muted">{month.content_created} articles</small>
+                      </div>
+                      <div className="text-end">
+                        <div className="fw-bold">{month.total_views} views</div>
+                        <small className="text-muted">{month.total_engagement || 0} engagement</small>
+                      </div>
+                    </div>
+                  )) : (
+                    <p className="text-muted">No performance data available</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Writer Info */}
+          <div className="row mt-4">
+            <div className="col-12">
+              <div className="card">
+                <div className="card-header">
+                  <h5><i className="fas fa-user-edit me-2"></i>Writer Information</h5>
+                </div>
+                <div className="card-body">
+                  <div className="row">
+                    <div className="col-md-3">
+                      <strong>Specialization:</strong>
+                      <p>{stats.writer_info.specialization || 'Not specified'}</p>
+                    </div>
+                    <div className="col-md-3">
+                      <strong>Status:</strong>
+                      <p>
+                        <span className={`badge bg-${stats.writer_info.is_approved ? 'success' : 'warning'}`}>
+                          {stats.writer_info.is_approved ? 'Approved' : 'Pending Approval'}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="col-md-3">
+                      <strong>Rank:</strong>
+                      <p>{stats.writer_info.rank || 'Beginner'}</p>
+                    </div>
+                    <div className="col-md-3">
+                      <strong>Total Earnings:</strong>
+                      <p className="text-success fw-bold">${stats.writer_info.total_earnings || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+            </>
+          ) : (
+            <div className="row">
+              <div className="col-12">
+                <div className="card">
+                  <div className="card-body text-center py-5">
+                    <div className="spinner-border text-primary mb-3" role="status">
+                      <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <h6>Loading dashboard statistics...</h6>
+                    <p className="text-muted mb-0">Please wait while we fetch your latest data</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Content Management Tab */}
+      {activeTab === 'content' && (
+        <div>
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h5><i className="fas fa-file-alt me-2"></i>My Content</h5>
+            <button 
+              className="btn btn-primary"
+              onClick={() => setActiveTab('create')}
+            >
+              <i className="fas fa-plus me-2"></i>Create New
+            </button>
+          </div>
+
+          {/* Search and Filters */}
+          <div className="card mb-4">
+            <div className="card-body">
+              <div className="row">
+                <div className="col-md-4">
+                  <div className="input-group">
+                    <span className="input-group-text">
+                      <i className="fas fa-search"></i>
+                    </span>
+                    <input
+                      type="text"
+                      className="form-control form-control-enhanced"
+                      placeholder="Search content..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="col-md-3">
+                  <select
+                    className="form-control"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    <option value="all">All Status</option>
+                    <option value="draft">Draft</option>
+                    <option value="pending_review">Pending Review</option>
+                    <option value="published">Published</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
+                <div className="col-md-3">
+                  <select
+                    className="form-control"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                  >
+                    <option value="created_at">Created Date</option>
+                    <option value="updated_at">Updated Date</option>
+                    <option value="title">Title</option>
+                    <option value="views">Views</option>
+                    <option value="likes">Likes</option>
+                    <option value="rating">Rating</option>
+                  </select>
+                </div>
+                <div className="col-md-2">
+                  <button
+                    className="btn btn-outline-secondary w-100"
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  >
+                    <i className={`fas fa-sort-${sortOrder === 'asc' ? 'up' : 'down'} me-1`}></i>
+                    {sortOrder.toUpperCase()}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="card">
+            <div className="card-body">
+              {filteredContent.length > 0 ? (
+                <div className="table-responsive">
+                  <table className="table table-hover table-enhanced">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Title</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th>Performance</th>
+                        <th>Word Count</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredContent.map(item => (
+                        <tr key={item.id}>
+                          <td>
+                            <div>
+                              <strong className="d-block">{item.title}</strong>
+                              <small className="text-muted">{item.summary?.substring(0, 80)}...</small>
+                              {item.tags && item.tags.length > 0 && (
+                                <div className="mt-1">
+                                  {item.tags.slice(0, 3).map((tag, index) => (
+                                    <span key={index} className="badge bg-light text-dark me-1 small">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                  {item.tags.length > 3 && (
+                                    <span className="badge bg-light text-dark small">+{item.tags.length - 3}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <span className="badge bg-secondary">{item.category}</span>
+                          </td>
+                          <td>
+                            <span className={`badge bg-${item.status === 'published' ? 'success' : 
+                              item.status === 'draft' ? 'warning' : 
+                              item.status === 'pending_review' ? 'info' : 'danger'}`}>
+                              {item.status.replace('_', ' ').toUpperCase()}
+                            </span>
+                            {item.review_notes && (
+                              <i className="fas fa-comment-alt ms-1" title={item.review_notes}></i>
+                            )}
+                          </td>
+                          <td>
+                            <div className="small">
+                              <div><i className="fas fa-eye me-1"></i>{item.views || 0}</div>
+                              <div><i className="fas fa-heart me-1"></i>{item.likes || 0}</div>
+                              <div><i className="fas fa-star me-1"></i>{item.rating?.toFixed(1) || '0.0'}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="small">
+                              <div>{item.word_count || 0} words</div>
+                              <div>{item.reading_time || 0} min read</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="small">
+                              <div>{new Date(item.created_at).toLocaleDateString()}</div>
+                              {item.published_at && (
+                                <div className="text-muted">Pub: {new Date(item.published_at).toLocaleDateString()}</div>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="btn-group btn-group-sm" role="group">
+                              {/* Edit Button */}
+                              <button 
+                                className="btn btn-outline-primary btn-enhanced"
+                                onClick={() => startEditing(item)}
+                                disabled={actionLoading[`edit-${item.id}`]}
+                                title="Edit Content"
+                              >
+                                {actionLoading[`edit-${item.id}`] ? (
+                                  <span className="spinner-border spinner-border-sm" role="status"></span>
+                                ) : (
+                                  <i className="fas fa-edit"></i>
+                                )}
+                              </button>
+                              
+                              {/* Submit for Review Button (only for drafts) */}
+                              {item.status === 'draft' && (
+                                <button 
+                                  className="btn btn-outline-success btn-enhanced"
+                                  onClick={() => submitForReview(item.id)}
+                                  disabled={actionLoading[`submit-${item.id}`]}
+                                  title="Submit for Review"
+                                >
+                                  {actionLoading[`submit-${item.id}`] ? (
+                                    <span className="spinner-border spinner-border-sm" role="status"></span>
+                                  ) : (
+                                    <i className="fas fa-paper-plane"></i>
+                                  )}
+                                </button>
+                              )}
+                              
+                              {/* Publish Button (for approved content) */}
+                              {item.status === 'approved' && (
+                                <button 
+                                  className="btn btn-outline-success btn-enhanced"
+                                  onClick={() => publishContent(item.id)}
+                                  disabled={actionLoading[`publish-${item.id}`]}
+                                  title="Publish Content"
+                                >
+                                  {actionLoading[`publish-${item.id}`] ? (
+                                    <span className="spinner-border spinner-border-sm" role="status"></span>
+                                  ) : (
+                                    <i className="fas fa-globe"></i>
+                                  )}
+                                </button>
+                              )}
+                              
+                              {/* View Button */}
+                              <button 
+                                className="btn btn-outline-info btn-enhanced"
+                                onClick={() => viewContent(item)}
+                                title="View Content"
+                              >
+                                <i className="fas fa-eye"></i>
+                              </button>
+                              
+                              {/* External Link Button (for published content) */}
+                              {item.status === 'published' && (
+                                <button 
+                                  className="btn btn-outline-secondary btn-enhanced"
+                                  onClick={() => window.open(`/content/${item.id}`, '_blank')}
+                                  title="Open in New Tab"
+                                >
+                                  <i className="fas fa-external-link-alt"></i>
+                                </button>
+                              )}
+                              
+                              {/* Delete Button */}
+                              <button 
+                                className="btn btn-outline-danger btn-enhanced"
+                                onClick={() => deleteContent(item.id)}
+                                disabled={actionLoading[`delete-${item.id}`]}
+                                title="Delete Content"
+                              >
+                                {actionLoading[`delete-${item.id}`] ? (
+                                  <span className="spinner-border spinner-border-sm" role="status"></span>
+                                ) : (
+                                  <i className="fas fa-trash"></i>
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-5">
+                  <i className="fas fa-file-alt fa-4x text-muted mb-3"></i>
+                  <h5>No content found</h5>
+                  <p className="text-muted">
+                    {searchTerm || statusFilter !== 'all' 
+                      ? 'Try adjusting your search criteria' 
+                      : 'Create your first article to get started'}
+                  </p>
+                  <button 
+                    className="btn btn-primary"
+                    onClick={() => setActiveTab('create')}
+                  >
+                    <i className="fas fa-plus me-2"></i>Create Your First Article
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create/Edit Content Tab */}
+      {activeTab === 'create' && (
+        <div className="container-fluid px-0">
+          {/* Enhanced Header with Progress Indicator */}
+          <div className="card card-enhanced border-0 shadow-lg mb-4">
+            <div className="card-header bg-gradient-primary text-white">
+              <div className="row align-items-center">
+                <div className="col-md-8">
+                  <h4 className="mb-0 d-flex align-items-center">
+                    {editingContent ? (
+                      <>
+                        <div className="bg-warning rounded-circle p-2 me-3">
+                          <i className="fas fa-edit text-white"></i>
+                        </div>
+                        <div>
+                          <div className="h5 mb-0">Editing Content</div>
+                          <small className="opacity-75">{editingContent.title}</small>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="bg-success rounded-circle p-2 me-3">
+                          <i className="fas fa-plus text-white"></i>
+                        </div>
+                        <div>
+                          <div className="h5 mb-0">Create New Content</div>
+                          <small className="opacity-75">Share your knowledge with the world</small>
+                        </div>
+                      </>
+                    )}
+                  </h4>
+                </div>
+                <div className="col-md-4 text-end">
+                  {editingContent && (
+                    <div className="btn-group">
+                      <button 
+                        type="button"
+                        className="btn btn-outline-light btn-sm"
+                        onClick={() => {
+                          setEditingContent(null);
+                          setFormData(resetFormData());
+                        }}
+                        title="Cancel Edit and Create New"
+                      >
+                        <i className="fas fa-times me-1"></i>Cancel Edit
+                      </button>
+                      <button 
+                        type="button"
+                        className="btn btn-light btn-sm"
+                        onClick={() => setActiveTab('content')}
+                        title="Back to Content List"
+                      >
+                        <i className="fas fa-arrow-left me-1"></i>Back to List
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Progress Steps */}
+              <div className="mt-3">
+                <div className="row">
+                  <div className="col-12">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <div className="d-flex align-items-center">
+                        <div className={`step-indicator ${formData.title ? 'completed' : 'active'}`}>
+                          <i className="fas fa-heading"></i>
+                          <span className="ms-2 d-none d-md-inline">Title & Summary</span>
+                        </div>
+                        <div className="step-connector"></div>
+                        <div className={`step-indicator ${formData.content ? 'completed' : formData.title ? 'active' : ''}`}>
+                          <i className="fas fa-file-alt"></i>
+                          <span className="ms-2 d-none d-md-inline">Content</span>
+                        </div>
+                        <div className="step-connector"></div>
+                        <div className={`step-indicator ${formData.category_id ? 'completed' : formData.content ? 'active' : ''}`}>
+                          <i className="fas fa-tags"></i>
+                          <span className="ms-2 d-none d-md-inline">Categories & Tags</span>
+                        </div>
+                        <div className="step-connector"></div>
+                        <div className={`step-indicator ${formData.featured_image ? 'completed' : formData.category_id ? 'active' : ''}`}>
+                          <i className="fas fa-image"></i>
+                          <span className="ms-2 d-none d-md-inline">Media & SEO</span>
+                        </div>
+                      </div>
+                      <div className="d-none d-lg-block">
+                        <small className="opacity-75">
+                          {Math.round((Object.values(formData).filter(v => v && (Array.isArray(v) ? v.length > 0 : true)).length / 7) * 100)}% Complete
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={editingContent ? handleUpdateContent : handleCreateContent}>
+            <div className="row g-4">
+              {/* Main Content Area */}
+              <div className="col-lg-8">
+                {/* Title and Summary Section */}
+                <div className="card card-enhanced border-0 shadow-sm mb-4">
+                  <div className="card-header bg-light">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <i className="fas fa-heading text-primary me-2"></i>
+                      Basic Information
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="mb-4">
+                      <label htmlFor="title" className="form-label fw-bold">
+                        Article Title <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control form-control-enhanced form-control-lg"
+                        id="title"
+                        placeholder="Enter an engaging title for your article..."
+                        value={formData.title}
+                        onChange={(e) => setFormData({...formData, title: e.target.value})}
+                        required
+                      />
+                      <div className="form-text">
+                        <small className="text-muted">
+                          <i className="fas fa-lightbulb me-1"></i>
+                          A good title is clear, specific, and engaging. Aim for 50-60 characters.
+                        </small>
+                      </div>
+                    </div>
+                    
+                    <div className="mb-3">
+                      <label htmlFor="summary" className="form-label fw-bold">Summary</label>
+                      <textarea
+                        className="form-control form-control-enhanced"
+                        id="summary"
+                        rows={4}
+                        placeholder="Write a compelling summary that hooks your readers..."
+                        value={formData.summary}
+                        onChange={(e) => setFormData({...formData, summary: e.target.value})}
+                      />
+                      <div className="form-text">
+                        <small className="text-muted">
+                          <i className="fas fa-info-circle me-1"></i>
+                          Summarize your article in 2-3 sentences. This appears in search results and social shares.
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content Editor Section */}
+                <div className="card card-enhanced border-0 shadow-sm mb-4">
+                  <div className="card-header bg-light">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <h6 className="mb-0 d-flex align-items-center">
+                        <i className="fas fa-file-alt text-primary me-2"></i>
+                        Article Content <span className="text-danger">*</span>
+                      </h6>
+                      <div className="btn-group btn-group-sm">
+                        <button 
+                          type="button"
+                          onClick={() => setShowAIAssistant(true)}
+                          className="btn btn-outline-primary btn-enhanced"
+                          title="AI Writing Assistant"
+                        >
+                          <i className="fas fa-robot me-1"></i>AI Assistant
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setShowTemplateLibrary(true)}
+                          className="btn btn-outline-secondary btn-enhanced"
+                          title="Content Templates"
+                        >
+                          <i className="fas fa-file-text me-1"></i>Templates
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="card-body p-0">
+                    <ContentEditor
+                      content={formData.content}
+                      onChange={(content) => setFormData({...formData, content})}
+                      onSave={() => editingContent ? handleUpdateContent : handleCreateContent}
+                      autoSave={autoSaveEnabled}
+                      collaborators={collaborators}
+                      darkMode={darkMode}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sidebar with Enhanced Panels */}
+              <div className="col-lg-4">
+                {/* Quick Actions Panel */}
+                <div className="card card-enhanced border-0 shadow-sm mb-4">
+                  <div className="card-header bg-gradient-success text-white">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <i className="fas fa-bolt me-2"></i>
+                      Quick Actions
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="d-grid gap-2">
+                      <button type="submit" className="btn btn-primary btn-enhanced">
+                        <i className={`fas ${editingContent ? 'fa-save' : 'fa-file-alt'} me-2`}></i>
+                        {editingContent ? 'Update Content' : 'Save as Draft'}
+                      </button>
+                      
+                      {!editingContent && (
+                        <button 
+                          type="button"
+                          className="btn btn-success btn-enhanced"
+                          onClick={(e) => {
+                            const form = e.currentTarget.closest('form') as HTMLFormElement;
+                            if (form) {
+                              const event = new Event('submit');
+                              form.dispatchEvent(event);
+                            }
+                          }}
+                        >
+                          <i className="fas fa-paper-plane me-2"></i>
+                          Save and Submit for Review
+                        </button>
+                      )}
+                      
+                      {editingContent && (
+                        <button 
+                          type="button" 
+                          className="btn btn-outline-secondary btn-enhanced"
+                          onClick={() => {
+                            setEditingContent(null);
+                            setFormData(resetFormData());
+                          }}
+                        >
+                          <i className="fas fa-times me-2"></i>
+                          Cancel Edit
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Category and Tags Panel */}
+                <div className="card card-enhanced border-0 shadow-sm mb-4">
+                  <div className="card-header bg-light">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <i className="fas fa-tags text-primary me-2"></i>
+                      Categories & Tags
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="mb-4">
+                      <label htmlFor="category" className="form-label fw-bold">
+                        Category <span className="text-danger">*</span>
+                      </label>
+                      <select
+                        className="form-control form-control-enhanced"
+                        id="category"
+                        value={formData.category_id}
+                        onChange={(e) => setFormData({...formData, category_id: e.target.value})}
+                        required
+                      >
+                        <option value="">Choose a category...</option>
+                        {categories.map(category => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="form-text">
+                        <small className="text-muted">
+                          <i className="fas fa-folder me-1"></i>
+                          Select the most relevant category for your content.
+                        </small>
+                      </div>
+                    </div>
+                    
+                    <div className="mb-3">
+                      <label className="form-label fw-bold">Tags</label>
+                      <div className="input-group mb-2">
+                        <input
+                          type="text"
+                          className="form-control form-control-enhanced"
+                          placeholder="Add a tag and press Enter..."
+                          value={tagInput}
+                          onChange={(e) => setTagInput(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
+                                setFormData({
+                                  ...formData,
+                                  tags: [...formData.tags, tagInput.trim()]
+                                });
+                                setTagInput('');
+                              }
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-enhanced"
+                          onClick={() => {
+                            if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
+                              setFormData({
+                                ...formData,
+                                tags: [...formData.tags, tagInput.trim()]
+                              });
+                              setTagInput('');
+                            }
+                          }}
+                        >
+                          <i className="fas fa-plus"></i>
+                        </button>
+                      </div>
+                      
+                      {formData.tags.length > 0 && (
+                        <div className="mb-2">
+                          {formData.tags.map((tag, index) => (
+                            <span key={index} className="badge bg-primary me-1 mb-1 p-2">
+                              {tag}
+                              <button
+                                type="button"
+                                className="btn-close btn-close-white ms-2"
+                                style={{fontSize: '0.7em'}}
+                                onClick={() => {
+                                  const newTags = formData.tags.filter((_, i) => i !== index);
+                                  setFormData({...formData, tags: newTags});
+                                }}
+                              ></button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      
+                      <div className="form-text">
+                        <small className="text-muted">
+                          <i className="fas fa-hashtag me-1"></i>
+                          Add relevant tags to help readers discover your content.
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SEO and Keywords Panel */}
+                <div className="card card-enhanced border-0 shadow-sm mb-4">
+                  <div className="card-header bg-light">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <i className="fas fa-search text-primary me-2"></i>
+                      SEO & Keywords
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="mb-3">
+                      <label className="form-label fw-bold">SEO Keywords</label>
+                      <div className="input-group mb-2">
+                        <input
+                          type="text"
+                          className="form-control form-control-enhanced"
+                          placeholder="Add SEO keyword..."
+                          value={seoKeywordInput}
+                          onChange={(e) => setSeoKeywordInput(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (seoKeywordInput.trim() && !formData.seo_keywords.includes(seoKeywordInput.trim())) {
+                                setFormData({
+                                  ...formData,
+                                  seo_keywords: [...formData.seo_keywords, seoKeywordInput.trim()]
+                                });
+                                setSeoKeywordInput('');
+                              }
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline-success btn-enhanced"
+                          onClick={() => {
+                            if (seoKeywordInput.trim() && !formData.seo_keywords.includes(seoKeywordInput.trim())) {
+                              setFormData({
+                                ...formData,
+                                seo_keywords: [...formData.seo_keywords, seoKeywordInput.trim()]
+                              });
+                              setSeoKeywordInput('');
+                            }
+                          }}
+                        >
+                          <i className="fas fa-plus"></i>
+                        </button>
+                      </div>
+                      
+                      {formData.seo_keywords.length > 0 && (
+                        <div className="mb-2">
+                          {formData.seo_keywords.map((keyword, index) => (
+                            <span key={index} className="badge bg-success me-1 mb-1 p-2">
+                              {keyword}
+                              <button
+                                type="button"
+                                className="btn-close btn-close-white ms-2"
+                                style={{fontSize: '0.7em'}}
+                                onClick={() => {
+                                  const newKeywords = formData.seo_keywords.filter((_, i) => i !== index);
+                                  setFormData({...formData, seo_keywords: newKeywords});
+                                }}
+                              ></button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      
+                      <div className="form-text">
+                        <small className="text-muted">
+                          <i className="fas fa-chart-line me-1"></i>
+                          Add keywords to improve search engine visibility.
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Media Panel */}
+                <div className="card card-enhanced border-0 shadow-sm mb-4">
+                  <div className="card-header bg-light">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <i className="fas fa-image text-primary me-2"></i>
+                      Featured Image
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="mb-3">
+                      <label className="form-label fw-bold">Image URL</label>
+                      <div className="input-group">
+                        <input
+                          type="url"
+                          className="form-control form-control-enhanced"
+                          placeholder="https://example.com/image.jpg"
+                          value={formData.featured_image}
+                          onChange={(e) => setFormData({...formData, featured_image: e.target.value})}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline-info btn-enhanced"
+                          title="Upload Image"
+                        >
+                          <i className="fas fa-upload"></i>
+                        </button>
+                      </div>
+                      
+                      {formData.featured_image && (
+                        <div className="mt-3">
+                          <img 
+                            src={formData.featured_image} 
+                            alt="Featured" 
+                            className="img-fluid rounded shadow-sm"
+                            style={{maxHeight: '200px', width: '100%', objectFit: 'cover'}}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
+                      
+                      <div className="form-text">
+                        <small className="text-muted">
+                          <i className="fas fa-palette me-1"></i>
+                          Add an eye-catching image to make your article stand out.
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Statistics and Settings Panel */}
+                <div className="card card-enhanced border-0 shadow-sm mb-4">
+                  <div className="card-header bg-light">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <i className="fas fa-chart-pie text-primary me-2"></i>
+                      Article Statistics
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="row text-center g-3">
+                      <div className="col-6">
+                        <div className="border rounded p-2 bg-light">
+                          <div className="h5 text-primary mb-0">{wordCount}</div>
+                          <small className="text-muted">Words</small>
+                        </div>
+                      </div>
+                      <div className="col-6">
+                        <div className="border rounded p-2 bg-light">
+                          <div className="h5 text-success mb-0">{readingTime}</div>
+                          <small className="text-muted">Min Read</small>
+                        </div>
+                      </div>
+                      <div className="col-6">
+                        <div className="border rounded p-2 bg-light">
+                          <div className="h5 text-info mb-0">{formData.title.length}</div>
+                          <small className="text-muted">Title Chars</small>
+                        </div>
+                      </div>
+                      <div className="col-6">
+                        <div className="border rounded p-2 bg-light">
+                          <div className="h5 text-warning mb-0">{formData.tags.length}</div>
+                          <small className="text-muted">Tags</small>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <hr className="my-3">
+                    
+                    <div className="form-check form-switch">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="autoSaveCheck"
+                        checked={autoSaveEnabled}
+                        onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+                      />
+                      <label className="form-check-label" htmlFor="autoSaveCheck">
+                        <i className="fas fa-save me-1"></i>
+                        Enable auto-save
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview Panel */}
+                <div className="card card-enhanced border-0 shadow-sm">
+                  <div className="card-header bg-light">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <i className="fas fa-eye text-primary me-2"></i>
+                      Live Preview
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="border rounded p-3 bg-white">
+                      <h6 className="mb-2">{formData.title || 'Your Article Title'}</h6>
+                      <p className="text-muted small mb-2">
+                        {formData.summary || 'Your article summary will appear here...'}
+                      </p>
+                      {formData.featured_image && (
+                        <img 
+                          src={formData.featured_image} 
+                          alt="Preview" 
+                          className="img-fluid rounded mb-2"
+                          style={{maxHeight: '100px', width: '100%', objectFit: 'cover'}}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <div className="small text-muted">
+                        {formData.tags.slice(0, 3).map((tag, index) => (
+                          <span key={index} className="badge bg-light text-dark me-1">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+                        }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <div className="d-flex flex-wrap gap-1">
+                      {formData.tags.map((tag, index) => (
+                        <span key={index} className="badge bg-primary">
+                          {tag}
+                          <button
+                            type="button"
+                            className="btn-close btn-close-white ms-1"
+                            style={{fontSize: '0.6em'}}
+                            onClick={() => {
+                              setFormData({
+                                ...formData,
+                                tags: formData.tags.filter((_, i) => i !== index)
+                              });
+                            }}
+                          ></button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* SEO Keywords */}
+                  <div className="mb-3">
+                    <label className="form-label">SEO Keywords</label>
+                    <div className="input-group mb-2">
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Add SEO keyword"
+                        value={keywordInput}
+                        onChange={(e) => setKeywordInput(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (keywordInput.trim() && !formData.seo_keywords.includes(keywordInput.trim())) {
+                              setFormData({
+                                ...formData,
+                                seo_keywords: [...formData.seo_keywords, keywordInput.trim()]
+                              });
+                              setKeywordInput('');
+                            }
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => {
+                          if (keywordInput.trim() && !formData.seo_keywords.includes(keywordInput.trim())) {
+                            setFormData({
+                              ...formData,
+                              seo_keywords: [...formData.seo_keywords, keywordInput.trim()]
+                            });
+                            setKeywordInput('');
+                          }
+                        }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <div className="d-flex flex-wrap gap-1">
+                      {formData.seo_keywords.map((keyword, index) => (
+                        <span key={index} className="badge bg-success">
+                          {keyword}
+                          <button
+                            type="button"
+                            className="btn-close btn-close-white ms-1"
+                            style={{fontSize: '0.6em'}}
+                            onClick={() => {
+                              setFormData({
+                                ...formData,
+                                seo_keywords: formData.seo_keywords.filter((_, i) => i !== index)
+                              });
+                            }}
+                          ></button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Content Stats */}
+                  <div className="mb-3">
+                    <label className="form-label">Content Statistics</label>
+                    <div className="card">
+                      <div className="card-body p-2">
+                        <div className="row text-center">
+                          <div className="col-6">
+                            <div className="text-primary">
+                              <strong>{wordCount}</strong>
+                            </div>
+                            <small className="text-muted">Words</small>
+                          </div>
+                          <div className="col-6">
+                            <div className="text-success">
+                              <strong>{readingTime}</strong>
+                            </div>
+                            <small className="text-muted">Min Read</small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Featured Image */}
+                  <div className="mb-3">
+                    <label className="form-label">Featured Image URL</label>
+                    <input
+                      type="url"
+                      className="form-control"
+                      placeholder="https://example.com/image.jpg"
+                      value={formData.featured_image}
+                      onChange={(e) => setFormData({...formData, featured_image: e.target.value})}
+                    />
+                  </div>
+
+                  {/* Auto-save toggle */}
+                  <div className="mb-3">
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="autoSaveCheck"
+                        checked={autoSaveEnabled}
+                        onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+                      />
+                      <label className="form-check-label" htmlFor="autoSaveCheck">
+                        Enable auto-save
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <div className="mb-3">
+                    <label className="form-label">Preview</label>
+                    <div className="border rounded p-3 bg-light">
+                      <h6>{formData.title || 'Content Title'}</h6>
+                      <p className="text-muted small">
+                        {formData.summary || 'Content summary will appear here...'}
+                      </p>
+                      {formData.featured_image && (
+                        <img 
+                          src={formData.featured_image} 
+                          alt="Featured" 
+                          className="img-fluid rounded mt-2"
+                          style={{maxHeight: '100px'}}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="d-grid gap-2">
+                    <button type="submit" className="btn btn-primary btn-enhanced">
+                      <i className={`fas ${editingContent ? 'fa-save' : 'fa-file-alt'} me-2`}></i>
+                      {editingContent ? 'Update Content' : 'Save as Draft'}
+                    </button>
+                    
+                    {!editingContent && (
+                      <button 
+                        type="button"
+                        className="btn btn-success btn-enhanced"
+                        onClick={(e) => {
+                          // Submit for review instead of draft
+                          const form = e.currentTarget.closest('form') as HTMLFormElement;
+                          if (form) {
+                            const event = new Event('submit');
+                            form.dispatchEvent(event);
+                          }
+                        }}
+                      >
+                        <i className="fas fa-paper-plane me-2"></i>
+                        Save and Submit for Review
+                      </button>
+                    )}
+                    
+                    {editingContent && (
+                      <button 
+                        type="button" 
+                        className="btn btn-outline-secondary btn-enhanced"
+                        onClick={() => {
+                          setEditingContent(null);
+                          setFormData(resetFormData());
+                        }}
+                      >
+                        <i className="fas fa-times me-2"></i>
+                        Cancel Edit
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Calendar Tab */}
+      {activeTab === 'calendar' && (
+        <ContentCalendar
+          events={calendarEvents}
+          onEventAdd={(event) => setCalendarEvents([...calendarEvents, event])}
+          onEventUpdate={(updatedEvent) => {
+            setCalendarEvents(calendarEvents.map(event => 
+              event.id === updatedEvent.id ? updatedEvent : event
+            ));
+          }}
+          onEventDelete={(eventId) => {
+            setCalendarEvents(calendarEvents.filter(event => event.id !== eventId));
+          }}
+        />
+      )}
+
+      {/* Profile Tab */}
+      {activeTab === 'profile' && profile && (
+        <div className="card">
+          <div className="card-header">
+            <h5>Writer Profile</h5>
+          </div>
+          <div className="card-body">
+            <div className="row">
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <label className="form-label">Name</label>
+                  <input type="text" className="form-control" value={profile.name} readOnly />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Email</label>
+                  <input type="email" className="form-control" value={profile.email} readOnly />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Specialization</label>
+                  <input type="text" className="form-control" value={profile.specialization || ''} />
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <label className="form-label">Bio</label>
+                  <textarea className="form-control" rows={5} value={profile.bio || ''}></textarea>
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Status</label>
+                  <div>
+                    <span className={`badge bg-${profile.is_approved ? 'success' : 'warning'}`}>
+                      {profile.is_approved ? 'Approved' : 'Pending Approval'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button className="btn btn-primary btn-enhanced">Update Profile</button>
+          </div>
+        </div>
+      )}
+
+      {/* AI Tools Tab */}
+      {activeTab === 'ai-tools' && (
+        <div className="row">
+          <div className="col-md-6 mb-4">
+            <div className="card h-100">
+              <div className="card-body">
+                <h5 className="card-title">
+                  <i className="fas fa-robot me-2 text-primary"></i>
+                  AI Writing Assistant
+                </h5>
+                <p className="card-text">
+                  Get intelligent suggestions to improve your writing, generate content ideas, and optimize your articles for better engagement.
+                </p>
+                <button 
+                  onClick={() => setShowAIAssistant(true)}
+                  className="btn btn-primary"
+                >
+                  Launch AI Assistant
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="col-md-6 mb-4">
+            <div className="card h-100">
+              <div className="card-body">
+                <h5 className="card-title">
+                  <i className="fas fa-magic me-2 text-success"></i>
+                  Content Generator
+                </h5>
+                <p className="card-text">
+                  Generate high-quality content using advanced AI models. Perfect for brainstorming and overcoming writer's block.
+                </p>
+                <button 
+                  onClick={() => setShowAIAssistant(true)}
+                  className="btn btn-success"
+                >
+                  Generate Content
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="col-md-6 mb-4">
+            <div className="card h-100">
+              <div className="card-body">
+                <h5 className="card-title">
+                  <i className="fas fa-search me-2 text-info"></i>
+                  SEO Optimizer
+                </h5>
+                <p className="card-text">
+                  Analyze and optimize your content for search engines. Get keyword suggestions and readability scores.
+                </p>
+                <button className="btn btn-info">
+                  Optimize SEO
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="col-md-6 mb-4">
+            <div className="card h-100">
+              <div className="card-body">
+                <h5 className="card-title">
+                  <i className="fas fa-language me-2 text-warning"></i>
+                  Grammar & Style Checker
+                </h5>
+                <p className="card-text">
+                  Check your content for grammar errors, style improvements, and readability enhancements.
+                </p>
+                <button className="btn btn-warning">
+                  Check Grammar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Templates Tab */}
+      {activeTab === 'templates' && (
+        <div>
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h4>Content Templates</h4>
+            <button 
+              onClick={() => setShowTemplateLibrary(true)}
+              className="btn btn-primary"
+            >
+              <i className="fas fa-plus me-2"></i>
+              Browse Templates
+            </button>
+          </div>
+          
+          <div className="row">
+            <div className="col-md-4 mb-4">
+              <div className="card">
+                <div className="card-body">
+                  <h6 className="card-title">Blog Post Template</h6>
+                  <p className="card-text text-muted small">
+                    Complete blog post structure with introduction, body, and conclusion sections.
+                  </p>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span className="badge bg-primary">Blog</span>
+                    <button className="btn btn-sm btn-outline-primary">Use Template</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="col-md-4 mb-4">
+              <div className="card">
+                <div className="card-body">
+                  <h6 className="card-title">Product Review</h6>
+                  <p className="card-text text-muted small">
+                    Comprehensive product review template with pros, cons, and ratings.
+                  </p>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span className="badge bg-success">Review</span>
+                    <button className="btn btn-sm btn-outline-primary">Use Template</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="col-md-4 mb-4">
+              <div className="card">
+                <div className="card-body">
+                  <h6 className="card-title">How-To Guide</h6>
+                  <p className="card-text text-muted small">
+                    Step-by-step tutorial template with clear instructions and tips.
+                  </p>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span className="badge bg-info">Tutorial</span>
+                    <button className="btn btn-sm btn-outline-primary">Use Template</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="col-md-4 mb-4">
+              <div className="card">
+                <div className="card-body">
+                  <h6 className="card-title">Listicle Template</h6>
+                  <p className="card-text text-muted small">
+                    Numbered list article template perfect for top 10 lists and recommendations.
+                  </p>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span className="badge bg-warning">List</span>
+                    <button className="btn btn-sm btn-outline-primary">Use Template</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="col-md-4 mb-4">
+              <div className="card">
+                <div className="card-body">
+                  <h6 className="card-title">News Article</h6>
+                  <p className="card-text text-muted small">
+                    Professional news article template with headline, lead, and body structure.
+                  </p>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span className="badge bg-danger">News</span>
+                    <button className="btn btn-sm btn-outline-primary">Use Template</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="col-md-4 mb-4">
+              <div className="card">
+                <div className="card-body">
+                  <h6 className="card-title">Custom Template</h6>
+                  <p className="card-text text-muted small">
+                    Create your own custom template and save it for future use.
+                  </p>
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span className="badge bg-secondary">Custom</span>
+                    <button className="btn btn-sm btn-outline-success">Create New</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Collaboration Tab */}
+      {activeTab === 'collaboration' && (
+        <div>
+          <div className="row mb-4">
+            <div className="col-md-6">
+              <div className="card">
+                <div className="card-header">
+                  <h6>Active Collaborations</h6>
+                </div>
+                <div className="card-body">
+                  <div className="list-group list-group-flush">
+                    <div className="list-group-item d-flex justify-content-between align-items-center">
+                      <div>
+                        <strong>Beauty Trends 2024</strong>
+                        <small className="text-muted d-block">with Sarah Johnson, Editor</small>
+                      </div>
+                      <span className="badge bg-success">Active</span>
+                    </div>
+                    <div className="list-group-item d-flex justify-content-between align-items-center">
+                      <div>
+                        <strong>Skincare Routine Guide</strong>
+                        <small className="text-muted d-block">with Mark Davis, Co-writer</small>
+                      </div>
+                      <span className="badge bg-warning">Review</span>
+                    </div>
+                    <div className="list-group-item d-flex justify-content-between align-items-center">
+                      <div>
+                        <strong>Natural Beauty Products</strong>
+                        <small className="text-muted d-block">with Team Beauty</small>
+                      </div>
+                      <span className="badge bg-info">Draft</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="col-md-6">
+              <div className="card">
+                <div className="card-header">
+                  <h6>Recent Comments</h6>
+                </div>
+                <div className="card-body">
+                  <div className="list-group list-group-flush">
+                    <div className="list-group-item">
+                      <div className="d-flex justify-content-between">
+                        <strong className="text-primary">Sarah Johnson</strong>
+                        <small className="text-muted">2 hours ago</small>
+                      </div>
+                      <p className="mb-1 small">Great introduction! Consider adding more statistics to support your claims.</p>
+                      <small className="text-muted">on "Beauty Trends 2024"</small>
+                    </div>
+                    <div className="list-group-item">
+                      <div className="d-flex justify-content-between">
+                        <strong className="text-success">Mark Davis</strong>
+                        <small className="text-muted">1 day ago</small>
+                      </div>
+                      <p className="mb-1 small">The skincare routine section needs more detail on product application.</p>
+                      <small className="text-muted">on "Skincare Routine Guide"</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="card">
+            <div className="card-header">
+              <h6>Team Members</h6>
+            </div>
+            <div className="card-body">
+              <div className="row">
+                <div className="col-md-3 text-center mb-3">
+                  <div className="avatar bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center" style={{width: '60px', height: '60px'}}>
+                    SJ
+                  </div>
+                  <h6 className="mt-2 mb-1">Sarah Johnson</h6>
+                  <small className="text-muted">Senior Editor</small>
+                </div>
+                <div className="col-md-3 text-center mb-3">
+                  <div className="avatar bg-success text-white rounded-circle d-inline-flex align-items-center justify-content-center" style={{width: '60px', height: '60px'}}>
+                    MD
+                  </div>
+                  <h6 className="mt-2 mb-1">Mark Davis</h6>
+                  <small className="text-muted">Content Writer</small>
+                </div>
+                <div className="col-md-3 text-center mb-3">
+                  <div className="avatar bg-info text-white rounded-circle d-inline-flex align-items-center justify-content-center" style={{width: '60px', height: '60px'}}>
+                    EM
+                  </div>
+                  <h6 className="mt-2 mb-1">Emma Miller</h6>
+                  <small className="text-muted">SEO Specialist</small>
+                </div>
+                <div className="col-md-3 text-center mb-3">
+                  <div className="avatar bg-warning text-white rounded-circle d-inline-flex align-items-center justify-content-center" style={{width: '60px', height: '60px'}}>
+                    TB
+                  </div>
+                  <h6 className="mt-2 mb-1">Team Beauty</h6>
+                  <small className="text-muted">Content Team</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Analytics Tab using the new component */}
+      {activeTab === 'analytics' && (
+        <div>
+          <AnalyticsDashboard />
+        </div>
+      )}
+
+      {/* AI Components */}
+      <AIWritingAssistant
+        isOpen={showAIAssistant}
+        onClose={() => setShowAIAssistant(false)}
+        onSuggestionApply={(suggestion) => {
+          setEditorContent(editorContent + '\n\n' + suggestion);
+          // Could also update formData.content here
+        }}
+        currentContent={editorContent}
+        contentType="article"
+      />
+
+      <TemplateLibrary
+        isOpen={showTemplateLibrary}
+        onClose={() => setShowTemplateLibrary(false)}
+        onTemplateSelect={(template) => {
+          setEditorContent(template);
+          // Could also update formData.content here
+        }}
+      />
+
+      {/* Floating Action Button */}
+      <div className="fixed-bottom end-0 p-4">
+        <div className="dropup">
+          <button
+            className="btn btn-primary rounded-circle btn-lg shadow-lg"
+            type="button"
+            data-bs-toggle="dropdown"
+            style={{width: '60px', height: '60px'}}
+          >
+            <i className="fas fa-plus"></i>
+          </button>
+          <ul className="dropdown-menu dropdown-menu-end mb-2">
+            <li>
+              <a 
+                className="dropdown-item"
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('create');
+                }}
+              >
+                <i className="fas fa-file-alt me-2"></i>
+                New Article
+              </a>
+            </li>
+            <li>
+              <a 
+                className="dropdown-item"
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowAIAssistant(true);
+                }}
+              >
+                <i className="fas fa-robot me-2"></i>
+                AI Assistant
+              </a>
+            </li>
+            <li>
+              <a 
+                className="dropdown-item"
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowTemplateLibrary(true);
+                }}
+              >
+                <i className="fas fa-file-text me-2"></i>
+                Browse Templates
+              </a>
+            </li>
+            <li><hr className="dropdown-divider" /></li>
+            <li>
+              <a 
+                className="dropdown-item"
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setActiveTab('analytics');
+                }}
+              >
+                <i className="fas fa-chart-line me-2"></i>
+                View Analytics
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Success/Error Messages */}
+      {success && (
+        <div className="position-fixed top-0 end-0 p-3" style={{zIndex: 9999}}>
+          <div className="alert alert-success alert-enhanced alert-dismissible fade show" role="alert">
+            <i className="fas fa-check-circle me-2"></i>
+            {success}
+            <button 
+              type="button" 
+              className="btn-close" 
+              onClick={() => setSuccess('')}
+            ></button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="position-fixed top-0 end-0 p-3" style={{zIndex: 9999}}>
+          <div className="alert alert-danger alert-enhanced alert-dismissible fade show" role="alert">
+            <i className="fas fa-exclamation-circle me-2"></i>
+            {error}
+            <button 
+              type="button" 
+              className="btn-close" 
+              onClick={() => setError('')}
+            ></button>
+          </div>
+        </div>
+      )}
+    </div>
+    </div>
+  );
+}

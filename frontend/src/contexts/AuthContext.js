@@ -25,10 +25,7 @@ export const AuthProvider = ({ children }) => {
       throw new Error('No authentication token');
     }
 
-    // Ensure endpoint starts with /api if not already present
-    const apiEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
-
-    const response = await fetch(`${API_BASE_URL}${apiEndpoint}`, {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -63,17 +60,17 @@ export const AuthProvider = ({ children }) => {
           switch (userType) {
             case 'admin':
               // For admin, use basic auth profile (no separate admin profile endpoint exists)
-              profileData = await makeAuthenticatedRequest('/auth/profile');
+              profileData = await makeAuthenticatedRequest('/api/auth/profile');
               break;
             case 'content_writer':
-              profileData = await makeAuthenticatedRequest('/content-writer/profile');
+              profileData = await makeAuthenticatedRequest('/api/content-writer/profile');
               break;
             case 'health_provider':
-              profileData = await makeAuthenticatedRequest('/health-provider/profile');
+              profileData = await makeAuthenticatedRequest('/api/health-provider/profile');
               break;
             default:
               // For regular users (parent, adolescent), use basic auth profile endpoint
-              profileData = await makeAuthenticatedRequest('/auth/profile');
+              profileData = await makeAuthenticatedRequest('/api/auth/profile');
               break;
           }
 
@@ -96,12 +93,32 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
   
-  // Login function
+  // Login function with timeout and better error handling
   const login = async (credentials) => {
     try {
       setError(null);
-      const response = await api.auth.login(credentials);
-      const { token, refresh_token, user_id, user_type } = response;
+      
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Login failed: ${response.status}`);
+      }
+      
+      const { token, refresh_token, user_id, user_type } = await response.json();
 
       // Store tokens in localStorage with consistent naming
       localStorage.setItem('access_token', token);
@@ -109,21 +126,47 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user_id', user_id);
       localStorage.setItem('user_type', user_type);
 
-      // Fetch full user profile based on user type
+      // Fetch full user profile based on user type with timeout
       let profileData = null;
-      switch (user_type) {
-        case 'admin':
-          profileData = await makeAuthenticatedRequest('/auth/profile');
-          break;
-        case 'content_writer':
-          profileData = await makeAuthenticatedRequest('/content-writer/profile');
-          break;
-        case 'health_provider':
-          profileData = await makeAuthenticatedRequest('/health-provider/profile');
-          break;
-        default:
-          profileData = await makeAuthenticatedRequest('/auth/profile');
-          break;
+      const profileController = new AbortController();
+      const profileTimeoutId = setTimeout(() => profileController.abort(), 5000);
+      
+      try {
+        let profileEndpoint;
+        switch (user_type) {
+          case 'admin':
+            profileEndpoint = '/api/auth/profile';
+            break;
+          case 'content_writer':
+            profileEndpoint = '/api/content-writer/profile';
+            break;
+          case 'health_provider':
+            profileEndpoint = '/api/health-provider/profile';
+            break;
+          default:
+            profileEndpoint = '/api/auth/profile';
+            break;
+        }
+        
+        const profileResponse = await fetch(`${API_BASE_URL}${profileEndpoint}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          signal: profileController.signal
+        });
+        
+        clearTimeout(profileTimeoutId);
+        
+        if (profileResponse.ok) {
+          profileData = await profileResponse.json();
+        } else {
+          console.warn('Profile fetch failed, using basic user data');
+          profileData = { user_id, user_type };
+        }
+      } catch (profileErr) {
+        console.warn('Profile fetch error:', profileErr.message);
+        profileData = { user_id, user_type };
       }
 
       setUser({
@@ -134,6 +177,12 @@ export const AuthProvider = ({ children }) => {
 
       return { success: true };
     } catch (err) {
+      if (err.name === 'AbortError') {
+        const errorMessage = 'Login timeout - please try again';
+        setError(errorMessage);
+        return { success: false, error: errorMessage };
+      }
+      
       const errorMessage = err.message || 'Login failed';
       setError(errorMessage);
       return { success: false, error: errorMessage };
@@ -178,7 +227,7 @@ export const AuthProvider = ({ children }) => {
           break;
         default:
           // For regular users and admin, use basic auth profile update
-          await makeAuthenticatedRequest('/auth/profile', {
+          await makeAuthenticatedRequest('/api/auth/profile', {
             method: 'PUT',
             body: JSON.stringify(userData)
           });
@@ -189,16 +238,16 @@ export const AuthProvider = ({ children }) => {
       let profileData = null;
       switch (userType) {
         case 'admin':
-          profileData = await makeAuthenticatedRequest('/auth/profile');
+          profileData = await makeAuthenticatedRequest('/api/auth/profile');
           break;
         case 'content_writer':
-          profileData = await makeAuthenticatedRequest('/content-writer/profile');
+          profileData = await makeAuthenticatedRequest('/api/content-writer/profile');
           break;
         case 'health_provider':
-          profileData = await makeAuthenticatedRequest('/health-provider/profile');
+          profileData = await makeAuthenticatedRequest('/api/health-provider/profile');
           break;
         default:
-          profileData = await makeAuthenticatedRequest('/auth/profile');
+          profileData = await makeAuthenticatedRequest('/api/auth/profile');
           break;
       }
 

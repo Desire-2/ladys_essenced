@@ -1,5 +1,0 @@
-f1b21b2a USSD enhancement
-ba310cb1 main website
-0531d44b main website
-fa141e7c W
-4c2d0a7b Main website

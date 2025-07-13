@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
+import { buildHealthProviderApiUrl } from '../../utils/apiConfig';
 
 interface ProviderStats {
   appointment_stats: {
@@ -128,7 +129,7 @@ export default function HealthProviderDashboard() {
         return;
       }
 
-      const statsResponse = await fetch('/api/health-provider/dashboard/stats', {
+      const statsResponse = await fetch(buildHealthProviderApiUrl('/dashboard/stats'), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -176,7 +177,7 @@ export default function HealthProviderDashboard() {
   const loadUnassignedAppointments = async () => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/health-provider/appointments/unassigned', {
+      const response = await fetch(buildHealthProviderApiUrl('/appointments/unassigned'), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
