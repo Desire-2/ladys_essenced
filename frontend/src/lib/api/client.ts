@@ -12,7 +12,7 @@ class APIClient {
   }
 
   private async request(endpoint: string, options: RequestInit = {}) {
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = endpoint; // Use relative URLs to leverage Next.js rewrites
     const response = await fetch(url, {
       ...options,
       headers: {

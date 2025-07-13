@@ -368,9 +368,9 @@ def create_app():
         return jsonify({'message': 'Authorization token is required'}), 401
     
     # Enable CORS with environment-specific origins
-    allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002,http://localhost:3003,http://127.0.0.1:3003,http://localhost:3004,http://127.0.0.1:3004,http://localhost:3005,http://127.0.0.1:3005').split(',')
+    allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002,http://localhost:3003,http://127.0.0.1:3003,http://localhost:3004,http://127.0.0.1:3004,http://localhost:3005,http://127.0.0.1:3005,https://ladys-essenced.vercel.app').split(',')
     CORS(app, 
-         resources={r"/api/*": {"origins":  "*"}},
+         resources={r"/api/*": {"origins": allowed_origins}},
          allow_headers=["Content-Type", "Authorization"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
          supports_credentials=True)

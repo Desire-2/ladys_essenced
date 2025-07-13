@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
       throw new Error('No authentication token');
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(endpoint, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -102,7 +102,7 @@ export const AuthProvider = ({ children }) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
       
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -148,7 +148,7 @@ export const AuthProvider = ({ children }) => {
             break;
         }
         
-        const profileResponse = await fetch(`${API_BASE_URL}${profileEndpoint}`, {
+        const profileResponse = await fetch(profileEndpoint, {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
