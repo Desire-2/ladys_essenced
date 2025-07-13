@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app, g
 from app import db
 from app.models import (
     User, ContentWriter, ContentItem, ContentCategory, 
-    SystemLog, Analytics, Notification
+    SystemLog, Analytics, Notification, Course, Module, Chapter
 )
 from app.auth.middleware import (
     content_writer_required, validate_content_writer_approval,
@@ -80,6 +80,12 @@ def get_writer_stats():
             'writer_info': {
                 'specialization': writer.specialization,
                 'is_approved': writer.is_approved
+            },
+            'course_stats': {
+                'total': Course.query.filter_by(author_id=writer.id).count(),
+                'published': Course.query.filter_by(author_id=writer.id, status='published').count(),
+                'draft': Course.query.filter_by(author_id=writer.id, status='draft').count(),
+                'pending_review': Course.query.filter_by(author_id=writer.id, status='pending_review').count()
             }
         }), 200
         
@@ -174,7 +180,7 @@ def create_content():
         return jsonify({
             'message': 'Content created successfully',
             'content_id': content_item.id
-        }), 201
+        }, 201)
         
     except Exception as e:
         current_app.logger.error(f"Error creating content: {str(e)}")
@@ -382,3 +388,324 @@ def update_profile():
     except Exception as e:
         current_app.logger.error(f"Error updating profile: {str(e)}")
         return jsonify({'error': 'Failed to update profile'}), 500
+
+
+# Course Management Endpoints
+@content_writer_bp.route('/courses', methods=['GET'])
+@content_writer_required
+@validate_content_writer_approval
+def get_courses():
+    """Get courses created by the writer"""
+    try:
+        writer = g.writer_profile
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        status_filter = request.args.get('status', None)
+        
+        query = Course.query.filter_by(author_id=writer.id)
+        
+        if status_filter:
+            query = query.filter_by(status=status_filter)
+        
+        courses = query.order_by(desc(Course.created_at)).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        return jsonify({
+            'courses': [course.to_dict() for course in courses.items],
+            'pagination': {
+                'page': courses.page,
+                'pages': courses.pages,
+                'per_page': courses.per_page,
+                'total': courses.total
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting courses: {str(e)}")
+        return jsonify({'error': 'Failed to fetch courses'}), 500
+
+
+@content_writer_bp.route('/courses', methods=['POST'])
+@content_writer_required
+@validate_content_writer_approval
+def create_course():
+    """Create a new course"""
+    try:
+        writer = g.writer_profile
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['title', 'description', 'level', 'duration']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'{field} is required'}), 400
+        
+        # Create new course
+        course = Course(
+            title=data['title'],
+            description=data['description'],
+            author_id=writer.id,
+            category_id=data.get('category_id'),
+            level=data['level'],
+            duration=data['duration'],
+            price=data.get('price', 0.0),
+            featured_image=data.get('featured_image')
+        )
+        
+        db.session.add(course)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Course created successfully',
+            'course': course.to_dict()
+        }, 201)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating course: {str(e)}")
+        return jsonify({'error': 'Failed to create course'}), 500
+
+
+@content_writer_bp.route('/courses/<int:course_id>', methods=['GET'])
+@content_writer_required
+@validate_content_writer_approval
+def get_course(course_id):
+    """Get a specific course by ID"""
+    try:
+        writer = g.writer_profile
+        course = Course.query.filter_by(id=course_id, author_id=writer.id).first()
+        
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        # Load modules and chapters for detailed view
+        course._modules_loaded = True
+        for module in course.modules:
+            module._chapters_loaded = True
+        
+        return jsonify({'course': course.to_dict()}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting course: {str(e)}")
+        return jsonify({'error': 'Failed to fetch course'}), 500
+
+
+@content_writer_bp.route('/courses/<int:course_id>', methods=['PUT'])
+@content_writer_required
+@validate_content_writer_approval
+def update_course(course_id):
+    """Update a course"""
+    try:
+        writer = g.writer_profile
+        course = Course.query.filter_by(id=course_id, author_id=writer.id).first()
+        
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        # Check if course can be updated
+        if course.status in ['pending_review', 'published']:
+            return jsonify({'error': 'Cannot update course in current status'}), 400
+        
+        data = request.get_json()
+        
+        # Update course fields
+        if 'title' in data:
+            course.title = data['title']
+        if 'description' in data:
+            course.description = data['description']
+        if 'level' in data:
+            course.level = data['level']
+        if 'duration' in data:
+            course.duration = data['duration']
+        if 'price' in data:
+            course.price = data['price']
+        if 'featured_image' in data:
+            course.featured_image = data['featured_image']
+        if 'category_id' in data:
+            course.category_id = data['category_id']
+        
+        course.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Course updated successfully',
+            'course': course.to_dict()
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating course: {str(e)}")
+        return jsonify({'error': 'Failed to update course'}), 500
+
+
+@content_writer_bp.route('/courses/<int:course_id>', methods=['DELETE'])
+@content_writer_required
+@validate_content_writer_approval
+def delete_course(course_id):
+    """Delete a course"""
+    try:
+        writer = g.writer_profile
+        course = Course.query.filter_by(id=course_id, author_id=writer.id).first()
+        
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        # Check if course can be deleted
+        if course.status == 'published':
+            return jsonify({'error': 'Cannot delete published course'}), 400
+        
+        db.session.delete(course)
+        db.session.commit()
+        
+        return jsonify({'message': 'Course deleted successfully'}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting course: {str(e)}")
+        return jsonify({'error': 'Failed to delete course'}), 500
+
+
+@content_writer_bp.route('/courses/<int:course_id>/submit', methods=['PATCH'])
+@content_writer_required
+@validate_content_writer_approval
+def submit_course_for_review(course_id):
+    """Submit course for review"""
+    try:
+        writer = g.writer_profile
+        course = Course.query.filter_by(id=course_id, author_id=writer.id).first()
+        
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        if course.status != 'draft':
+            return jsonify({'error': 'Only draft courses can be submitted for review'}), 400
+        
+        course.status = 'pending_review'
+        course.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Course submitted for review successfully',
+            'course': course.to_dict()
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error submitting course: {str(e)}")
+        return jsonify({'error': 'Failed to submit course for review'}), 500
+
+
+@content_writer_bp.route('/suggestions', methods=['GET'])
+@content_writer_required
+@validate_content_writer_approval
+def get_content_suggestions():
+    """Get AI-powered content suggestions based on trends and performance"""
+    try:
+        writer = g.writer_profile
+        
+        # Mock suggestions - integrate with AI service or trending topics API
+        suggestions = [
+            {
+                'title': 'Top 10 Health Benefits of Natural Skincare',
+                'description': 'Explore the advantages of using natural ingredients in skincare routines',
+                'category': 'Health & Beauty',
+                'avg_views': 1250,
+                'trending_score': 8.5
+            },
+            {
+                'title': 'Essential Oils for Stress Relief: A Complete Guide',
+                'description': 'Learn about aromatherapy and essential oils for mental wellness',
+                'category': 'Wellness',
+                'avg_views': 980,
+                'trending_score': 7.8
+            },
+            {
+                'title': 'Sustainable Beauty Practices for Modern Women',
+                'description': 'How to maintain beauty routines while being environmentally conscious',
+                'category': 'Beauty & Environment',
+                'avg_views': 1100,
+                'trending_score': 8.2
+            }
+        ]
+        
+        return jsonify({
+            'status': 'success',
+            'suggestions': suggestions
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Suggestions error: {str(e)}")
+        return jsonify({'status': 'error', 'message': 'Failed to load suggestions'}), 500
+
+
+@content_writer_bp.route('/analytics', methods=['GET'])
+@content_writer_required
+@validate_content_writer_approval
+def get_analytics():
+    """Get detailed analytics for content writer"""
+    try:
+        writer = g.writer_profile
+        
+        # Get content performance data
+        content_stats = {
+            'total_views': db.session.query(func.sum(ContentItem.views)).filter_by(author_id=writer.id).scalar() or 0,
+            'total_likes': 0,  # Placeholder for likes functionality
+            'avg_rating': 4.5,  # Placeholder for rating functionality
+        }
+        
+        # Mock analytics data
+        analytics_data = {
+            'performance': content_stats,
+            'trends': {
+                'views_last_30_days': 2450,
+                'engagement_rate': 12.5,
+                'top_performing_category': 'Health & Beauty'
+            },
+            'recommendations': [
+                'Focus on health and wellness topics for better engagement',
+                'Include more visual content to increase views',
+                'Post consistently to maintain audience growth'
+            ]
+        }
+        
+        return jsonify({
+            'status': 'success',
+            'analytics': analytics_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Analytics error: {str(e)}")
+        return jsonify({'status': 'error', 'message': 'Failed to load analytics'}), 500
+
+
+# Module Management Endpoints
+@content_writer_bp.route('/modules', methods=['POST'])
+@content_writer_required
+@validate_content_writer_approval
+def create_module():
+    """Create a new module for a course"""
+    try:
+        writer = g.writer_profile
+        data = request.get_json()
+        
+        # Verify the course belongs to the writer
+        course = Course.query.filter_by(id=data['course_id'], author_id=writer.id).first()
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        module = Module(
+            title=data['title'],
+            description=data.get('description', ''),
+            duration=data.get('duration', ''),
+            order_index=data.get('order_index', 1),
+            course_id=course.id
+        )
+        
+        db.session.add(module)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Module created successfully',
+            'module': module.to_dict()
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating module: {str(e)}")
+        return jsonify({'error': 'Failed to create module'}), 500

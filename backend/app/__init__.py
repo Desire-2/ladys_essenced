@@ -449,4 +449,14 @@ def create_app():
     def index():
         return "The Lady's Essence API is running!"
     
+    @app.route('/health')
+    def health_check():
+        """Health check endpoint for monitoring and testing"""
+        from datetime import datetime
+        return jsonify({
+            'status': 'healthy',
+            'message': 'Lady\'s Essence API is running',
+            'timestamp': datetime.utcnow().isoformat()
+        })
+    
     return app
