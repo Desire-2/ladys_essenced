@@ -6,10 +6,12 @@ from datetime import datetime
 
 meal_logs_bp = Blueprint('meal_logs', __name__)
 
+@meal_logs_bp.route('', methods=['GET'])
 @meal_logs_bp.route('/', methods=['GET'])
 @jwt_required()
 def get_meal_logs():
-    current_user_id = get_jwt_identity()
+    # Ensure identity is integer for filtering
+    current_user_id = int(get_jwt_identity())
     
     # Get query parameters for pagination and filtering
     page = request.args.get('page', 1, type=int)
@@ -67,7 +69,8 @@ def get_meal_logs():
 @meal_logs_bp.route('/<int:log_id>', methods=['GET'])
 @jwt_required()
 def get_meal_log(log_id):
-    current_user_id = get_jwt_identity()
+    # Ensure identity is integer for filtering
+    current_user_id = int(get_jwt_identity())
     
     # Find the specific meal log
     log = MealLog.query.filter_by(id=log_id, user_id=current_user_id).first()
@@ -91,10 +94,12 @@ def get_meal_log(log_id):
     
     return jsonify(result), 200
 
+@meal_logs_bp.route('', methods=['POST'])
 @meal_logs_bp.route('/', methods=['POST'])
 @jwt_required()
 def create_meal_log():
-    current_user_id = get_jwt_identity()
+    # Ensure identity is integer for assignment
+    current_user_id = int(get_jwt_identity())
     data = request.get_json()
     
     # Validate required fields
@@ -136,7 +141,8 @@ def create_meal_log():
 @meal_logs_bp.route('/<int:log_id>', methods=['PUT'])
 @jwt_required()
 def update_meal_log(log_id):
-    current_user_id = get_jwt_identity()
+    # Ensure identity is integer for filtering
+    current_user_id = int(get_jwt_identity())
     data = request.get_json()
     
     # Find the specific meal log
@@ -183,7 +189,8 @@ def update_meal_log(log_id):
 @meal_logs_bp.route('/<int:log_id>', methods=['DELETE'])
 @jwt_required()
 def delete_meal_log(log_id):
-    current_user_id = get_jwt_identity()
+    # Ensure identity is integer for filtering
+    current_user_id = int(get_jwt_identity())
     
     # Find the specific meal log
     log = MealLog.query.filter_by(id=log_id, user_id=current_user_id).first()

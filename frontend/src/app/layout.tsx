@@ -4,7 +4,7 @@ import { ReactNode, useEffect } from 'react';
 import { Inter } from 'next/font/google';
 import { AppProviders } from '../contexts';
 import { useAuth } from '../contexts/AuthContext';
-import '../styles/globals.css';
+import './globals.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 const inter = Inter({ subsets: ['latin'] });

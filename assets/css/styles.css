@@ -816,7 +816,165 @@ img {
   transform: scaleY(1.05);
 }
 
-/* Responsive Adjustments */
+/* ===== APPOINTMENT SCHEDULING STYLES ===== */
+.provider-card {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.provider-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.provider-card.border-primary {
+  border-width: 2px !important;
+  background-color: rgba(15, 76, 129, 0.05);
+}
+
+.provider-card .card-body {
+  padding: 1rem;
+}
+
+.provider-card h6 {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.time-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.time-slot-btn {
+  padding: 0.5rem;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-sm);
+  background: var(--neutral-100);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.time-slot-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+  color: white;
+  border-color: var(--primary);
+}
+
+.time-slot-btn.selected {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary-dark);
+}
+
+.time-slot-btn:disabled {
+  background: var(--neutral-200);
+  color: var(--neutral-500);
+  cursor: not-allowed;
+}
+
+.appointment-priority-toggle .btn-check:checked + .btn {
+  box-shadow: 0 0 0 0.2rem rgba(15, 76, 129, 0.25);
+}
+
+.emergency-mode .card-header {
+  background: linear-gradient(135deg, #dc3545, #b02a37) !important;
+  color: white;
+}
+
+.emergency-mode .alert {
+  border-left: 4px solid #dc3545;
+}
+
+/* Appointment guidelines styling */
+.appointment-guidelines {
+  background: linear-gradient(135deg, var(--neutral-200), var(--neutral-100));
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.appointment-guidelines li {
+  padding: var(--space-xs) 0;
+  border-bottom: 1px solid var(--neutral-300);
+}
+
+.appointment-guidelines li:last-child {
+  border-bottom: none;
+}
+
+/* Enhanced appointment cards */
+.appointment-card {
+  transition: all 0.3s ease;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.appointment-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.appointment-card .badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.appointment-card .emergency-badge {
+  animation: pulse 2s infinite;
+}
+
+/* Provider selection styling */
+.provider-selection {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: var(--space-sm);
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  background: var(--neutral-100);
+}
+
+.provider-option {
+  padding: var(--space-md);
+  margin-bottom: var(--space-sm);
+  border: 2px solid var(--neutral-300);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.provider-option:hover {
+  border-color: var(--primary-light);
+  background: rgba(15, 76, 129, 0.05);
+}
+
+.provider-option.selected {
+  border-color: var(--primary);
+  background: rgba(15, 76, 129, 0.1);
+  box-shadow: 0 0 0 2px rgba(15, 76, 129, 0.2);
+}
+
+.provider-availability-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-left: var(--space-xs);
+}
+
+.provider-availability-indicator.available {
+  background: var(--secondary);
+  box-shadow: 0 0 0 2px rgba(54, 179, 126, 0.3);
+}
+
+.provider-availability-indicator.busy {
+  background: var(--neutral-500);
+}
+
+/* ===== RESPONSIVE STYLES ===== */
 @media (max-width: 768px) {
   .admin-dashboard .container-fluid {
     padding: var(--space-sm);
@@ -912,4 +1070,250 @@ img {
   0% { transform: scale(1); }
   50% { transform: scale(1.05); }
   100% { transform: scale(1); }
+}
+
+/* Enhanced Appointment Scheduling Styles */
+.appointment-provider-card {
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.appointment-provider-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.appointment-provider-card.selected {
+  border-color: var(--primary);
+  background-color: var(--primary-light);
+  color: white;
+}
+
+.appointment-provider-card.unavailable {
+  opacity: 0.6;
+  filter: grayscale(50%);
+}
+
+.specialization-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.time-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.time-slot-btn {
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.time-slot-btn.recommended::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+}
+
+.time-slot-btn:hover:not(.disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.smart-suggestions {
+  background: linear-gradient(135deg, var(--primary-light), var(--secondary-light));
+}
+
+.provider-comparison {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.provider-rating {
+  color: var(--accent);
+}
+
+.availability-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.availability-indicator.available {
+  background-color: var(--secondary);
+}
+
+.availability-indicator.busy {
+  background-color: var(--accent);
+}
+
+.availability-indicator.unavailable {
+  background-color: var(--neutral-400);
+}
+
+.appointment-conflict-alert {
+  border-left: 4px solid var(--accent);
+  background-color: #fff8e1;
+}
+
+.appointment-loading {
+  position: relative;
+}
+
+.appointment-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .appointment-provider-card {
+    margin-bottom: 1rem;
+  }
+  
+  .time-slot-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .provider-comparison {
+    max-height: 200px;
+  }
+}
+
+/* Animation for provider cards */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.provider-card-animate {
+  animation: slideInUp 0.3s ease-out forwards;
+}
+
+/* Time slot availability indicators */
+.time-slot-status {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.time-slot-status.available {
+  background-color: var(--secondary);
+}
+
+.time-slot-status.recommended {
+  background-color: var(--accent);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Enhanced appointment form styling */
+.appointment-form-section {
+  border-left: 3px solid var(--primary-light);
+  padding-left: 1rem;
+  margin-bottom: 2rem;
+}
+
+.form-step-indicator {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.form-step {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--neutral-300);
+  color: var(--neutral-600);
+  font-weight: 600;
+  margin-right: 1rem;
+  position: relative;
+}
+
+.form-step.active {
+  background-color: var(--primary);
+  color: white;
+}
+
+.form-step.completed {
+  background-color: var(--secondary);
+  color: white;
+}
+
+.form-step::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 2rem;
+  height: 2px;
+  background-color: var(--neutral-300);
+  transform: translateY(-50%);
+}
+
+.form-step:last-child::after {
+  display: none;
+}
+
+.form-step.completed::after {
+  background-color: var(--secondary);
+}
+
+/* Smart suggestion highlights */
+.suggestion-highlight {
+  background: linear-gradient(90deg, transparent, var(--accent-light), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
 }

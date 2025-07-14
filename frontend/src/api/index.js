@@ -7,6 +7,11 @@ const api = axios.create({
     : '',  // Use relative URLs in development
   headers: {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+  maxRedirects: 5, // Follow up to 5 redirects
+  validateStatus: function (status) {
+    return status >= 200 && status < 400; // Accept redirects as valid
   },
 });
 
@@ -33,14 +38,32 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     console.log('API Response:', response.status, response.config?.url);
+    
+    // Check if we got HTML when expecting JSON
+    const contentType = response.headers['content-type'];
+    if (contentType && !contentType.includes('application/json') && 
+        typeof response.data === 'string' && 
+        (response.data.includes('<!doctype') || response.data.includes('<html'))) {
+      console.warn('Received HTML response when expecting JSON:', response.config?.url);
+      throw new Error('Server returned HTML instead of JSON - possible proxy/redirect issue');
+    }
+    
     return response;
   },
   async (error) => {
+    // Check if we got HTML instead of JSON (common with redirects/proxy issues)
+    const isHtmlResponse = error.response?.data && 
+      typeof error.response.data === 'string' && 
+      error.response.data.includes('<!doctype') || error.response.data.includes('<html');
+    
     console.error('API Response Error:', {
       status: error.response?.status,
       url: error.config?.url,
-      message: error.response?.data?.message,
-      error: error.message
+      message: error.response?.data?.message || error.message,
+      error: error.message,
+      isHtmlResponse,
+      responseData: isHtmlResponse ? 'HTML page returned (redirect/proxy issue)' : error.response?.data,
+      fullError: error
     });
     
     const originalRequest = error.config;
@@ -90,7 +113,66 @@ api.interceptors.response.use(
   }
 );
 
-// Auth API
+// Error interceptor to handle JSON error responses
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error Interceptor:', error);
+
+    if (error.response) {
+      // Check if the response is HTML, which can happen with proxy errors or server crashes
+      if (typeof error.response.data === 'string' && (error.response.data.includes('<!doctype html>') || error.response.data.includes('<html'))) {
+        error.message = 'The server returned an unexpected response. Please try again.';
+      } else if (error.response.data && typeof error.response.data === 'object') {
+        // Handle structured JSON errors from the Flask backend
+        // Prefer the 'message' or 'error' key from the JSON response
+        const message = error.response.data.message || error.response.data.error || 'An unknown error occurred.';
+        error.message = message; // Augment the error object
+      }
+    } else if (error.request) {
+      // The request was made but no response was received
+      console.error('API Request Error:', error.request);
+      error.message = 'The server is not responding. Please check your connection or try again later.';
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      console.error('API Setup Error:', error.message);
+      error.message = error.message || 'An unexpected error occurred.';
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Generic API error handling function
+const handleApiError = (error) => {
+  if (error.response) {
+    // The request was made and the server responded with a status code
+    // that falls out of the range of 2xx
+    console.error('API Response Error:', error.response.data, error.response.status, error.response.headers);
+    
+    // Check for structured error message from our backend
+    if (error.response.data && typeof error.response.data === 'object') {
+        return error.response.data.message || error.response.data.error || `Error: ${error.response.status}`;
+    }
+    
+    // Fallback for plain text or other non-json responses
+    if (typeof error.response.data === 'string') {
+      return error.response.data;
+    }
+
+    // Generic fallback
+    return `Request failed with status code ${error.response.status}`;
+  } else if (error.request) {
+    // The request was made but no response was received
+    console.error('API Request Error:', error.request);
+    return 'Network error: No response received from server.';
+  } else {
+    // Something happened in setting up the request that triggered an Error
+    console.error('API Setup Error:', error.message);
+    return error.message;
+  }
+};
+
 export const authAPI = {
   register: (userData) => api.post('/api/auth/register', userData),
   login: (credentials) => api.post('/api/auth/login', credentials),
@@ -142,11 +224,36 @@ export const appointmentAPI = {
     return api.get(url);
   },
   getAppointment: (id) => api.get(`/api/appointments/${id}`),
-  create: (appointmentData) => api.post('/api/appointments/', appointmentData),
-  createAppointment: (appointmentData) => api.post('/api/appointments/', appointmentData),
+  create: (appointmentData) => {
+    // Handle both emergency and regular appointments
+    if (appointmentData.is_emergency) {
+      return api.post('/api/appointments/emergency', appointmentData);
+    } else if (appointmentData.provider_id && appointmentData.appointment_date) {
+      return api.post('/api/appointments/schedule', appointmentData);
+    } else {
+      // Fallback to regular appointment creation
+      return api.post('/api/appointments/', appointmentData);
+    }
+  },
+  createAppointment: (appointmentData) => {
+    // Handle both emergency and regular appointments
+    if (appointmentData.is_emergency) {
+      return api.post('/api/appointments/emergency', appointmentData);
+    } else if (appointmentData.provider_id && appointmentData.appointment_date) {
+      return api.post('/api/appointments/schedule', appointmentData);
+    } else {
+      // Fallback to regular appointment creation
+      return api.post('/api/appointments/', appointmentData);
+    }
+  },
   updateAppointment: (id, appointmentData) => api.put(`/api/appointments/${id}`, appointmentData),
   deleteAppointment: (id) => api.delete(`/api/appointments/${id}`),
   getUpcoming: () => api.get('/api/appointments/upcoming'),
+  // New provider-based scheduling endpoints
+  getAvailableProviders: () => api.get('/api/appointments/providers'),
+  getProviderTimeSlots: (providerId, date) => api.get(`/api/appointments/providers/${providerId}/slots?date=${date}`),
+  createEmergencyAppointment: (appointmentData) => api.post('/api/appointments/emergency', appointmentData),
+  scheduleWithProvider: (appointmentData) => api.post('/api/appointments/schedule', appointmentData),
 };
 
 // Notifications API

@@ -211,6 +211,7 @@ class Appointment(db.Model):
     status = db.Column(db.String(50), nullable=False, default='pending')  # 'pending', 'confirmed', 'cancelled', 'completed'
     notes = db.Column(db.Text, nullable=True)
     provider_notes = db.Column(db.Text, nullable=True)  # Notes from health provider
+    is_emergency = db.Column(db.Boolean, default=False)  # True for emergency appointments
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -225,7 +226,7 @@ class Notification(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     message = db.Column(db.Text, nullable=False)
     notification_type = db.Column(db.String(50), nullable=False)  # e.g., 'cycle', 'appointment', 'education'
-    read = db.Column(db.Boolean, default=False)
+    is_read = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def __repr__(self):

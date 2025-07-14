@@ -190,8 +190,7 @@ def get_my_appointments():
 def get_unassigned_appointments():
     """Get unassigned appointments that provider can claim"""
     try:
-        user_id = 1  # Replace with actual user_id from token
-        provider = HealthProvider.query.filter_by(user_id=user_id).first()
+        provider = g.provider_profile
         
         # Get appointments without assigned provider
         appointments = Appointment.query.filter(
@@ -219,8 +218,7 @@ def get_unassigned_appointments():
 def claim_appointment(appointment_id):
     """Claim an unassigned appointment"""
     try:
-        user_id = 1  # Replace with actual user_id from token
-        provider = HealthProvider.query.filter_by(user_id=user_id).first()
+        provider = g.provider_profile
         
         appointment = Appointment.query.filter_by(
             id=appointment_id,
@@ -246,7 +244,7 @@ def claim_appointment(appointment_id):
         
         # Log the action
         log_entry = SystemLog(
-            user_id=user_id,
+            user_id=g.current_user.id,
             action='appointment_claimed',
             details=json.dumps({
                 'appointment_id': appointment_id,
@@ -267,8 +265,7 @@ def claim_appointment(appointment_id):
 def update_appointment(appointment_id):
     """Update appointment details"""
     try:
-        user_id = 1  # Replace with actual user_id from token
-        provider = HealthProvider.query.filter_by(user_id=user_id).first()
+        provider = g.provider_profile
         
         appointment = Appointment.query.filter_by(
             id=appointment_id,
@@ -282,7 +279,11 @@ def update_appointment(appointment_id):
         
         # Update appointment fields
         if 'appointment_date' in data:
-            appointment.appointment_date = datetime.fromisoformat(data['appointment_date'])
+            try:
+                appointment.appointment_date = datetime.fromisoformat(data['appointment_date'].replace('Z', '+00:00'))
+            except ValueError as ve:
+                current_app.logger.error(f"Invalid date format: {data['appointment_date']}, error: {str(ve)}")
+                return jsonify({'error': 'Invalid date format'}), 400
         if 'status' in data:
             appointment.status = data['status']
         if 'priority' in data:
@@ -291,7 +292,13 @@ def update_appointment(appointment_id):
             appointment.provider_notes = data['provider_notes']
         
         appointment.updated_at = datetime.utcnow()
-        db.session.commit()
+        
+        try:
+            db.session.commit()
+        except Exception as db_error:
+            db.session.rollback()
+            current_app.logger.error(f"Database error updating appointment: {str(db_error)}")
+            return jsonify({'error': 'Database error occurred'}), 500
         
         # Send notification to patient if status changed
         if 'status' in data:
@@ -321,8 +328,7 @@ def update_appointment(appointment_id):
 def get_schedule():
     """Get provider's schedule/calendar view"""
     try:
-        user_id = 1  # Replace with actual user_id from token
-        provider = HealthProvider.query.filter_by(user_id=user_id).first()
+        provider = g.provider_profile
         
         # Get date range
         start_date = request.args.get('start_date')
@@ -448,8 +454,7 @@ def update_profile():
 def get_patients():
     """Get list of patients who have had appointments"""
     try:
-        user_id = 1  # Replace with actual user_id from token
-        provider = HealthProvider.query.filter_by(user_id=user_id).first()
+        provider = g.provider_profile
         
         # Get unique patients from appointments
         patients = db.session.query(User).join(Appointment).filter(
@@ -479,3 +484,283 @@ def get_patients():
     except Exception as e:
         current_app.logger.error(f"Error getting patients: {str(e)}")
         return jsonify({'error': 'Failed to fetch patients'}), 500
+
+@health_provider_bp.route('/patients/<int:patient_id>/history', methods=['GET'])
+@health_provider_required
+def get_patient_history(patient_id):
+    """Get detailed appointment history for a specific patient"""
+    try:
+        provider = g.provider_profile
+        
+        # Verify patient has appointments with this provider
+        patient = User.query.get(patient_id)
+        if not patient:
+            return jsonify({'error': 'Patient not found'}), 404
+        
+        # Get all appointments between this provider and patient
+        appointments = Appointment.query.filter_by(
+            user_id=patient_id,
+            provider_id=provider.id
+        ).order_by(desc(Appointment.appointment_date)).all()
+        
+        if not appointments:
+            return jsonify({'error': 'No appointment history found'}), 404
+        
+        appointment_history = []
+        for appt in appointments:
+            appointment_history.append({
+                'id': appt.id,
+                'issue': appt.issue,
+                'appointment_date': appt.appointment_date.isoformat() if appt.appointment_date else None,
+                'status': appt.status,
+                'priority': appt.priority,
+                'notes': appt.notes,
+                'provider_notes': appt.provider_notes,
+                'created_at': appt.created_at.isoformat()
+            })
+        
+        return jsonify({
+            'patient': {
+                'id': patient.id,
+                'name': patient.name,
+                'email': patient.email,
+                'phone_number': patient.phone_number
+            },
+            'appointments': appointment_history,
+            'total_appointments': len(appointments),
+            'completed_appointments': len([a for a in appointments if a.status == 'completed']),
+            'cancelled_appointments': len([a for a in appointments if a.status == 'cancelled'])
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting patient history: {str(e)}")
+        return jsonify({'error': 'Failed to fetch patient history'}), 500
+
+@health_provider_bp.route('/analytics', methods=['GET'])
+@health_provider_required
+def get_analytics():
+    """Get detailed analytics for the provider"""
+    try:
+        provider = g.provider_profile
+        
+        # Get date range for analytics
+        days = request.args.get('days', 30, type=int)
+        start_date = datetime.now() - timedelta(days=days)
+        
+        # Appointment analytics
+        appointments = Appointment.query.filter_by(provider_id=provider.id).filter(
+            Appointment.created_at >= start_date
+        ).all()
+        
+        # Group by status
+        status_breakdown = {}
+        for appt in appointments:
+            status_breakdown[appt.status] = status_breakdown.get(appt.status, 0) + 1
+        
+        # Group by priority
+        priority_breakdown = {}
+        for appt in appointments:
+            priority_breakdown[appt.priority] = priority_breakdown.get(appt.priority, 0) + 1
+        
+        # Daily appointment counts
+        daily_counts = {}
+        for appt in appointments:
+            date_str = appt.created_at.date().isoformat()
+            daily_counts[date_str] = daily_counts.get(date_str, 0) + 1
+        
+        # Response time analysis
+        response_times = []
+        for appt in appointments:
+            if appt.updated_at and appt.created_at:
+                diff = appt.updated_at - appt.created_at
+                response_times.append(diff.total_seconds() / 3600)  # hours
+        
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+        
+        return jsonify({
+            'period_days': days,
+            'total_appointments': len(appointments),
+            'status_breakdown': status_breakdown,
+            'priority_breakdown': priority_breakdown,
+            'daily_counts': daily_counts,
+            'average_response_time_hours': round(avg_response_time, 2),
+            'completion_rate': len([a for a in appointments if a.status == 'completed']) / len(appointments) * 100 if appointments else 0
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting analytics: {str(e)}")
+        return jsonify({'error': 'Failed to fetch analytics'}), 500
+
+@health_provider_bp.route('/availability', methods=['GET'])
+@health_provider_required
+def get_availability():
+    """Get provider's availability schedule"""
+    try:
+        provider = g.provider_profile
+        
+        # Parse availability hours or set defaults
+        if provider.availability_hours:
+            availability = json.loads(provider.availability_hours)
+        else:
+            # Default availability (Monday-Friday 9-5, weekends off)
+            availability = {
+                'monday': {'day': 'monday', 'start_time': '09:00', 'end_time': '17:00', 'is_available': True},
+                'tuesday': {'day': 'tuesday', 'start_time': '09:00', 'end_time': '17:00', 'is_available': True},
+                'wednesday': {'day': 'wednesday', 'start_time': '09:00', 'end_time': '17:00', 'is_available': True},
+                'thursday': {'day': 'thursday', 'start_time': '09:00', 'end_time': '17:00', 'is_available': True},
+                'friday': {'day': 'friday', 'start_time': '09:00', 'end_time': '17:00', 'is_available': True},
+                'saturday': {'day': 'saturday', 'start_time': '09:00', 'end_time': '12:00', 'is_available': False},
+                'sunday': {'day': 'sunday', 'start_time': '09:00', 'end_time': '12:00', 'is_available': False}
+            }
+        
+        return jsonify({
+            'availability': availability,
+            'provider_id': provider.id,
+            'last_updated': provider.updated_at.isoformat() if hasattr(provider, 'updated_at') and provider.updated_at else None
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting availability: {str(e)}")
+        return jsonify({'error': 'Failed to fetch availability'}), 500
+
+
+@health_provider_bp.route('/availability', methods=['PUT'])
+@health_provider_required
+def update_availability():
+    """Update provider's availability schedule"""
+    try:
+        provider = g.provider_profile
+        data = request.get_json()
+        
+        if not data or 'availability' not in data:
+            return jsonify({'error': 'Availability data is required'}), 400
+        
+        availability_data = data['availability']
+        
+        # Validate availability data structure
+        required_days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        for day in required_days:
+            if day not in availability_data:
+                return jsonify({'error': f'Missing availability data for {day}'}), 400
+            
+            day_data = availability_data[day]
+            required_fields = ['day', 'start_time', 'end_time', 'is_available']
+            for field in required_fields:
+                if field not in day_data:
+                    return jsonify({'error': f'Missing {field} for {day}'}), 400
+        
+        # Validate time format for available days
+        import re
+        time_pattern = re.compile(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$')
+        
+        for day, day_data in availability_data.items():
+            if day_data['is_available']:
+                if not time_pattern.match(day_data['start_time']) or not time_pattern.match(day_data['end_time']):
+                    return jsonify({'error': f'Invalid time format for {day}. Use HH:MM format'}), 400
+                
+                # Validate start time is before end time
+                start_hour, start_min = map(int, day_data['start_time'].split(':'))
+                end_hour, end_min = map(int, day_data['end_time'].split(':'))
+                
+                start_minutes = start_hour * 60 + start_min
+                end_minutes = end_hour * 60 + end_min
+                
+                if start_minutes >= end_minutes:
+                    return jsonify({'error': f'Start time must be before end time for {day}'}), 400
+        
+        # Update provider availability
+        provider.availability_hours = json.dumps(availability_data)
+        
+        # Update the updated_at timestamp if it exists
+        if hasattr(provider, 'updated_at'):
+            from datetime import datetime
+            provider.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        current_app.logger.info(f"Availability updated for provider {provider.id}")
+        
+        return jsonify({
+            'message': 'Availability updated successfully',
+            'availability': availability_data
+        }), 200
+        
+    except json.JSONDecodeError:
+        return jsonify({'error': 'Invalid JSON data'}), 400
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating availability: {str(e)}")
+        return jsonify({'error': 'Failed to update availability'}), 500
+
+
+@health_provider_bp.route('/availability/summary', methods=['GET'])
+@health_provider_required
+def get_availability_summary():
+    """Get a summary of provider's availability"""
+    try:
+        provider = g.provider_profile
+        
+        if not provider.availability_hours:
+            return jsonify({
+                'total_available_days': 0,
+                'total_weekly_hours': 0,
+                'next_available_slot': None,
+                'status': 'No availability set'
+            }), 200
+        
+        availability = json.loads(provider.availability_hours)
+        
+        # Calculate summary statistics
+        available_days = [day for day, schedule in availability.items() if schedule.get('is_available', False)]
+        total_available_days = len(available_days)
+        
+        total_weekly_hours = 0
+        for day, schedule in availability.items():
+            if schedule.get('is_available', False):
+                try:
+                    start_hour, start_min = map(int, schedule['start_time'].split(':'))
+                    end_hour, end_min = map(int, schedule['end_time'].split(':'))
+                    
+                    start_minutes = start_hour * 60 + start_min
+                    end_minutes = end_hour * 60 + end_min
+                    
+                    day_hours = (end_minutes - start_minutes) / 60
+                    total_weekly_hours += day_hours
+                except (ValueError, KeyError):
+                    continue
+        
+        # Find next available slot (simplified - just find next available day)
+        from datetime import datetime, timedelta
+        today = datetime.now().strftime('%A').lower()
+        next_available_slot = None
+        
+        days_order = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        today_index = days_order.index(today) if today in days_order else 0
+        
+        for i in range(7):  # Check next 7 days
+            day_index = (today_index + i) % 7
+            day_name = days_order[day_index]
+            
+            if day_name in availability and availability[day_name].get('is_available', False):
+                next_date = (datetime.now() + timedelta(days=i)).strftime('%Y-%m-%d')
+                next_available_slot = {
+                    'date': next_date,
+                    'day': day_name,
+                    'start_time': availability[day_name]['start_time'],
+                    'end_time': availability[day_name]['end_time']
+                }
+                break
+        
+        status = 'Available for appointments' if total_available_days > 0 else 'No availability set'
+        
+        return jsonify({
+            'total_available_days': total_available_days,
+            'total_weekly_hours': round(total_weekly_hours, 2),
+            'next_available_slot': next_available_slot,
+            'available_days': available_days,
+            'status': status
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting availability summary: {str(e)}")
+        return jsonify({'error': 'Failed to fetch availability summary'}), 500

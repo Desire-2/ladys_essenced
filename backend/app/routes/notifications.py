@@ -1,6 +1,6 @@
 from app.models import Notification
 from app import db
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 
@@ -26,7 +26,7 @@ def get_notifications():
     
     if read_status is not None:
         read_bool = read_status.lower() == 'true'
-        query = query.filter_by(read=read_bool)
+        query = query.filter_by(is_read=read_bool)
     
     # Order by creation date descending and paginate
     notifications = query.order_by(Notification.created_at.desc()).paginate(page=page, per_page=per_page)
@@ -37,13 +37,13 @@ def get_notifications():
             'id': notification.id,
             'message': notification.message,
             'notification_type': notification.notification_type,
-            'read': notification.read,
+            'is_read': notification.is_read,
             'created_at': notification.created_at.isoformat()
         } for notification in notifications.items],
         'total': notifications.total,
         'pages': notifications.pages,
         'current_page': page,
-        'unread_count': Notification.query.filter_by(user_id=current_user_id, read=False).count()
+        'unread_count': Notification.query.filter_by(user_id=current_user_id, is_read=False).count()
     }
     
     return jsonify(result), 200
@@ -141,13 +141,13 @@ def delete_notification(notification_id):
 @jwt_required()
 def get_unread_count():
     current_user_id = get_jwt_identity()
-    
-    # Count unread notifications
-    unread_count = Notification.query.filter_by(user_id=current_user_id, read=False).count()
-    
-    return jsonify({
-        'unread_count': unread_count
-    }), 200
+    try:
+        # Corrected column name from 'read' to 'is_read'
+        unread_count = Notification.query.filter_by(user_id=current_user_id, is_read=False).count()
+        return jsonify({'unread_count': unread_count})
+    except Exception as e:
+        current_app.logger.error(f"Error fetching unread count for user {current_user_id}: {e}")
+        return jsonify(message="Failed to retrieve unread notification count"), 500
 
 @notifications_bp.route('/settings', methods=['GET'])
 @jwt_required()
@@ -198,7 +198,7 @@ def get_recent_notifications():
         'id': notification.id,
         'message': notification.message,
         'notification_type': notification.notification_type,
-        'is_read': notification.read,
+        'is_read': notification.is_read,
         'date': notification.created_at.isoformat()
     } for notification in notifications]
     

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, createContext, useContext } from 'react';
-import api from '../lib/api/client';
+import { authAPI } from '../api/index';
 
 // Create auth context
 const AuthContext = createContext();
@@ -10,10 +10,10 @@ export const useAuth = () => {
   return useContext(AuthContext);
 };
 
-// API Base URL - use environment variable in production, relative path in development
+// API Base URL - use environment variable in production, empty for relative URLs in development
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
   ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
-  : '';
+  : ''; // Empty string for relative URLs in development to use Next.js proxy
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -24,9 +24,11 @@ export const AuthProvider = ({ children }) => {
   const makeAuthenticatedRequest = async (endpoint, options = {}) => {
     const token = localStorage.getItem('access_token');
     if (!token) {
+      console.error('makeAuthenticatedRequest: No authentication token');
       throw new Error('No authentication token');
     }
 
+    console.log('makeAuthenticatedRequest: Making request to:', endpoint);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
@@ -36,29 +38,34 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
+    console.log('makeAuthenticatedRequest: Response status:', response.status);
+
     if (!response.ok) {
       if (response.status === 401) {
+        console.error('makeAuthenticatedRequest: Token expired or invalid, logging out user');
         // Token expired or invalid, logout user
         logout();
         throw new Error('Authentication expired');
       }
       const errorText = await response.text();
-      console.error(`API Error: ${response.status}`, errorText);
+      console.error(`makeAuthenticatedRequest: API Error: ${response.status}`, errorText);
       throw new Error(`API Error: ${response.status}`);
     }
 
     const contentType = response.headers.get('content-type');
     if (!contentType || !contentType.includes('application/json')) {
       const text = await response.text();
-      console.error(`Expected JSON but received:`, text.substring(0, 200));
+      console.error(`makeAuthenticatedRequest: Expected JSON but received:`, text.substring(0, 200));
       throw new Error(`Expected JSON response but received: ${contentType || 'unknown content type'}`);
     }
 
     try {
-      return await response.json();
+      const result = await response.json();
+      console.log('makeAuthenticatedRequest: Success, received data:', result);
+      return result;
     } catch (parseError) {
       const text = await response.text();
-      console.error('JSON parse error:', parseError, 'Response text:', text.substring(0, 200));
+      console.error('makeAuthenticatedRequest: JSON parse error:', parseError, 'Response text:', text.substring(0, 200));
       throw new Error('Invalid JSON response from server');
     }
   };
@@ -66,12 +73,21 @@ export const AuthProvider = ({ children }) => {
   // Check if user is logged in on initial load and fetch profile based on user type
   useEffect(() => {
     const checkAuth = async () => {
+      console.log('AuthContext: Starting authentication check...');
       const token = localStorage.getItem('access_token');
       const userType = localStorage.getItem('user_type');
+      
+      console.log('AuthContext: Token exists:', !!token);
+      console.log('AuthContext: User type:', userType);
       
       if (token && userType) {
         try {
           let profileData = null;
+          
+          console.log('AuthContext: Fetching profile for user type:', userType);
+          
+          // Add a small delay to ensure the backend is ready
+          await new Promise(resolve => setTimeout(resolve, 100));
           
           // Fetch profile based on user type
           switch (userType) {
@@ -91,20 +107,36 @@ export const AuthProvider = ({ children }) => {
               break;
           }
 
-          setUser({
+          console.log('AuthContext: Profile data received:', profileData);
+
+          const userData = {
             ...profileData,
             user_type: userType,
             user_id: localStorage.getItem('user_id')
-          });
+          };
+          
+          console.log('AuthContext: Setting user data:', userData);
+          setUser(userData);
+          
+          console.log('AuthContext: User set successfully');
         } catch (err) {
-          console.error('Failed to fetch user profile:', err);
-          // Clear invalid tokens
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          localStorage.removeItem('user_id');
-          localStorage.removeItem('user_type');
+          console.error('AuthContext: Failed to fetch user profile:', err);
+          // Don't immediately clear tokens on profile fetch failure
+          // This could be a temporary network issue
+          console.log('AuthContext: Keeping tokens but setting user to null, letting app retry');
+          // Only clear tokens if it's definitely an auth error, not a network error
+          if (err.message === 'Authentication expired') {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user_id');
+            localStorage.removeItem('user_type');
+            console.log('AuthContext: Cleared invalid tokens');
+          }
         }
+      } else {
+        console.log('AuthContext: No token or user type found, user remains null');
       }
+      console.log('AuthContext: Setting loading to false');
       setLoading(false);
     };
     checkAuth();
@@ -115,27 +147,9 @@ export const AuthProvider = ({ children }) => {
     try {
       setError(null);
       
-      // Add timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Login failed: ${response.status}`);
-      }
-      
-      const { token, refresh_token, user_id, user_type } = await response.json();
+      // Use the authAPI from our configured axios instance
+      const response = await authAPI.login(credentials);
+      const { token, refresh_token, user_id, user_type } = response.data;
 
       // Store tokens in localStorage with consistent naming
       localStorage.setItem('access_token', token);
@@ -143,54 +157,25 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('user_id', user_id);
       localStorage.setItem('user_type', user_type);
 
-      // Fetch full user profile based on user type with timeout
+      // Fetch full user profile
       let profileData = null;
-      const profileController = new AbortController();
-      const profileTimeoutId = setTimeout(() => profileController.abort(), 5000);
-      
       try {
-        let profileEndpoint;
-        switch (user_type) {
-          case 'admin':
-            profileEndpoint = '/api/auth/profile';
-            break;
-          case 'content_writer':
-            profileEndpoint = '/api/content-writer/profile';
-            break;
-          case 'health_provider':
-            profileEndpoint = '/api/health-provider/profile';
-            break;
-          default:
-            profileEndpoint = '/api/auth/profile';
-            break;
-        }
-        
-        const profileResponse = await fetch(`${API_BASE_URL}${profileEndpoint}`, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          signal: profileController.signal
-        });
-        
-        clearTimeout(profileTimeoutId);
-        
-        if (profileResponse.ok) {
-          profileData = await profileResponse.json();
-        } else {
-          console.warn('Profile fetch failed, using basic user data');
-          profileData = { user_id, user_type };
-        }
+        const profileResponse = await authAPI.getProfile();
+        profileData = profileResponse.data;
       } catch (profileErr) {
         console.warn('Profile fetch error:', profileErr.message);
         profileData = { user_id, user_type };
       }
 
-      setUser({
+      const userData = {
         ...profileData,
         user_type: user_type,
         user_id: user_id
-      });
+      };
+      
+      console.log('Login: Setting user data after login:', userData);
+      setUser(userData);
+      console.log('Login: User set successfully');
 
       return { success: true };
     } catch (err) {

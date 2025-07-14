@@ -131,6 +131,147 @@ def _initialize_test_data():
         )
         db.session.add(provider)
         
+        # Additional Health Providers for testing
+        additional_providers = [
+            {
+                'name': 'Dr. Michael Chen',
+                'phone_number': '+1-555-0456',
+                'email': 'michael.chen@citymedical.com',
+                'password': 'provider123',
+                'specialization': 'General Medicine',
+                'clinic_name': 'City Medical Center',
+                'clinic_address': '456 Oak Ave, Medical District',
+                'license_number': 'GM-2024-002',
+                'is_verified': True,
+                'availability_hours': '{"monday": ["08:00-12:00", "13:00-17:00"], "wednesday": ["08:00-12:00", "13:00-17:00"], "friday": ["08:00-12:00", "13:00-17:00"], "saturday": ["09:00-13:00"]}'
+            },
+            {
+                'name': 'Dr. Emily Rodriguez',
+                'phone_number': '+1-555-0789',
+                'email': 'emily.rodriguez@childrencare.com',
+                'password': 'provider123',
+                'specialization': 'Pediatrics',
+                'clinic_name': 'Children\'s Care Clinic',
+                'clinic_address': '789 Pine St, Family District',
+                'license_number': 'PED-2024-003',
+                'is_verified': True,
+                'availability_hours': '{"monday": ["08:00-12:00", "14:00-18:00"], "tuesday": ["08:00-12:00", "14:00-18:00"], "thursday": ["08:00-12:00", "14:00-18:00"], "friday": ["08:00-12:00", "14:00-18:00"], "saturday": ["09:00-13:00"]}'
+            },
+            {
+                'name': 'Dr. James Wilson',
+                'phone_number': '+1-555-0321',
+                'email': 'james.wilson@harmonyfamily.com',
+                'password': 'provider123',
+                'specialization': 'Family Medicine',
+                'clinic_name': 'Harmony Family Practice',
+                'clinic_address': '321 Elm St, Suburban Area',
+                'license_number': 'FM-2024-004',
+                'is_verified': False,
+                'availability_hours': '{"tuesday": ["09:00-12:00", "14:00-17:00"], "wednesday": ["09:00-12:00", "14:00-17:00"], "thursday": ["09:00-12:00", "14:00-17:00"], "saturday": ["08:00-14:00"]}'
+            },
+            {
+                'name': 'Dr. Lisa Thompson',
+                'phone_number': '+1-555-0654',
+                'email': 'lisa.thompson@advancedwomens.com',
+                'password': 'provider123',
+                'specialization': 'Gynecology',
+                'clinic_name': 'Advanced Women\'s Health',
+                'clinic_address': '654 Maple Ave, Health District',
+                'license_number': 'GYN-2024-005',
+                'is_verified': True,
+                'availability_hours': '{"monday": ["10:00-14:00"], "tuesday": ["10:00-14:00"], "wednesday": ["10:00-14:00"], "thursday": ["10:00-14:00"], "friday": ["10:00-14:00"]}'
+            },
+            {
+                'name': 'Dr. Robert Martinez',
+                'phone_number': '+1-555-0987',
+                'email': 'robert.martinez@quickcare.com',
+                'password': 'provider123',
+                'specialization': 'General Medicine',
+                'clinic_name': 'QuickCare Medical',
+                'clinic_address': '987 Cedar Blvd, Express District',
+                'license_number': 'GM-2024-006',
+                'is_verified': True,
+                'availability_hours': '{"monday": ["07:00-19:00"], "tuesday": ["07:00-19:00"], "wednesday": ["07:00-19:00"], "thursday": ["07:00-19:00"], "friday": ["07:00-19:00"], "saturday": ["08:00-16:00"], "sunday": ["10:00-16:00"]}'
+            },
+            {
+                'name': 'Dr. Angela Foster',
+                'phone_number': '+1-555-0159',
+                'email': 'angela.foster@sunshinechildren.com',
+                'password': 'provider123',
+                'specialization': 'Pediatrics',
+                'clinic_name': 'Sunshine Children\'s Health',
+                'clinic_address': '159 Birch Lane, Family Zone',
+                'license_number': 'PED-2024-007',
+                'is_verified': True,
+                'availability_hours': '{"monday": ["08:00-12:00", "13:00-17:00"], "tuesday": ["08:00-12:00", "13:00-17:00"], "wednesday": ["08:00-12:00"], "thursday": ["08:00-12:00", "13:00-17:00"], "friday": ["08:00-12:00", "13:00-17:00"], "saturday": ["09:00-13:00"]}'
+            },
+            {
+                'name': 'Dr. David Kim',
+                'phone_number': '+1-555-0753',
+                'email': 'david.kim@integratedfamily.com',
+                'password': 'provider123',
+                'specialization': 'Family Medicine',
+                'clinic_name': 'Integrated Family Health',
+                'clinic_address': '753 Spruce St, Community Center',
+                'license_number': 'FM-2024-008',
+                'is_verified': True,
+                'availability_hours': '{"monday": ["09:00-17:00"], "tuesday": ["09:00-17:00"], "wednesday": ["09:00-17:00"], "thursday": ["09:00-17:00"], "friday": ["09:00-17:00"]}'
+            },
+            {
+                'name': 'Dr. Maria Santos',
+                'phone_number': '+1-555-0486',
+                'email': 'maria.santos@comprehensivewomens.com',
+                'password': 'provider123',
+                'specialization': 'Gynecology',
+                'clinic_name': 'Comprehensive Women\'s Care',
+                'clinic_address': '486 Willow Dr, Medical Plaza',
+                'license_number': 'GYN-2024-009',
+                'is_verified': True,
+                'availability_hours': '{"monday": ["10:00-14:00", "18:00-21:00"], "tuesday": ["10:00-14:00", "18:00-21:00"], "wednesday": ["10:00-14:00"], "thursday": ["10:00-14:00", "18:00-21:00"], "friday": ["10:00-14:00", "18:00-21:00"]}'
+            },
+            {
+                'name': 'Dr. Thomas Anderson',
+                'phone_number': '+1-555-0852',
+                'email': 'thomas.anderson@metrohealth.com',
+                'password': 'provider123',
+                'specialization': 'General Medicine',
+                'clinic_name': 'Metro Health Services',
+                'clinic_address': '852 Poplar Ave, Downtown Core',
+                'license_number': 'GM-2024-010',
+                'is_verified': True,
+                'availability_hours': '{"monday": ["10:00-14:00"], "wednesday": ["10:00-14:00"], "friday": ["10:00-14:00"]}'
+            }
+        ]
+        
+        # Create additional provider users and profiles
+        for provider_data in additional_providers:
+            # Create user
+            provider_user = User(
+                name=provider_data['name'],
+                phone_number=provider_data['phone_number'],
+                email=provider_data['email'],
+                password_hash=generate_password_hash(provider_data['password']),
+                user_type='health_provider',
+                is_active=True,
+                created_at=datetime.utcnow()
+            )
+            db.session.add(provider_user)
+            db.session.flush()
+            
+            # Create provider profile
+            provider_profile = HealthProvider(
+                user_id=provider_user.id,
+                license_number=provider_data['license_number'],
+                specialization=provider_data['specialization'],
+                clinic_name=provider_data['clinic_name'],
+                clinic_address=provider_data['clinic_address'],
+                phone=provider_data['phone_number'],
+                email=provider_data['email'],
+                is_verified=provider_data['is_verified'],
+                availability_hours=provider_data['availability_hours']
+            )
+            db.session.add(provider_profile)
+        
         # Parent profile
         parent = Parent(user_id=created_users['parent'].id)
         db.session.add(parent)
@@ -266,13 +407,13 @@ def _initialize_test_data():
                 'user_id': created_users['adolescent'].id,
                 'message': 'Your next period is expected in 3 days',
                 'notification_type': 'cycle',
-                'read': False
+                'is_read': False
             },
             {
                 'user_id': created_users['adolescent'].id,
                 'message': 'Upcoming appointment with Dr. Sarah Johnson in 7 days',
                 'notification_type': 'appointment',
-                'read': False
+                'is_read': False
             }
         ]
         
