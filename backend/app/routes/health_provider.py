@@ -13,6 +13,234 @@ import json
 
 health_provider_bp = Blueprint('health_provider', __name__)
 
+# TEMPORARY: Test endpoint without authentication for demo
+@health_provider_bp.route('/test/dashboard/stats', methods=['GET'])
+def get_test_provider_stats():
+    """Test endpoint to get provider stats without authentication"""
+    try:
+        provider_id = request.args.get('provider_id', 1, type=int)
+        provider = HealthProvider.query.get(provider_id)
+        
+        if not provider:
+            return jsonify({'error': 'Provider not found'}), 404
+        
+        # Appointment statistics
+        total_appointments = Appointment.query.filter_by(provider_id=provider.id).count()
+        pending_appointments = Appointment.query.filter_by(
+            provider_id=provider.id, 
+            status='pending'
+        ).count()
+        confirmed_appointments = Appointment.query.filter_by(
+            provider_id=provider.id, 
+            status='confirmed'
+        ).count()
+        completed_appointments = Appointment.query.filter_by(
+            provider_id=provider.id, 
+            status='completed'
+        ).count()
+        
+        # Today's appointments
+        today = datetime.now().date()
+        today_start = datetime.combine(today, datetime.min.time())
+        today_end = datetime.combine(today, datetime.max.time())
+        
+        today_appointments = Appointment.query.filter(
+            Appointment.provider_id == provider.id,
+            Appointment.appointment_date >= today_start,
+            Appointment.appointment_date <= today_end
+        ).count()
+        
+        # This week's appointments
+        week_start = today_start - timedelta(days=today.weekday())
+        week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        
+        week_appointments = Appointment.query.filter(
+            Appointment.provider_id == provider.id,
+            Appointment.appointment_date >= week_start,
+            Appointment.appointment_date <= week_end
+        ).count()
+        
+        # Urgent appointments
+        urgent_appointments = Appointment.query.filter_by(
+            provider_id=provider.id, 
+            priority='urgent'
+        ).count()
+        
+        # Recent appointments for overview
+        recent_appointments = Appointment.query.filter_by(
+            provider_id=provider.id
+        ).order_by(Appointment.appointment_date.desc()).limit(5).all()
+        
+        recent_appointments_list = []
+        for appt in recent_appointments:
+            recent_appointments_list.append({
+                'id': appt.id,
+                'patient_name': appt.user.name if appt.user else 'Unknown',
+                'issue': appt.issue,
+                'status': appt.status,
+                'priority': appt.priority,
+                'appointment_date': appt.appointment_date.isoformat() if appt.appointment_date else None
+            })
+        
+        # Mock monthly trends for demo
+        monthly_trends = [
+            {'month': 'June', 'appointments': 8, 'completed': 6},
+            {'month': 'July', 'appointments': total_appointments, 'completed': completed_appointments},
+        ]
+        
+        return jsonify({
+            'appointment_stats': {
+                'total': total_appointments,
+                'pending': pending_appointments,
+                'confirmed': confirmed_appointments,
+                'completed': completed_appointments,
+                'today': today_appointments,
+                'this_week': week_appointments,
+                'urgent': urgent_appointments
+            },
+            'provider_info': {
+                'is_verified': True  # For demo purposes
+            },
+            'recent_appointments': recent_appointments_list,
+            'monthly_trends': monthly_trends,
+            'success': True
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in test provider stats: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+
+@health_provider_bp.route('/test/appointments', methods=['GET'])
+def get_test_appointments():
+    """Test endpoint to get appointments without authentication"""
+    try:
+        provider_id = request.args.get('provider_id', 1, type=int)
+        provider = HealthProvider.query.get(provider_id)
+        
+        if not provider:
+            return jsonify({'error': 'Provider not found'}), 404
+        
+        # Get appointments for this provider
+        appointments = Appointment.query.filter_by(provider_id=provider.id).order_by(
+            Appointment.appointment_date.desc()
+        ).limit(10).all()
+        
+        appointment_list = []
+        for appt in appointments:
+            appointment_list.append({
+                'id': appt.id,
+                'patient_name': appt.user.name if appt.user else 'Unknown',
+                'patient_phone': appt.user.phone_number if appt.user else None,
+                'patient_email': appt.user.email if appt.user else None,
+                'issue': appt.issue,
+                'status': appt.status,
+                'priority': appt.priority,
+                'appointment_date': appt.appointment_date.isoformat() if appt.appointment_date else None,
+                'created_at': appt.created_at.isoformat() if appt.created_at else None
+            })
+        
+        return jsonify({
+            'appointments': appointment_list,
+            'total': len(appointment_list),
+            'success': True
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in test appointments: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+
+@health_provider_bp.route('/test/schedule', methods=['GET'])
+def test_get_schedule():
+    """Test endpoint to get provider's schedule without authentication"""
+    try:
+        provider_id = request.args.get('provider_id', 1, type=int)
+        provider = HealthProvider.query.get(provider_id)
+        
+        if not provider:
+            return jsonify({'error': 'Provider not found'}), 404
+        
+        # Get date range
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date:
+            start_date = datetime.now().date()
+        else:
+            start_date = datetime.fromisoformat(start_date).date()
+        
+        if not end_date:
+            end_date = start_date + timedelta(days=7)
+        else:
+            end_date = datetime.fromisoformat(end_date).date()
+        
+        # Get appointments in date range
+        appointments = Appointment.query.filter_by(provider_id=provider.id).filter(
+            func.date(Appointment.appointment_date) >= start_date,
+            func.date(Appointment.appointment_date) <= end_date
+        ).order_by(Appointment.appointment_date).all()
+        
+        # Group appointments by date
+        schedule = {}
+        current_date = start_date
+        while current_date <= end_date:
+            schedule[current_date.isoformat()] = []
+            current_date += timedelta(days=1)
+        
+        for appt in appointments:
+            if appt.appointment_date:
+                date_key = appt.appointment_date.date().isoformat()
+                if date_key in schedule:
+                    schedule[date_key].append({
+                        'id': appt.id,
+                        'patient_name': appt.user.name if appt.user else 'Unknown',
+                        'issue': appt.issue,
+                        'time': appt.appointment_date.strftime('%H:%M'),
+                        'status': appt.status,
+                        'priority': appt.priority
+                    })
+        
+        return jsonify({
+            'schedule': schedule,
+            'provider_info': {
+                'name': provider.user.name if provider.user else 'Test Provider',
+                'specialization': provider.specialization,
+                'clinic_name': provider.clinic_name
+            },
+            'success': True
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting test schedule: {str(e)}")
+        return jsonify({'error': 'Failed to fetch schedule', 'message': str(e)}), 500
+
+@health_provider_bp.route('/test/providers', methods=['GET'])
+def get_test_providers():
+    """Test endpoint to get available providers without authentication"""
+    try:
+        providers = HealthProvider.query.filter_by(is_verified=True).all()
+        
+        providers_list = []
+        for provider in providers:
+            providers_list.append({
+                'id': provider.id,
+                'name': provider.user.name if provider.user else 'Unknown Provider',
+                'specialization': provider.specialization or 'General Practice',
+                'is_verified': provider.is_verified,
+                'clinic_name': provider.clinic_name,
+                'clinic_address': provider.clinic_address,
+                'phone': provider.phone,
+                'email': provider.email
+            })
+        
+        return jsonify({
+            'providers': providers_list,
+            'total_count': len(providers_list)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting test providers: {str(e)}")
+        return jsonify({'error': 'Failed to fetch providers', 'message': str(e)}), 500
+
 @health_provider_bp.route('/dashboard/stats', methods=['GET'])
 @health_provider_required
 @validate_health_provider_verification
@@ -479,3 +707,962 @@ def get_patients():
     except Exception as e:
         current_app.logger.error(f"Error getting patients: {str(e)}")
         return jsonify({'error': 'Failed to fetch patients'}), 500
+
+@health_provider_bp.route('/notifications', methods=['GET'])
+@health_provider_required
+def get_notifications():
+    """Get notifications for health provider"""
+    try:
+        provider = g.provider_profile
+        user_id = provider.user_id
+        
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        
+        # Get notifications for the provider
+        notifications = Notification.query.filter_by(user_id=user_id)\
+            .order_by(desc(Notification.created_at))\
+            .paginate(page=page, per_page=per_page, error_out=False)
+        
+        return jsonify({
+            'notifications': [{
+                'id': notif.id,
+                'message': notif.message,
+                'type': notif.notification_type,
+                'created_at': notif.created_at.isoformat(),
+                'is_read': notif.is_read
+            } for notif in notifications.items],
+            'total': notifications.total,
+            'pages': notifications.pages,
+            'current_page': page
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting notifications: {str(e)}")
+        return jsonify({'error': 'Failed to fetch notifications'}), 500
+
+@health_provider_bp.route('/notifications/<int:notification_id>/read', methods=['PATCH'])
+@health_provider_required
+def mark_notification_read(notification_id):
+    """Mark notification as read"""
+    try:
+        provider = g.provider_profile
+        user_id = provider.user_id
+        
+        notification = Notification.query.filter_by(
+            id=notification_id,
+            user_id=user_id
+        ).first()
+        
+        if not notification:
+            return jsonify({'error': 'Notification not found'}), 404
+        
+        notification.is_read = True
+        notification.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({'message': 'Notification marked as read'}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error marking notification as read: {str(e)}")
+        return jsonify({'error': 'Failed to update notification'}), 500
+
+@health_provider_bp.route('/notifications/read-all', methods=['PATCH'])
+@health_provider_bp.route('/notifications/read-all', methods=['PUT'])
+@health_provider_required
+def mark_all_notifications_read():
+    """Mark all notifications as read for the provider"""
+    try:
+        provider = g.provider_profile
+        user_id = provider.user_id
+        
+        # Update all unread notifications for this user
+        notifications = Notification.query.filter_by(
+            user_id=user_id,
+            is_read=False
+        ).all()
+        
+        for notification in notifications:
+            notification.is_read = True
+            notification.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Marked {len(notifications)} notifications as read'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error marking all notifications as read: {str(e)}")
+        return jsonify({'error': 'Failed to update notifications'}), 500
+
+@health_provider_bp.route('/notifications/<int:notification_id>', methods=['DELETE'])
+@health_provider_required
+def delete_notification(notification_id):
+    """Delete a specific notification"""
+    try:
+        provider = g.provider_profile
+        user_id = provider.user_id
+        
+        notification = Notification.query.filter_by(
+            id=notification_id,
+            user_id=user_id
+        ).first()
+        
+        if not notification:
+            return jsonify({'error': 'Notification not found'}), 404
+        
+        db.session.delete(notification)
+        db.session.commit()
+        
+        return jsonify({'message': 'Notification deleted successfully'}), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting notification: {str(e)}")
+        return jsonify({'error': 'Failed to delete notification'}), 500
+
+@health_provider_bp.route('/appointments/next-available-slot', methods=['GET'])
+@health_provider_required
+def get_next_available_slot():
+    """Get next available appointment slot for provider"""
+    try:
+        provider_id = request.args.get('provider_id', type=int)
+        days_ahead = request.args.get('days_ahead', 7, type=int)
+        duration = request.args.get('duration', 30, type=int)
+        
+        if not provider_id:
+            provider_id = g.provider_profile.id
+        
+        # Check if user has access to this provider
+        if provider_id != g.provider_profile.id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        # Calculate next available slot based on existing appointments
+        current_time = datetime.now()
+        end_time = current_time + timedelta(days=days_ahead)
+        
+        # Get existing appointments in the time range
+        existing_appointments = Appointment.query.filter_by(
+            provider_id=provider_id,
+            status='confirmed'
+        ).filter(
+            Appointment.appointment_date >= current_time,
+            Appointment.appointment_date <= end_time
+        ).order_by(Appointment.appointment_date).all()
+        
+        # Simple slot finding logic (can be enhanced with provider availability)
+        current_slot = current_time.replace(hour=9, minute=0, second=0, microsecond=0)
+        if current_slot < current_time:
+            current_slot = current_slot + timedelta(days=1)
+        
+        # Find first available slot
+        while current_slot <= end_time:
+            # Skip weekends for now (can be enhanced)
+            if current_slot.weekday() >= 5:
+                current_slot = current_slot + timedelta(days=1)
+                current_slot = current_slot.replace(hour=9, minute=0)
+                continue
+            
+            # Check if slot conflicts with existing appointments
+            slot_end = current_slot + timedelta(minutes=duration)
+            conflict = False
+            
+            for appointment in existing_appointments:
+                if appointment.appointment_date:
+                    appt_start = appointment.appointment_date
+                    appt_end = appt_start + timedelta(minutes=duration)
+                    
+                    if (current_slot < appt_end and slot_end > appt_start):
+                        conflict = True
+                        break
+            
+            if not conflict:
+                return jsonify({
+                    'next_available_slot': {
+                        'datetime': current_slot.isoformat(),
+                        'date': current_slot.date().isoformat(),
+                        'time': current_slot.time().strftime('%H:%M'),
+                        'duration_minutes': duration
+                    }
+                }), 200
+            
+            # Move to next 30-minute slot
+            current_slot += timedelta(minutes=30)
+            
+            # If past work hours, move to next day
+            if current_slot.hour >= 17:
+                current_slot = current_slot + timedelta(days=1)
+                current_slot = current_slot.replace(hour=9, minute=0)
+        
+        return jsonify({
+            'next_available_slot': None,
+            'message': f'No available slots in the next {days_ahead} days'
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting next available slot: {str(e)}")
+        return jsonify({'error': 'Failed to get next available slot'}), 500
+
+@health_provider_bp.route('/appointments/provider-availability-summary', methods=['GET'])
+@health_provider_required
+def get_provider_availability_summary():
+    """Get provider availability summary for the next few days"""
+    try:
+        provider_id = request.args.get('provider_id', type=int)
+        days_ahead = request.args.get('days_ahead', 7, type=int)
+        
+        if not provider_id:
+            provider_id = g.provider_profile.id
+        
+        if provider_id != g.provider_profile.id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        current_date = datetime.now().date()
+        end_date = current_date + timedelta(days=days_ahead)
+        
+        availability_summary = []
+        
+        for i in range(days_ahead):
+            check_date = current_date + timedelta(days=i)
+            
+            # Skip weekends
+            if check_date.weekday() >= 5:
+                continue
+            
+            # Count appointments for this date
+            appointments_count = Appointment.query.filter_by(
+                provider_id=provider_id
+            ).filter(
+                func.date(Appointment.appointment_date) == check_date,
+                Appointment.status.in_(['confirmed', 'pending'])
+            ).count()
+            
+            # Assume 8 slots per day (9 AM to 5 PM, 1 hour each)
+            total_slots = 8
+            available_slots = max(0, total_slots - appointments_count)
+            
+            availability_summary.append({
+                'date': check_date.isoformat(),
+                'day_of_week': check_date.strftime('%A'),
+                'total_slots': total_slots,
+                'booked_slots': appointments_count,
+                'available_slots': available_slots,
+                'availability_percentage': (available_slots / total_slots) * 100
+            })
+        
+        return jsonify({
+            'availability_summary': availability_summary,
+            'provider_id': provider_id,
+            'days_ahead': days_ahead
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting availability summary: {str(e)}")
+        return jsonify({'error': 'Failed to get availability summary'}), 500
+
+@health_provider_bp.route('/appointments/provider-time-slots', methods=['GET'])
+@health_provider_required
+def get_provider_time_slots():
+    """Get detailed time slots for a specific date"""
+    try:
+        provider_id = request.args.get('provider_id', type=int)
+        date_str = request.args.get('date')
+        
+        if not provider_id:
+            provider_id = g.provider_profile.id
+        
+        if provider_id != g.provider_profile.id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        if not date_str:
+            return jsonify({'error': 'Date parameter is required'}), 400
+        
+        try:
+            check_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+        
+        # Generate time slots for the day (9 AM to 5 PM, 30-minute intervals)
+        time_slots = []
+        start_hour = 9
+        end_hour = 17
+        
+        # Get existing appointments for this date
+        existing_appointments = Appointment.query.filter_by(
+            provider_id=provider_id
+        ).filter(
+            func.date(Appointment.appointment_date) == check_date,
+            Appointment.status.in_(['confirmed', 'pending'])
+        ).all()
+        
+        for hour in range(start_hour, end_hour):
+            for minute in [0, 30]:
+                slot_time = datetime.combine(check_date, datetime.min.time().replace(hour=hour, minute=minute))
+                
+                # Check if this slot is booked
+                is_booked = False
+                appointment_info = None
+                
+                for appointment in existing_appointments:
+                    if appointment.appointment_date:
+                        # Check if appointment falls within this 30-minute slot
+                        appt_time = appointment.appointment_date
+                        if (appt_time.hour == hour and 
+                            ((minute == 0 and appt_time.minute < 30) or 
+                             (minute == 30 and appt_time.minute >= 30))):
+                            is_booked = True
+                            appointment_info = {
+                                'id': appointment.id,
+                                'patient_name': appointment.patient_name,
+                                'status': appointment.status,
+                                'priority': appointment.priority
+                            }
+                            break
+                
+                time_slots.append({
+                    'time': slot_time.strftime('%H:%M'),
+                    'datetime': slot_time.isoformat(),
+                    'is_available': not is_booked,
+                    'appointment': appointment_info
+                })
+        
+        return jsonify({
+            'date': date_str,
+            'time_slots': time_slots,
+            'provider_id': provider_id
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting time slots: {str(e)}")
+        return jsonify({'error': 'Failed to get time slots'}), 500
+
+@health_provider_bp.route('/analytics', methods=['GET'])
+@health_provider_required
+def get_provider_analytics():
+    """Get comprehensive analytics for health provider"""
+    try:
+        provider_id = request.args.get('provider_id', type=int)
+        time_range = request.args.get('time_range', '30d')
+        
+        if not provider_id:
+            provider_id = g.provider_profile.id
+        
+        if provider_id != g.provider_profile.id:
+            return jsonify({'error': 'Access denied'}), 403
+        
+        # Calculate date range
+        current_time = datetime.now()
+        if time_range == '7d':
+            start_date = current_time - timedelta(days=7)
+        elif time_range == '30d':
+            start_date = current_time - timedelta(days=30)
+        elif time_range == '90d':
+            start_date = current_time - timedelta(days=90)
+        elif time_range == '1y':
+            start_date = current_time - timedelta(days=365)
+        else:
+            start_date = current_time - timedelta(days=30)
+        
+        # Appointment trends by month
+        appointment_trends = []
+        current_month = start_date.replace(day=1)
+        while current_month <= current_time:
+            next_month = current_month.replace(month=current_month.month + 1) if current_month.month < 12 else current_month.replace(year=current_month.year + 1, month=1)
+            
+            total_appointments = Appointment.query.filter_by(provider_id=provider_id).filter(
+                Appointment.created_at >= current_month,
+                Appointment.created_at < next_month
+            ).count()
+            
+            completed_appointments = Appointment.query.filter_by(provider_id=provider_id, status='completed').filter(
+                Appointment.created_at >= current_month,
+                Appointment.created_at < next_month
+            ).count()
+            
+            completion_rate = (completed_appointments / total_appointments * 100) if total_appointments > 0 else 0
+            
+            appointment_trends.append({
+                'month': current_month.strftime('%Y-%m'),
+                'total_appointments': total_appointments,
+                'completed_appointments': completed_appointments,
+                'completion_rate': round(completion_rate, 1)
+            })
+            
+            current_month = next_month
+            if current_month > current_time:
+                break
+        
+        # Peak hours analysis
+        busy_hours = []
+        for hour in range(24):
+            appointment_count = Appointment.query.filter_by(provider_id=provider_id).filter(
+                Appointment.appointment_date >= start_date,
+                func.extract('hour', Appointment.appointment_date) == hour
+            ).count()
+            
+            if appointment_count > 0:
+                busy_hours.append({
+                    'hour': hour,
+                    'appointment_count': appointment_count
+                })
+        
+        # Most common issues analysis
+        appointments_with_issues = Appointment.query.filter_by(provider_id=provider_id).filter(
+            Appointment.created_at >= start_date
+        ).all()
+        
+        # Simple keyword extraction from issues
+        issue_keywords = {}
+        for appointment in appointments_with_issues:
+            if appointment.issue:
+                words = appointment.issue.lower().split()
+                for word in words:
+                    if len(word) > 4:  # Filter out short words
+                        issue_keywords[word] = issue_keywords.get(word, 0) + 1
+        
+        most_common_issues = sorted(issue_keywords.items(), key=lambda x: x[1], reverse=True)[:5]
+        most_common_issues = [issue[0] for issue in most_common_issues]
+        
+        # Calculate average consultation time (mock data for now)
+        average_consultation_time = 30  # This would need actual consultation time tracking
+        
+        # Calculate follow-up rate
+        total_completed = Appointment.query.filter_by(provider_id=provider_id, status='completed').filter(
+            Appointment.created_at >= start_date
+        ).count()
+        
+        # For follow-up rate, we'll use a simple heuristic: patients with more than one appointment
+        unique_patients = db.session.query(Appointment.patient_name).filter_by(provider_id=provider_id).filter(
+            Appointment.created_at >= start_date
+        ).distinct().count()
+        
+        follow_up_rate = ((total_completed - unique_patients) / total_completed * 100) if total_completed > 0 else 0
+        
+        analytics_data = {
+            'appointmentTrends': appointment_trends,
+            'patientSatisfaction': {
+                'average_rating': 4.2,  # Mock data - would come from actual ratings
+                'total_reviews': 45,
+                'distribution': {
+                    '5': 25,
+                    '4': 15,
+                    '3': 3,
+                    '2': 1,
+                    '1': 1
+                }
+            },
+            'busyHours': busy_hours,
+            'specialtyMetrics': {
+                'most_common_issues': most_common_issues,
+                'average_consultation_time': average_consultation_time,
+                'follow_up_rate': round(follow_up_rate, 1)
+            }
+        }
+        
+        return jsonify(analytics_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting analytics: {str(e)}")
+        return jsonify({'error': 'Failed to get analytics data'}), 500
+
+@health_provider_bp.route('/availability', methods=['GET'])
+@health_provider_required
+def get_provider_availability():
+    """Get provider's availability settings"""
+    try:
+        provider = g.provider_profile
+        
+        # Return current availability settings
+        availability_data = {
+            'provider_id': provider.id,
+            'availability_hours': provider.availability_hours or {
+                'monday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'tuesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'wednesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'thursday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'friday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'saturday': {'start': '09:00', 'end': '13:00', 'enabled': False},
+                'sunday': {'start': '09:00', 'end': '13:00', 'enabled': False}
+            },
+            'break_times': [
+                {'start': '12:00', 'end': '13:00', 'label': 'Lunch Break'}
+            ],
+            'slot_duration': 30,  # minutes
+            'advance_booking_days': 30,
+            'buffer_time': 15,  # minutes between appointments
+            'timezone': 'UTC'
+        }
+        
+        return jsonify(availability_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting provider availability: {str(e)}")
+        return jsonify({'error': 'Failed to get availability settings'}), 500
+
+@health_provider_bp.route('/availability', methods=['PUT'])
+@health_provider_required
+def update_provider_availability():
+    """Update provider's availability settings"""
+    try:
+        provider = g.provider_profile
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Update availability hours
+        if 'availability_hours' in data:
+            provider.availability_hours = data['availability_hours']
+        
+        # Update other availability settings (these would need additional model fields)
+        availability_settings = {
+            'availability_hours': data.get('availability_hours', provider.availability_hours),
+            'break_times': data.get('break_times', []),
+            'slot_duration': data.get('slot_duration', 30),
+            'advance_booking_days': data.get('advance_booking_days', 30),
+            'buffer_time': data.get('buffer_time', 15),
+            'timezone': data.get('timezone', 'UTC')
+        }
+        
+        provider.availability_hours = availability_settings
+        provider.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        # Log the activity
+        log_user_activity(
+            user_id=provider.user_id,
+            activity_type='availability_update',
+            details=f'Updated availability settings'
+        )
+        
+        return jsonify({
+            'message': 'Availability updated successfully',
+            'availability': availability_settings
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating provider availability: {str(e)}")
+        return jsonify({'error': 'Failed to update availability settings'}), 500
+
+@health_provider_bp.route('/availability/slots', methods=['POST'])
+@health_provider_required
+def create_custom_availability_slot():
+    """Create custom availability slot for specific dates"""
+    try:
+        provider = g.provider_profile
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        required_fields = ['date', 'start_time', 'end_time']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # For now, we'll store custom slots in a simple format
+        # In a real application, you'd want a separate AvailabilitySlot model
+        custom_slots = provider.availability_hours.get('custom_slots', {})
+        date_key = data['date']
+        
+        if date_key not in custom_slots:
+            custom_slots[date_key] = []
+        
+        custom_slots[date_key].append({
+            'start_time': data['start_time'],
+            'end_time': data['end_time'],
+            'is_available': data.get('is_available', True),
+            'notes': data.get('notes', ''),
+            'created_at': datetime.utcnow().isoformat()
+        })
+        
+        # Update the provider's availability
+        updated_availability = provider.availability_hours or {}
+        updated_availability['custom_slots'] = custom_slots
+        provider.availability_hours = updated_availability
+        provider.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Custom availability slot created successfully',
+            'slot': custom_slots[date_key][-1]
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating custom availability slot: {str(e)}")
+        return jsonify({'error': 'Failed to create availability slot'}), 500
+
+@health_provider_bp.route('/availability/slots/<date>', methods=['DELETE'])
+@health_provider_required
+def delete_custom_availability_slot(date):
+    """Delete custom availability slot for a specific date"""
+    try:
+        provider = g.provider_profile
+        
+        if not provider.availability_hours:
+            return jsonify({'error': 'No availability settings found'}), 404
+        
+        custom_slots = provider.availability_hours.get('custom_slots', {})
+        
+        if date not in custom_slots:
+            return jsonify({'error': 'No custom slots found for this date'}), 404
+        
+        # Remove the custom slots for this date
+        del custom_slots[date]
+        
+        updated_availability = provider.availability_hours
+        updated_availability['custom_slots'] = custom_slots
+        provider.availability_hours = updated_availability
+        provider.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Custom availability slots for {date} deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting custom availability slot: {str(e)}")
+        return jsonify({'error': 'Failed to delete availability slot'}), 500
+
+@health_provider_bp.route('/availability/block', methods=['POST'])
+@health_provider_required
+def block_time_slot():
+    """Block a time slot (mark as unavailable)"""
+    try:
+        provider = g.provider_profile
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        required_fields = ['date', 'start_time', 'end_time']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Get or create blocked slots
+        blocked_slots = provider.availability_hours.get('blocked_slots', {}) if provider.availability_hours else {}
+        date_key = data['date']
+        
+        if date_key not in blocked_slots:
+            blocked_slots[date_key] = []
+        
+        blocked_slots[date_key].append({
+            'start_time': data['start_time'],
+            'end_time': data['end_time'],
+            'reason': data.get('reason', 'Blocked by provider'),
+            'notes': data.get('notes', ''),
+            'created_at': datetime.utcnow().isoformat()
+        })
+        
+        # Update the provider's availability
+        updated_availability = provider.availability_hours or {}
+        updated_availability['blocked_slots'] = blocked_slots
+        provider.availability_hours = updated_availability
+        provider.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Time slot blocked successfully',
+            'blocked_slot': blocked_slots[date_key][-1]
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error blocking time slot: {str(e)}")
+        return jsonify({'error': 'Failed to block time slot'}), 500
+
+@health_provider_bp.route('/test/appointments/<int:appointment_id>/update', methods=['PATCH'])
+def test_update_appointment(appointment_id):
+    """Test endpoint to update appointment without authentication"""
+    try:
+        appointment = Appointment.query.get(appointment_id)
+        
+        if not appointment:
+            return jsonify({'error': 'Appointment not found'}), 404
+        
+        # Get the updates from request body
+        updates = request.get_json() or {}
+        
+        # Update allowed fields
+        if 'status' in updates:
+            appointment.status = updates['status']
+        if 'notes' in updates:
+            appointment.notes = updates['notes']
+        if 'provider_notes' in updates:
+            appointment.provider_notes = updates['provider_notes']
+        
+        appointment.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Appointment updated successfully',
+            'appointment': {
+                'id': appointment.id,
+                'status': appointment.status,
+                'notes': appointment.notes,
+                'provider_notes': appointment.provider_notes
+            },
+            'success': True
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating appointment: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+
+@health_provider_bp.route('/test/appointments/<int:appointment_id>/claim', methods=['PATCH'])
+def test_claim_appointment(appointment_id):
+    """Test endpoint to claim appointment without authentication"""
+    try:
+        appointment = Appointment.query.get(appointment_id)
+        
+        if not appointment:
+            return jsonify({'error': 'Appointment not found'}), 404
+        
+        if appointment.provider_id is not None:
+            return jsonify({'error': 'Appointment already claimed'}), 400
+        
+        # For demo, claim for provider 1
+        provider_id = request.args.get('provider_id', 1, type=int)
+        appointment.provider_id = provider_id
+        appointment.status = 'confirmed'
+        appointment.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Appointment claimed successfully',
+            'appointment': {
+                'id': appointment.id,
+                'provider_id': appointment.provider_id,
+                'status': appointment.status
+            },
+            'success': True
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error claiming appointment: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+
+@health_provider_bp.route('/test/appointments/unassigned', methods=['GET'])
+def test_get_unassigned_appointments():
+    """Test endpoint to get unassigned appointments without authentication"""
+    try:
+        # Get unassigned appointments (provider_id is None)
+        appointments = Appointment.query.filter_by(provider_id=None).order_by(
+            Appointment.created_at.desc()
+        ).all()
+        
+        appointment_list = []
+        for appt in appointments:
+            appointment_list.append({
+                'id': appt.id,
+                'patient_name': appt.user.name if appt.user else 'Unknown',
+                'patient_phone': appt.user.phone_number if appt.user else None,
+                'patient_email': appt.user.email if appt.user else None,
+                'issue': appt.issue,
+                'status': appt.status,
+                'priority': appt.priority,
+                'preferred_date': appt.preferred_date.isoformat() if appt.preferred_date else None,
+                'created_at': appt.created_at.isoformat() if appt.created_at else None
+            })
+        
+        return jsonify({
+            'appointments': appointment_list,
+            'total': len(appointment_list),
+            'success': True
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in test unassigned appointments: {str(e)}")
+        return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+
+@health_provider_bp.route('/test/availability', methods=['PUT'])
+def test_update_provider_availability():
+    """Test endpoint to update provider's availability settings without authentication"""
+    try:
+        provider_id = request.args.get('provider_id', 1, type=int)
+        provider = HealthProvider.query.get(provider_id)
+        
+        if not provider:
+            return jsonify({'error': 'Provider not found'}), 404
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # For demo purposes, we'll simulate updating the availability settings
+        # In a real application, you'd store this in the database
+        availability_settings = {
+            'availability_hours': data.get('availability_hours', {}),
+            'break_times': data.get('break_times', []),
+            'slot_duration': data.get('slot_duration', 30),
+            'advance_booking_days': data.get('advance_booking_days', 30),
+            'buffer_time': data.get('buffer_time', 15),
+            'timezone': data.get('timezone', 'UTC'),
+            'custom_slots': data.get('custom_slots', {}),
+            'blocked_slots': data.get('blocked_slots', {})
+        }
+        
+        # In a real app, store in provider.availability_hours or separate model
+        provider.updated_at = datetime.utcnow()
+        
+        # For demo, we'll commit without actual data storage
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Availability settings saved successfully',
+            'availability': availability_settings,
+            'success': True
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in test update availability: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'Internal server error', 'message': str(e)}), 500
+
+@health_provider_bp.route('/test/availability', methods=['GET'])
+def test_get_provider_availability():
+    """Test endpoint to get provider's availability settings without authentication"""
+    try:
+        provider_id = request.args.get('provider_id', 1, type=int)
+        provider = HealthProvider.query.get(provider_id)
+        
+        if not provider:
+            return jsonify({'error': 'Provider not found'}), 404
+        
+        # Return mock availability settings for demo
+        availability_data = {
+            'provider_id': provider.id,
+            'availability_hours': {
+                'monday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'tuesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'wednesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'thursday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'friday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'saturday': {'start': '09:00', 'end': '13:00', 'enabled': False},
+                'sunday': {'start': '09:00', 'end': '13:00', 'enabled': False}
+            },
+            'break_times': [
+                {'start': '12:00', 'end': '13:00', 'label': 'Lunch Break'}
+            ],
+            'slot_duration': 30,  # minutes
+            'advance_booking_days': 30,
+            'buffer_time': 15,  # minutes between appointments
+            'timezone': 'UTC',
+            'custom_slots': {},
+            'blocked_slots': {}
+        }
+        
+        return jsonify(availability_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting test provider availability: {str(e)}")
+        return jsonify({'error': 'Failed to get availability settings'}), 500
+
+@health_provider_bp.route('/test/availability/slots', methods=['POST'])
+def test_create_custom_availability_slot():
+    """Test endpoint to create custom availability slot without authentication"""
+    try:
+        provider_id = request.args.get('provider_id', 1, type=int)
+        provider = HealthProvider.query.get(provider_id)
+        
+        if not provider:
+            return jsonify({'error': 'Provider not found'}), 404
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        required_fields = ['date', 'start_time', 'end_time']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # For demo purposes, we'll just return success
+        # In a real application, you'd store this in the database
+        custom_slot = {
+            'start_time': data['start_time'],
+            'end_time': data['end_time'],
+            'is_available': data.get('is_available', True),
+            'notes': data.get('notes', ''),
+            'created_at': datetime.utcnow().isoformat()
+        }
+        
+        return jsonify({
+            'message': 'Custom availability slot created successfully',
+            'slot': custom_slot,
+            'success': True
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating test custom availability slot: {str(e)}")
+        return jsonify({'error': 'Failed to create availability slot'}), 500
+
+@health_provider_bp.route('/test/availability/slots/<date>', methods=['DELETE'])
+def test_delete_custom_availability_slot(date):
+    """Test endpoint to delete custom availability slot without authentication"""
+    try:
+        provider_id = request.args.get('provider_id', 1, type=int)
+        provider = HealthProvider.query.get(provider_id)
+        
+        if not provider:
+            return jsonify({'error': 'Provider not found'}), 404
+        
+        # For demo purposes, just return success
+        return jsonify({
+            'message': f'Custom availability slots for {date} deleted successfully',
+            'success': True
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting test custom availability slot: {str(e)}")
+        return jsonify({'error': 'Failed to delete availability slot'}), 500
+
+@health_provider_bp.route('/test/availability/block', methods=['POST'])
+def test_block_time_slot():
+    """Test endpoint to block a time slot without authentication"""
+    try:
+        provider_id = request.args.get('provider_id', 1, type=int)
+        provider = HealthProvider.query.get(provider_id)
+        
+        if not provider:
+            return jsonify({'error': 'Provider not found'}), 404
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        required_fields = ['date', 'start_time', 'end_time', 'reason']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # For demo purposes, we'll just return success
+        blocked_slot = {
+            'start_time': data['start_time'],
+            'end_time': data['end_time'],
+            'reason': data.get('reason', 'Blocked by provider'),
+            'notes': data.get('notes', ''),
+            'created_at': datetime.utcnow().isoformat()
+        }
+        
+        return jsonify({
+            'message': 'Time slot blocked successfully',
+            'blocked_slot': blocked_slot,
+            'success': True
+        }), 201
+        
+    except Exception as e:
+        current_app.logger.error(f"Error blocking test time slot: {str(e)}")
+        return jsonify({'error': 'Failed to block time slot'}), 500

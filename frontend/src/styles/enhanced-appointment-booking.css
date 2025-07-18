@@ -1,0 +1,203 @@
+/* Enhanced Appointment Booking Styles */
+.enhanced-appointment-booking {
+  /* Progress steps */
+  .progress {
+    border-radius: 10px;
+  }
+  
+  .progress-bar {
+    transition: width 0.3s ease;
+  }
+
+  /* Provider cards */
+  .hover-shadow:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    transform: translateY(-2px);
+  }
+
+  .cursor-pointer {
+    cursor: pointer;
+  }
+
+  /* Time slots grid */
+  .time-slots-grid {
+    /* Custom scrollbar */
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 3px;
+    }
+    
+    &::-webkit-scrollbar-thumb:hover {
+      background: #a8a8a8;
+    }
+  }
+
+  /* Time slot buttons */
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* Avatar icons */
+  .avatar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+  }
+
+  /* Card enhancements */
+  .card {
+    border: 1px solid rgba(0, 0, 0, 0.125);
+    border-radius: 0.5rem;
+  }
+
+  .card-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+  }
+
+  /* Success animations */
+  @keyframes fadeInScale {
+    0% {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .confirmation-success {
+    animation: fadeInScale 0.5s ease-out;
+  }
+
+  /* Responsive improvements */
+  @media (max-width: 768px) {
+    .time-slots-grid .col-6 {
+      flex: 0 0 50%;
+    }
+    
+    .col-sm-4 {
+      flex: 0 0 33.333333%;
+    }
+  }
+
+  /* Loading states */
+  .spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  /* Badge improvements */
+  .badge {
+    font-size: 0.75em;
+    padding: 0.35em 0.65em;
+  }
+
+  /* Form enhancements */
+  .form-control:focus,
+  .form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+  }
+
+  /* Alert enhancements */
+  .alert {
+    border: none;
+    border-radius: 0.5rem;
+  }
+
+  .alert-success {
+    background-color: #d1e7dd;
+    color: #0a3622;
+  }
+
+  .alert-info {
+    background-color: #cff4fc;
+    color: #055160;
+  }
+
+  /* Button hover effects */
+  .btn {
+    transition: all 0.2s ease;
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .btn:active {
+    transform: translateY(0);
+  }
+
+  /* Card hover effects for provider selection */
+  .provider-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .provider-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* Global enhancements for appointment booking */
+.appointment-booking-page {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
+  padding: 2rem 0;
+}
+
+/* Dashboard appointment section specific styles */
+.dashboard-appointments {
+  .list-group-item {
+    border: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 1rem 0;
+  }
+
+  .list-group-item:last-child {
+    border-bottom: none;
+  }
+
+  /* Appointment status badges */
+  .badge.bg-success {
+    background-color: #28a745 !important;
+  }
+
+  .badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000;
+  }
+
+  .badge.bg-info {
+    background-color: #17a2b8 !important;
+  }
+
+  .badge.bg-secondary {
+    background-color: #6c757d !important;
+  }
+
+  /* Tips card styling */
+  .tips-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+  }
+
+  /* Icon enhancements */
+  .fas {
+    margin-right: 0.5rem;
+  }
+}

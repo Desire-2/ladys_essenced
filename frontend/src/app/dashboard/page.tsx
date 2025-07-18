@@ -8,6 +8,8 @@ import { useCycle } from '../../contexts/CycleContext';
 import { useMeal } from '../../contexts/MealContext';
 import { useAppointment } from '../../contexts/AppointmentContext';
 import { useNotification } from '../../contexts/NotificationContext';
+import EnhancedAppointmentBooking from '../../components/EnhancedAppointmentBooking';
+import CycleCalendar from '../../components/CycleCalendar';
 
 interface User {
   id: number;
@@ -61,7 +63,7 @@ export default function Dashboard() {
   const { addCycleLog, fetchCycleStats, error: cycleError, loading: cycleLoading } = useCycle();
   const { addMealLog, error: mealError, loading: mealLoading } = useMeal();
   const { createAppointment, error: appointmentError, loading: appointmentLoading } = useAppointment();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState<string>('overview');
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedChild, setSelectedChild] = useState<number | null>(null);
   const [cycleData, setCycleData] = useState<CycleData>({
@@ -79,6 +81,35 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
+  
+  // Enhanced individual loading and error states for better UX
+  const [dataLoadingStates, setDataLoadingStates] = useState({
+    children: false,
+    cycle: false,
+    meals: false,
+    appointments: false,
+    notifications: false,
+    calendar: false
+  });
+  
+  const [dataErrors, setDataErrors] = useState({
+    children: '',
+    cycle: '',
+    meals: '',
+    appointments: '',
+    notifications: '',
+    calendar: ''
+  });
+  
+  const [dataAvailability, setDataAvailability] = useState({
+    children: false,
+    cycle: false,
+    meals: false,
+    appointments: false,
+    notifications: false,
+    calendar: false
+  });
+  
   // Child management state
   const [childName, setChildName] = useState('');
   const [childDob, setChildDob] = useState('');
@@ -88,6 +119,49 @@ export default function Dashboard() {
   const [childFormError, setChildFormError] = useState('');
 
   const router = useRouter();
+
+  // Helper functions for managing data states
+  const setDataLoading = (dataType: keyof typeof dataLoadingStates, isLoading: boolean) => {
+    setDataLoadingStates(prev => ({ ...prev, [dataType]: isLoading }));
+  };
+
+  const setDataError = (dataType: keyof typeof dataErrors, error: string) => {
+    setDataErrors(prev => ({ ...prev, [dataType]: error }));
+  };
+
+  const setDataAvailable = (dataType: keyof typeof dataAvailability, available: boolean) => {
+    setDataAvailability(prev => ({ ...prev, [dataType]: available }));
+  };
+
+  const clearDataError = (dataType: keyof typeof dataErrors) => {
+    setDataError(dataType, '');
+  };
+
+  // Helper function to retry loading specific data type
+  const retryDataLoad = async (dataType: string) => {
+    switch (dataType) {
+      case 'children':
+        await loadChildrenData();
+        break;
+      case 'cycle':
+        await loadCycleData();
+        break;
+      case 'meals':
+        await loadMealsData();
+        break;
+      case 'appointments':
+        await loadAppointmentsData();
+        break;
+      case 'notifications':
+        await loadNotificationsData();
+        break;
+      case 'calendar':
+        await loadCalendarData();
+        break;
+      default:
+        await loadDashboardData();
+    }
+  };
 
   // Helper function to safely access localStorage
   const getStorageItem = (key: string): string | null => {
@@ -137,31 +211,56 @@ export default function Dashboard() {
   const loadDashboardData = async () => {
     if (!user) {
       console.log('Dashboard: loadDashboardData called without a user.');
-      return; // Don't proceed if there's no user
+      return;
     }
 
     setLoading(true);
+    setError('');
+
+    // Load all data sections individually for better error handling
+    await Promise.allSettled([
+      loadChildrenData(),
+      loadCycleData(),
+      loadMealsData(),
+      loadAppointmentsData(),
+      loadNotificationsData()
+    ]);
+
+    setLoading(false);
+  };
+
+  // Individual data loading functions with enhanced error handling
+  const loadChildrenData = async () => {
+    if (!user || user.user_type !== 'parent') return;
+    
+    setDataLoading('children', true);
+    clearDataError('children');
+    
     try {
-      console.log('Dashboard: loading data for user:', user.id);
+      console.log('Dashboard: loading children...');
+      const childrenResponse = await parentAPI.getChildren();
+      setChildren(childrenResponse.data || []);
+      setDataAvailable('children', true);
+      console.log('Dashboard: children loaded', childrenResponse.data);
+    } catch (err: any) {
+      console.error('Failed to load children:', err);
+      setDataError('children', err.response?.data?.message || 'Failed to load children data');
+      setDataAvailable('children', false);
+    } finally {
+      setDataLoading('children', false);
+    }
+  };
 
-      // Load children if user is parent
-      if (user.user_type === 'parent') {
-        try {
-          console.log('Dashboard: loading children...');
-          const childrenResponse = await parentAPI.getChildren();
-          setChildren(childrenResponse.data || []);
-          console.log('Dashboard: children loaded', childrenResponse.data);
-        } catch (err) {
-          console.error('Failed to load children:', err);
-          // Not a critical error, continue with empty children array
-        }
-      }
-
+  const loadCycleData = async () => {
+    if (!user) return;
+    
+    setDataLoading('cycle', true);
+    clearDataError('cycle');
+    
+    try {
       console.log('Dashboard: loading cycle data...');
-      // Load cycle data
       const cycleResponse = await cycleAPI.getStats();
       
-      // Transform the API response to match frontend expectations
       const transformedCycleData = {
         nextPeriod: cycleResponse.data.next_period_prediction 
           ? formatDate(cycleResponse.data.next_period_prediction) 
@@ -179,62 +278,99 @@ export default function Dashboard() {
       };
       
       setCycleData(transformedCycleData);
+      setDataAvailable('cycle', true);
       console.log('Dashboard: cycle data loaded', transformedCycleData);
-
-      console.log('Dashboard: loading recent meals...');
-      // Load recent meals
-      const mealsResponse = await mealAPI.getLogs(1, 5);
-      setRecentMeals(mealsResponse.data.logs || []);
-
-      console.log('Dashboard: loading appointments...');
-      // Load appointments
-      const appointmentsResponse = await appointmentAPI.getUpcoming();
-      setUpcomingAppointments(appointmentsResponse.data || []);
-
-      console.log('Dashboard: loading notifications...');
-      // Load notifications
-      const notificationsResponse = await notificationAPI.getRecent();
-      setNotifications(notificationsResponse.data || []);
-
-      console.log('Dashboard: all data loaded successfully');
-      // Clear error and reset retry count on success
-      setError('');
-      setRetryCount(0);
     } catch (err: any) {
-      console.error('Failed to load dashboard data:', err);
-      console.log('Error details:', {
-        status: err.response?.status,
-        message: err.response?.data?.message,
-        url: err.config?.url
-      });
-      
-      if (err.response?.status === 401) {
-        console.log('Dashboard: unauthorized, logging out.');
-        logout(); // Use logout from context
-        router.push('/login');
-      } else {
-        setError(`Failed to load dashboard data: ${err.response?.data?.message || err.message}`);
-        setRetryCount(prev => prev + 1);
-      }
+      console.error('Failed to load cycle data:', err);
+      setDataError('cycle', err.response?.data?.message || 'Failed to load cycle tracking data');
+      setDataAvailable('cycle', false);
     } finally {
-      setLoading(false);
+      setDataLoading('cycle', false);
     }
   };
 
-  // Load calendar data
+  const loadMealsData = async () => {
+    if (!user) return;
+    
+    setDataLoading('meals', true);
+    clearDataError('meals');
+    
+    try {
+      console.log('Dashboard: loading recent meals...');
+      const mealsResponse = await mealAPI.getLogs(1, 5);
+      setRecentMeals(mealsResponse.data.logs || []);
+      setDataAvailable('meals', true);
+      console.log('Dashboard: meals loaded', mealsResponse.data.logs);
+    } catch (err: any) {
+      console.error('Failed to load meals:', err);
+      setDataError('meals', err.response?.data?.message || 'Failed to load meal logs');
+      setDataAvailable('meals', false);
+    } finally {
+      setDataLoading('meals', false);
+    }
+  };
+
+  const loadAppointmentsData = async () => {
+    if (!user) return;
+    
+    setDataLoading('appointments', true);
+    clearDataError('appointments');
+    
+    try {
+      console.log('Dashboard: loading appointments...');
+      const appointmentsResponse = await appointmentAPI.getUpcoming();
+      setUpcomingAppointments(appointmentsResponse.data || []);
+      setDataAvailable('appointments', true);
+      console.log('Dashboard: appointments loaded', appointmentsResponse.data);
+    } catch (err: any) {
+      console.error('Failed to load appointments:', err);
+      setDataError('appointments', err.response?.data?.message || 'Failed to load appointments');
+      setDataAvailable('appointments', false);
+    } finally {
+      setDataLoading('appointments', false);
+    }
+  };
+
+  const loadNotificationsData = async () => {
+    if (!user) return;
+    
+    setDataLoading('notifications', true);
+    clearDataError('notifications');
+    
+    try {
+      console.log('Dashboard: loading notifications...');
+      const notificationsResponse = await notificationAPI.getRecent();
+      setNotifications(notificationsResponse.data || []);
+      setDataAvailable('notifications', true);
+      console.log('Dashboard: notifications loaded', notificationsResponse.data);
+    } catch (err: any) {
+      console.error('Failed to load notifications:', err);
+      setDataError('notifications', err.response?.data?.message || 'Failed to load notifications');
+      setDataAvailable('notifications', false);
+    } finally {
+      setDataLoading('notifications', false);
+    }
+  };
+
+  // Load calendar data with enhanced error handling
   const loadCalendarData = async (year?: number, month?: number) => {
     if (!user) return;
     
-    setLoading(true);
+    setDataLoading('calendar', true);
+    clearDataError('calendar');
+    
     try {
       const targetDate = year && month ? new Date(year, month - 1) : currentDate;
       const response = await cycleAPI.getCalendarData(targetDate.getFullYear(), targetDate.getMonth() + 1);
       setCalendarData(response.data);
+      setDataAvailable('calendar', true);
       console.log('Calendar data loaded:', response.data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load calendar data:', err);
+      setDataError('calendar', err.response?.data?.message || 'Failed to load calendar data');
+      setDataAvailable('calendar', false);
     } finally {
-      setLoading(false);
+      setDataLoading('calendar', false);
     }
   };
 
@@ -364,14 +500,157 @@ export default function Dashboard() {
     setChildren(children.filter(c => c.id !== id));
   };
 
+  // Reusable component for displaying data with loading and error states
+  const DataSection = ({ 
+    title, 
+    dataType, 
+    children, 
+    icon,
+    showRetry = true 
+  }: { 
+    title: string; 
+    dataType: keyof typeof dataLoadingStates; 
+    children: React.ReactNode;
+    icon?: string;
+    showRetry?: boolean;
+  }) => {
+    const isLoading = dataLoadingStates[dataType];
+    const error = dataErrors[dataType];
+    const hasData = dataAvailability[dataType];
+
+    if (isLoading) {
+      return (
+        <div className="card h-100">
+          <div className="card-header d-flex align-items-center">
+            {icon && <i className={`${icon} me-2`}></i>}
+            <h5 className="mb-0">{title}</h5>
+          </div>
+          <div className="card-body d-flex align-items-center justify-content-center">
+            <div className="text-center">
+              <div className="spinner-border text-primary mb-3" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <p className="text-muted mb-0">Loading {title.toLowerCase()}...</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="card h-100 border-warning">
+          <div className="card-header bg-warning text-dark d-flex align-items-center">
+            <i className="fas fa-exclamation-triangle me-2"></i>
+            <h5 className="mb-0">{title}</h5>
+          </div>
+          <div className="card-body">
+            <div className="alert alert-warning mb-3">
+              <div className="d-flex align-items-center">
+                <i className="fas fa-exclamation-circle me-2"></i>
+                <div className="flex-grow-1">
+                  <strong>Unable to load data</strong>
+                  <div className="small mt-1">{error}</div>
+                </div>
+              </div>
+            </div>
+            {showRetry && (
+              <div className="text-center">
+                <button 
+                  className="btn btn-outline-warning btn-sm"
+                  onClick={() => retryDataLoad(dataType)}
+                  disabled={isLoading}
+                >
+                  <i className="fas fa-redo me-1"></i>
+                  Retry Loading
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="card h-100">
+        <div className="card-header d-flex align-items-center justify-content-between">
+          <div className="d-flex align-items-center">
+            {icon && <i className={`${icon} me-2`}></i>}
+            <h5 className="mb-0">{title}</h5>
+          </div>
+          {hasData && (
+            <span className="badge bg-success">
+              <i className="fas fa-check-circle me-1"></i>
+              Loaded
+            </span>
+          )}
+        </div>
+        <div className="card-body">
+          {children}
+        </div>
+      </div>
+    );
+  };
+
+  // Enhanced empty state component
+  const EmptyState = ({ 
+    icon, 
+    title, 
+    description, 
+    actionText, 
+    onAction 
+  }: {
+    icon: string;
+    title: string;
+    description: string;
+    actionText?: string;
+    onAction?: () => void;
+  }) => (
+    <div className="text-center py-4">
+      <i className={`${icon} text-muted mb-3`} style={{ fontSize: '3rem' }}></i>
+      <h6 className="text-muted mb-2">{title}</h6>
+      <p className="text-muted small mb-3">{description}</p>
+      {actionText && onAction && (
+        <button className="btn btn-primary btn-sm" onClick={onAction}>
+          {actionText}
+        </button>
+      )}
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="container py-4">
         <div className="text-center">
-          <div className="spinner-border" role="status">
+          <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
             <span className="visually-hidden">Loading...</span>
           </div>
-          <p className="mt-2">Loading dashboard...</p>
+          <h4 className="text-muted">Loading Dashboard</h4>
+          <p className="text-muted">Fetching your data...</p>
+          
+          {/* Show individual loading states */}
+          <div className="row mt-4">
+            <div className="col-md-8 mx-auto">
+              <div className="list-group">
+                {Object.entries(dataLoadingStates).map(([key, isLoading]) => (
+                  <div key={key} className="list-group-item d-flex justify-content-between align-items-center">
+                    <span className="text-capitalize">{key}</span>
+                    {isLoading ? (
+                      <div className="spinner-border spinner-border-sm text-primary" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                      </div>
+                    ) : dataAvailability[key as keyof typeof dataAvailability] ? (
+                      <i className="fas fa-check-circle text-success"></i>
+                    ) : dataErrors[key as keyof typeof dataErrors] ? (
+                      <i className="fas fa-exclamation-circle text-warning"></i>
+                    ) : (
+                      <i className="fas fa-clock text-muted"></i>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -381,39 +660,96 @@ export default function Dashboard() {
     return (
       <div className="container py-4">
         <div className="alert alert-danger" role="alert">
-          <h4 className="alert-heading">Error Loading Dashboard</h4>
-          <p>{error}</p>
-          <hr />
-          <div className="mb-3">
-            <strong>Debug Info:</strong>
-            <br />
-            <small>
-              Token exists: {getStorageItem('access_token') ? 'Yes' : 'No'}
-              <br />
-              User ID: {getStorageItem('user_id') || 'Not set'}
-              <br />
-              User Type: {getStorageItem('user_type') || 'Not set'}
-              <br />
-              API URL: {process.env.NEXT_PUBLIC_API_URL || 'Not configured'}
-              <br />
-              Retry attempts: {retryCount}
-            </small>
+          <div className="d-flex align-items-center mb-3">
+            <i className="fas fa-exclamation-triangle me-2" style={{ fontSize: '1.5rem' }}></i>
+            <h4 className="mb-0">Dashboard Error</h4>
           </div>
-          <div className="d-flex gap-2">
+          <p className="mb-3">{error}</p>
+          
+          {/* Enhanced error details */}
+          <div className="card bg-light mb-3">
+            <div className="card-body">
+              <h6 className="card-title">Debug Information</h6>
+              <div className="row">
+                <div className="col-md-6">
+                  <small>
+                    <strong>Authentication:</strong><br />
+                    Token exists: {getStorageItem('access_token') ? '✅ Yes' : '❌ No'}<br />
+                    User ID: {getStorageItem('user_id') || 'Not set'}<br />
+                    User Type: {getStorageItem('user_type') || 'Not set'}
+                  </small>
+                </div>
+                <div className="col-md-6">
+                  <small>
+                    <strong>System:</strong><br />
+                    API URL: {process.env.NEXT_PUBLIC_API_URL || 'Not configured'}<br />
+                    Retry attempts: {retryCount}<br />
+                    Browser: {typeof window !== 'undefined' ? navigator.userAgent.split(' ').pop() : 'Unknown'}
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Data loading status */}
+          <div className="card mb-3">
+            <div className="card-header">
+              <h6 className="mb-0">Data Loading Status</h6>
+            </div>
+            <div className="card-body">
+              <div className="row">
+                {Object.entries(dataErrors).map(([key, error]) => (
+                  <div key={key} className="col-md-6 mb-2">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span className="text-capitalize">{key}:</span>
+                      {error ? (
+                        <span className="badge bg-danger">
+                          <i className="fas fa-times me-1"></i>
+                          Error
+                        </span>
+                      ) : dataAvailability[key as keyof typeof dataAvailability] ? (
+                        <span className="badge bg-success">
+                          <i className="fas fa-check me-1"></i>
+                          Loaded
+                        </span>
+                      ) : (
+                        <span className="badge bg-secondary">
+                          <i className="fas fa-clock me-1"></i>
+                          Pending
+                        </span>
+                      )}
+                    </div>
+                    {error && <small className="text-danger">{error}</small>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <hr />
+          <div className="d-flex gap-2 flex-wrap">
             <button 
               className="btn btn-primary"
               onClick={async () => {
-                if (retryCount < 3) {
+                if (retryCount < 5) {
                   setError('');
-                  setLoading(true);
+                  setRetryCount(prev => prev + 1);
                   await loadDashboardData();
                 } else {
-                  alert('Too many retry attempts. Please check your connection and login again.');
+                  alert('Maximum retry attempts reached. Please check your connection and try logging in again.');
                 }
               }}
-              disabled={retryCount >= 3}
+              disabled={retryCount >= 5}
             >
-              {retryCount >= 3 ? 'Max Retries Reached' : 'Retry Loading'}
+              <i className="fas fa-redo me-1"></i>
+              {retryCount >= 5 ? 'Max Retries Reached' : `Retry Loading (${retryCount}/5)`}
+            </button>
+            <button 
+              className="btn btn-outline-primary"
+              onClick={() => window.location.reload()}
+            >
+              <i className="fas fa-refresh me-1"></i>
+              Refresh Page
             </button>
             <button 
               className="btn btn-secondary"
@@ -425,7 +761,8 @@ export default function Dashboard() {
                 router.push('/login');
               }}
             >
-              Go to Login
+              <i className="fas fa-sign-out-alt me-1"></i>
+              Logout & Retry
             </button>
           </div>
         </div>
@@ -552,153 +889,252 @@ export default function Dashboard() {
             <div className="row">
               {/* Cycle Summary */}
               <div className="col-md-6 mb-4">
-                <div className="card h-100">
-                  <div className="card-header">
-                    <h3>Cycle Summary</h3>
-                    {selectedChild && (
-                      <small className="text-muted">For: {children.find(c => c.id === selectedChild)?.name}</small>
-                    )}
-                  </div>
-                  <div className="card-body">
-                    <div className="d-flex justify-content-between mb-3">
-                      <div>
-                        <strong>Next Period:</strong>
+                <DataSection
+                  title="Cycle Summary"
+                  dataType="cycle"
+                  icon="fas fa-calendar-alt"
+                >
+                  {selectedChild && (
+                    <small className="text-muted d-block mb-3">For: {children.find(c => c.id === selectedChild)?.name}</small>
+                  )}
+                  {dataAvailability.cycle ? (
+                    <>
+                      <div className="d-flex justify-content-between mb-3">
+                        <div>
+                          <strong>Next Period:</strong>
+                        </div>
+                        <div className={cycleData.nextPeriod ? 'text-primary fw-bold' : 'text-muted'}>
+                          {cycleData.nextPeriod || 'Not available'}
+                        </div>
                       </div>
-                      <div>{cycleData.nextPeriod || 'Not available'}</div>
-                    </div>
-                    <div className="d-flex justify-content-between mb-3">
-                      <div>
-                        <strong>Last Period:</strong>
+                      <div className="d-flex justify-content-between mb-3">
+                        <div>
+                          <strong>Last Period:</strong>
+                        </div>
+                        <div className={cycleData.lastPeriod ? 'text-success' : 'text-muted'}>
+                          {cycleData.lastPeriod || 'Not logged yet'}
+                        </div>
                       </div>
-                      <div>{cycleData.lastPeriod || 'Not logged yet'}</div>
-                    </div>
-                    <div className="d-flex justify-content-between">
-                      <div>
-                        <strong>Average Cycle Length:</strong>
+                      <div className="d-flex justify-content-between mb-3">
+                        <div>
+                          <strong>Average Cycle Length:</strong>
+                        </div>
+                        <div className={cycleData.cycleLength ? 'text-info fw-bold' : 'text-muted'}>
+                          {cycleData.cycleLength ? `${cycleData.cycleLength} days` : 'N/A'}
+                        </div>
                       </div>
-                      <div>{cycleData.cycleLength || 'N/A'} days</div>
-                    </div>
-                    <div className="mt-4">
-                      <button 
-                        className="btn btn-secondary"
-                        onClick={() => setActiveTab('cycle')}
-                      >
-                        Track Cycle
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                      <div className="d-flex justify-content-between mb-3">
+                        <div>
+                          <strong>Total Logs:</strong>
+                        </div>
+                        <div className="text-secondary fw-bold">
+                          {cycleData.totalLogs} cycles
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <button 
+                          className="btn btn-primary w-100"
+                          onClick={() => setActiveTab('cycle')}
+                        >
+                          <i className="fas fa-plus-circle me-2"></i>
+                          Track Cycle
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <EmptyState
+                      icon="fas fa-calendar-plus"
+                      title="No Cycle Data"
+                      description="Start tracking your menstrual cycle to see insights and predictions."
+                      actionText="Start Tracking"
+                      onAction={() => setActiveTab('cycle')}
+                    />
+                  )}
+                </DataSection>
               </div>
               
               {/* Notifications */}
               <div className="col-md-6 mb-4">
-                <div className="card h-100">
-                  <div className="card-header">
-                    <h3>Notifications</h3>
-                  </div>
-                  <div className="card-body">
-                    {notifications.length > 0 ? (
-                      <ul className="list-group">
-                        {notifications.slice(0, 5).map(notification => (
-                          <li key={notification.id} className={`list-group-item ${!notification.is_read ? 'bg-light' : ''}`}>
-                            <div className="d-flex justify-content-between">
-                              <div>{notification.message}</div>
-                              <small className="text-muted">{formatDate(notification.date)}</small>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
+                <DataSection
+                  title="Notifications"
+                  dataType="notifications"
+                  icon="fas fa-bell"
+                >
+                  {dataAvailability.notifications ? (
+                    notifications.length > 0 ? (
+                      <>
+                        <ul className="list-group list-group-flush">
+                          {notifications.slice(0, 5).map(notification => (
+                            <li key={notification.id} className={`list-group-item px-0 ${!notification.is_read ? 'bg-light border-start border-primary border-3' : ''}`}>
+                              <div className="d-flex justify-content-between align-items-start">
+                                <div className="flex-grow-1">
+                                  <div className="d-flex align-items-center mb-1">
+                                    {!notification.is_read && <span className="badge bg-primary me-2">New</span>}
+                                    <span className={!notification.is_read ? 'fw-bold' : ''}>{notification.message}</span>
+                                  </div>
+                                </div>
+                                <small className="text-muted">{formatDate(notification.date)}</small>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                        {notifications.length > 5 && (
+                          <div className="mt-3 text-center">
+                            <a href="/notifications" className="btn btn-sm btn-outline-primary">
+                              View All {notifications.length} Notifications
+                            </a>
+                          </div>
+                        )}
+                      </>
                     ) : (
-                      <p>No new notifications</p>
-                    )}
-                    <div className="mt-3">
-                      <a href="/notifications" className="btn btn-sm btn-outline-primary">View All</a>
-                    </div>
-                  </div>
-                </div>
+                      <EmptyState
+                        icon="fas fa-bell-slash"
+                        title="No Notifications"
+                        description="You're all caught up! No new notifications to display."
+                      />
+                    )
+                  ) : (
+                    <EmptyState
+                      icon="fas fa-exclamation-triangle"
+                      title="Notifications Unavailable"
+                      description="Unable to load your notifications at this time."
+                    />
+                  )}
+                </DataSection>
               </div>
             </div>
             
             <div className="row">
               {/* Recent Meals */}
               <div className="col-md-6 mb-4">
-                <div className="card h-100">
-                  <div className="card-header">
-                    <h3>Recent Meals</h3>
-                    {selectedChild && (
-                      <small className="text-muted">For: {children.find(c => c.id === selectedChild)?.name}</small>
-                    )}
-                  </div>
-                  <div className="card-body">
-                    {recentMeals.length > 0 ? (
-                      <ul className="list-group">
-                        {recentMeals.map(meal => (
-                          <li key={meal.id} className="list-group-item">
-                            <div className="d-flex justify-content-between">
-                              <div>
-                                <strong>{meal.meal_type}</strong>: {meal.description || meal.details}
+                <DataSection
+                  title="Recent Meals"
+                  dataType="meals"
+                  icon="fas fa-utensils"
+                >
+                  {selectedChild && (
+                    <small className="text-muted d-block mb-3">For: {children.find(c => c.id === selectedChild)?.name}</small>
+                  )}
+                  {dataAvailability.meals ? (
+                    recentMeals.length > 0 ? (
+                      <>
+                        <ul className="list-group list-group-flush">
+                          {recentMeals.map(meal => (
+                            <li key={meal.id} className="list-group-item px-0">
+                              <div className="d-flex justify-content-between align-items-start">
+                                <div className="flex-grow-1">
+                                  <div className="d-flex align-items-center mb-1">
+                                    <span className={`badge me-2 ${
+                                      meal.meal_type === 'breakfast' ? 'bg-warning' :
+                                      meal.meal_type === 'lunch' ? 'bg-success' :
+                                      meal.meal_type === 'dinner' ? 'bg-info' :
+                                      'bg-secondary'
+                                    }`}>
+                                      {meal.meal_type}
+                                    </span>
+                                    <strong className="text-capitalize">{meal.meal_type}</strong>
+                                  </div>
+                                  <p className="mb-0 text-muted small">{meal.description || meal.details}</p>
+                                </div>
+                                <small className="text-muted">{formatDate(meal.meal_time || meal.date)}</small>
                               </div>
-                              <small className="text-muted">{formatDate(meal.meal_time || meal.date)}</small>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="mt-4">
+                          <button 
+                            className="btn btn-primary w-100"
+                            onClick={() => setActiveTab('meals')}
+                          >
+                            <i className="fas fa-plus-circle me-2"></i>
+                            Log New Meal
+                          </button>
+                        </div>
+                      </>
                     ) : (
-                      <p>No meal logs yet</p>
-                    )}
-                    <div className="mt-4">
-                      <button 
-                        className="btn btn-secondary"
-                        onClick={() => setActiveTab('meals')}
-                      >
-                        Log Meal
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                      <EmptyState
+                        icon="fas fa-utensils"
+                        title="No Meal Logs"
+                        description="Start logging your meals to track your nutrition and eating patterns."
+                        actionText="Log First Meal"
+                        onAction={() => setActiveTab('meals')}
+                      />
+                    )
+                  ) : (
+                    <EmptyState
+                      icon="fas fa-exclamation-triangle"
+                      title="Meals Unavailable"
+                      description="Unable to load your meal logs at this time."
+                    />
+                  )}
+                </DataSection>
               </div>
               
               {/* Upcoming Appointments */}
               <div className="col-md-6 mb-4">
-                <div className="card h-100">
-                  <div className="card-header">
-                    <h3>Upcoming Appointments</h3>
-                  </div>
-                  <div className="card-body">
-                    {upcomingAppointments.length > 0 ? (
-                      <ul className="list-group">
-                        {upcomingAppointments.map(appointment => (
-                          <li key={appointment.id} className="list-group-item">
-                            <div className="d-flex justify-content-between">
-                              <div>
-                                <strong>{formatDate(appointment.appointment_date || appointment.date)}</strong>: {appointment.issue}
-                                {appointment.for_user && (
-                                  <>
-                                    <br />
-                                    <small className="text-muted">For: {appointment.for_user}</small>
-                                  </>
-                                )}
+                <DataSection
+                  title="Upcoming Appointments"
+                  dataType="appointments"
+                  icon="fas fa-calendar-check"
+                >
+                  {dataAvailability.appointments ? (
+                    upcomingAppointments.length > 0 ? (
+                      <>
+                        <ul className="list-group list-group-flush">
+                          {upcomingAppointments.map(appointment => (
+                            <li key={appointment.id} className="list-group-item px-0">
+                              <div className="d-flex justify-content-between align-items-start">
+                                <div className="flex-grow-1">
+                                  <div className="d-flex align-items-center mb-2">
+                                    <i className="fas fa-calendar text-primary me-2"></i>
+                                    <strong>{formatDate(appointment.appointment_date || appointment.date)}</strong>
+                                  </div>
+                                  <p className="mb-1">{appointment.issue}</p>
+                                  {appointment.for_user && (
+                                    <small className="text-muted">
+                                      <i className="fas fa-user me-1"></i>
+                                      For: {appointment.for_user}
+                                    </small>
+                                  )}
+                                </div>
+                                <span className={`badge ${
+                                  appointment.status.toLowerCase() === 'confirmed' ? 'bg-success' : 
+                                  appointment.status.toLowerCase() === 'pending' ? 'bg-warning' : 
+                                  appointment.status.toLowerCase() === 'completed' ? 'bg-info' : 'bg-secondary'
+                                }`}>
+                                  {appointment.status}
+                                </span>
                               </div>
-                              <span className={`badge ${appointment.status === 'Confirmed' ? 'bg-success' : 'bg-warning'}`}>
-                                {appointment.status}
-                              </span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="mt-4">
+                          <button 
+                            className="btn btn-primary w-100"
+                            onClick={() => setActiveTab('appointments')}
+                          >
+                            <i className="fas fa-plus-circle me-2"></i>
+                            Schedule Appointment
+                          </button>
+                        </div>
+                      </>
                     ) : (
-                      <p>No upcoming appointments</p>
-                    )}
-                    <div className="mt-4">
-                      <button 
-                        className="btn btn-secondary"
-                        onClick={() => setActiveTab('appointments')}
-                      >
-                        Schedule Appointment
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                      <EmptyState
+                        icon="fas fa-calendar-plus"
+                        title="No Upcoming Appointments"
+                        description="Schedule your first appointment with a healthcare provider."
+                        actionText="Book Appointment"
+                        onAction={() => setActiveTab('appointments')}
+                      />
+                    )
+                  ) : (
+                    <EmptyState
+                      icon="fas fa-exclamation-triangle"
+                      title="Appointments Unavailable"
+                      description="Unable to load your appointments at this time."
+                    />
+                  )}
+                </DataSection>
               </div>
             </div>
           </div>
@@ -706,263 +1142,89 @@ export default function Dashboard() {
 
         {/* Cycle Tracking Tab Content */}
         {activeTab === 'cycle' && (
-          <div className="card">
-            <div className="card-header">
-              <h3>Cycle Tracking</h3>
-              {selectedChild && (
-                <small className="text-muted">For: {children.find(c => c.id === selectedChild)?.name}</small>
-              )}
-            </div>
-            <div className="card-body">
-              <div className="row">
-                <div className="col-md-8">
-                  {/* Enhanced Calendar Container */}
-                  <div className="calendar-container mb-4">
-                    <div className="card">
-                      <div className="card-header bg-gradient text-white" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
-                        <div className="d-flex justify-content-between align-items-center">
-                          <h5 className="mb-0">
-                            <i className="fas fa-calendar-alt me-2"></i>
-                            Cycle Calendar
-                          </h5>
-                          <div className="btn-group btn-group-sm">
-                            <button className="btn btn-light btn-sm" onClick={() => navigateMonth('prev')}>
-                              <i className="fas fa-chevron-left"></i>
-                            </button>
-                            <span className="btn btn-light btn-sm">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
-                            <button className="btn btn-light btn-sm" onClick={() => navigateMonth('next')}>
-                              <i className="fas fa-chevron-right"></i>
-                            </button>
-                          </div>
+          <div>
+            <div className="card">
+              <div className="card-header">
+                <h3>Cycle Tracking</h3>
+                {selectedChild && (
+                  <small className="text-muted">For: {children.find(c => c.id === selectedChild)?.name}</small>
+                )}
+              </div>
+              <div className="card-body">
+                <div className="row">
+                  <div className="col-md-8">
+                    <DataSection
+                      title="Cycle Calendar"
+                      dataType="calendar"
+                      icon="fas fa-calendar-alt"
+                      showRetry={true}
+                    >
+                      {dataAvailability.calendar && calendarData ? (
+                        <CycleCalendar 
+                          calendarData={calendarData}
+                          currentDate={currentDate}
+                          onNavigateMonth={navigateMonth}
+                        />
+                      ) : (
+                        <EmptyState
+                          icon="fas fa-calendar-times"
+                          title="Calendar Unavailable"
+                          description="Unable to load calendar data. Please check your connection and try again."
+                          actionText="Retry Loading"
+                          onAction={() => retryDataLoad('calendar')}
+                        />
+                      )}
+                    </DataSection>
+                    {/* Cycle Insights Section */}
+                    {calendarData?.stats && (
+                      <div className="card mt-4">
+                        <div className="card-header bg-info text-white">
+                          <h6 className="mb-0">
+                            <i className="fas fa-chart-line me-2"></i>
+                            Cycle Insights
+                          </h6>
                         </div>
-                      </div>
-                      <div className="card-body p-0">
-                        {/* Calendar Grid */}
-                        <div className="calendar-grid">
-                          {/* Calendar Header */}
-                          <div className="calendar-header">
-                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                              <div key={day} className="calendar-day-header text-center py-2 fw-bold text-muted">
-                                {day}
-                              </div>
-                            ))}
-                          </div>
-                          
-                          {/* Calendar Days */}
-                          <div className="calendar-days">
-                            {calendarData?.days ? (
-                              calendarData.days.map((day: any, i: number) => {
-                                const dayClasses = [
-                                  'calendar-day',
-                                  'position-relative',
-                                  !day.is_current_month ? 'text-muted' : '',
-                                  day.is_today ? 'today' : '',
-                                  day.period_day ? 'period-day' : '',
-                                  day.ovulation_day ? 'ovulation-day' : '',
-                                  day.fertile_day && !day.period_day && !day.ovulation_day ? 'fertile-day' : '',
-                                  day.predicted ? 'predicted' : ''
-                                ].filter(Boolean).join(' ');
-                                
-                                // Create tooltip text
-                                const tooltipParts = [];
-                                if (day.period_day) {
-                                  tooltipParts.push(`Period Day${day.predicted ? ' (Predicted)' : ''}`);
-                                  if (day.flow_intensity) tooltipParts.push(`Flow: ${day.flow_intensity}`);
-                                }
-                                if (day.ovulation_day) {
-                                  tooltipParts.push(`Ovulation Day${day.predicted ? ' (Predicted)' : ''}`);
-                                }
-                                if (day.fertile_day && !day.period_day && !day.ovulation_day) {
-                                  tooltipParts.push(`Fertile Window${day.predicted ? ' (Predicted)' : ''}`);
-                                }
-                                if (day.symptoms?.length) {
-                                  tooltipParts.push(`Symptoms: ${day.symptoms.join(', ')}`);
-                                }
-                                if (day.notes) {
-                                  tooltipParts.push(`Notes: ${day.notes}`);
-                                }
-                                
-                                return (
-                                  <div 
-                                    key={i} 
-                                    className={dayClasses}
-                                    onClick={() => {
-                                      if (day.is_current_month) {
-                                        console.log(`Clicked on ${day.date}`, day);
-                                        // Future: Open day details modal
-                                      }
-                                    }}
-                                    title={tooltipParts.length > 0 ? tooltipParts.join(' | ') : `${day.date}`}
-                                    data-bs-toggle="tooltip"
-                                    data-bs-placement="top"
-                                  >
-                                    <div className="calendar-day-content">
-                                      <div className={`calendar-day-number ${day.is_today ? 'text-primary fw-bold' : day.is_current_month ? 'text-dark' : 'text-muted'}`}>
-                                        {day.day}
-                                      </div>
-                                      
-                                      <div className="calendar-day-indicators">
-                                        {day.symptoms && day.symptoms.length > 0 && (
-                                          <div className="calendar-indicator symptoms" title={`Symptoms: ${day.symptoms.join(', ')}`}></div>
-                                        )}
-                                        {day.notes && (
-                                          <div className="calendar-indicator notes" title={day.notes}></div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            ) : (
-                              // Fallback loading grid
-                              Array.from({ length: 35 }, (_, i) => (
-                                <div 
-                                  key={i} 
-                                  className="calendar-day d-flex align-items-center justify-content-center"
-                                  style={{
-                                    minHeight: '80px',
-                                    background: '#f8f9fa'
-                                  }}
-                                >
-                                  <div className="spinner-grow spinner-grow-sm text-muted" role="status">
-                                    <span className="visually-hidden">Loading...</span>
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Enhanced Calendar Legend */}
-                        <div className="calendar-legend">
+                        <div className="card-body">
                           <div className="row text-center">
-                            <div className="col-6 col-md-3 mb-2">
-                              <div className="d-flex align-items-center justify-content-center gap-2">
-                                <div style={{
-                                  width: '16px', 
-                                  height: '16px', 
-                                  background: 'linear-gradient(135deg, #ffebf0 0%, #fce4ec 100%)',
-                                  border: '2px solid #e91e63',
-                                  borderRadius: '4px'
-                                }}></div>
-                                <small className="fw-medium">Period</small>
+                            <div className="col-4">
+                              <div className="mb-2">
+                                <div className="fs-4 fw-bold text-primary">
+                                  {calendarData.stats.average_cycle_length ? Math.round(calendarData.stats.average_cycle_length) : 'N/A'}
+                                </div>
+                                <small className="text-muted">Avg Cycle Length (days)</small>
                               </div>
                             </div>
-                            <div className="col-6 col-md-3 mb-2">
-                              <div className="d-flex align-items-center justify-content-center gap-2">
-                                <div style={{
-                                  width: '16px', 
-                                  height: '16px', 
-                                  background: 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)',
-                                  border: '2px solid #ffc107',
-                                  borderRadius: '4px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '8px'
-                                }}>★</div>
-                                <small className="fw-medium">Ovulation</small>
+                            <div className="col-4">
+                              <div className="mb-2">
+                                <div className="fs-4 fw-bold text-success">
+                                  {calendarData.stats.total_logs || 0}
+                                </div>
+                                <small className="text-muted">Cycles Tracked</small>
                               </div>
                             </div>
-                            <div className="col-6 col-md-3 mb-2">
-                              <div className="d-flex align-items-center justify-content-center gap-2">
-                                <div style={{
-                                  width: '16px', 
-                                  height: '16px', 
-                                  background: 'linear-gradient(135deg, #e7f3ff 0%, #cfe2ff 100%)',
-                                  border: '2px solid #17a2b8',
-                                  borderRadius: '4px'
-                                }}></div>
-                                <small className="fw-medium">Fertile</small>
-                              </div>
-                            </div>
-                            <div className="col-6 col-md-3 mb-2">
-                              <div className="d-flex align-items-center justify-content-center gap-2">
-                                <div style={{
-                                  width: '16px', 
-                                  height: '16px', 
-                                  background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
-                                  border: '2px solid #2196f3',
-                                  borderRadius: '4px',
-                                  fontWeight: 'bold',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '8px'
-                                }}>●</div>
-                                <small className="fw-medium">Today</small>
+                            <div className="col-4">
+                              <div className="mb-2">
+                                <div className="fs-4 fw-bold text-warning">
+                                  {calendarData.stats.next_predicted_period ? 
+                                    new Date(calendarData.stats.next_predicted_period).getDate() : 'N/A'}
+                                </div>
+                                <small className="text-muted">Next Period (day)</small>
                               </div>
                             </div>
                           </div>
-                          <div className="row text-center mt-2">
-                            <div className="col-6">
-                              <div className="d-flex align-items-center justify-content-center gap-2">
-                                <div className="calendar-indicator symptoms"></div>
-                                <small className="text-muted">Symptoms</small>
+                          {calendarData.stats.next_predicted_period && (
+                            <div className="mt-3">
+                              <div className="alert alert-info py-2 mb-0">
+                                <i className="fas fa-info-circle me-2"></i>
+                                <small>
+                                  Next period predicted for {new Date(calendarData.stats.next_predicted_period).toLocaleDateString()}
+                                </small>
                               </div>
                             </div>
-                            <div className="col-6">
-                              <div className="d-flex align-items-center justify-content-center gap-2">
-                                <div className="calendar-indicator notes"></div>
-                                <small className="text-muted">Notes</small>
-                              </div>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  </div>
-                  
-                  {/* Cycle Insights Section */}
-                  {calendarData?.stats && (
-                    <div className="card mt-4">
-                      <div className="card-header bg-info text-white">
-                        <h6 className="mb-0">
-                          <i className="fas fa-chart-line me-2"></i>
-                          Cycle Insights
-                        </h6>
-                      </div>
-                      <div className="card-body">
-                        <div className="row text-center">
-                          <div className="col-4">
-                            <div className="mb-2">
-                              <div className="fs-4 fw-bold text-primary">
-                                {calendarData.stats.average_cycle_length ? Math.round(calendarData.stats.average_cycle_length) : 'N/A'}
-                              </div>
-                              <small className="text-muted">Avg Cycle Length (days)</small>
-                            </div>
-                          </div>
-                          <div className="col-4">
-                            <div className="mb-2">
-                              <div className="fs-4 fw-bold text-success">
-                                {calendarData.stats.total_logs || 0}
-                              </div>
-                              <small className="text-muted">Cycles Tracked</small>
-                            </div>
-                          </div>
-                          <div className="col-4">
-                            <div className="mb-2">
-                              <div className="fs-4 fw-bold text-warning">
-                                {calendarData.stats.next_predicted_period ? 
-                                  new Date(calendarData.stats.next_predicted_period).getDate() : 'N/A'}
-                              </div>
-                              <small className="text-muted">Next Period (day)</small>
-                            </div>
-                          </div>
-                        </div>
-                        {calendarData.stats.next_predicted_period && (
-                          <div className="mt-3">
-                            <div className="alert alert-info py-2 mb-0">
-                              <i className="fas fa-info-circle me-2"></i>
-                              <small>
-                                Next period predicted for {new Date(calendarData.stats.next_predicted_period).toLocaleDateString()}
-                              </small>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                    )}
                 </div>
                 
                 <div className="col-md-4">
@@ -993,15 +1255,19 @@ export default function Dashboard() {
                         
                         <div className="form-group mb-3">
                           <label htmlFor="endDate" className="form-label">
-                            <i className="fas fa-calendar-check me-1"></i>
-                            End Date (Optional)
+                            <i className="fas fa-calendar-check me-1 text-success"></i>
+                            <span className="fw-semibold">End Date</span> <span className="text-muted small">(Optional)</span>
                           </label>
-                          <input 
-                            type="date" 
-                            className="form-control" 
-                            id="endDate" 
-                            name="endDate"
-                          />
+                          <div className="input-group">
+                            <span className="input-group-text bg-light border-0"><i className="fas fa-calendar-day text-success"></i></span>
+                            <input 
+                              type="date" 
+                              className="form-control border-start-0" 
+                              id="endDate" 
+                              name="endDate"
+                              style={{ background: '#133557ff' }}
+                            />
+                          </div>
                         </div>
                         
                         <div className="form-group mb-3">
@@ -1115,6 +1381,7 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+        </div>
         )}
         
         {/* Meal Logs Tab Content */}
@@ -1216,106 +1483,91 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Appointments Tab Content */}
+        {/* Enhanced Appointments Tab Content */}
         {activeTab === 'appointments' && (
-          <div className="card">
-            <div className="card-header">
-              <h3>Appointment Scheduling</h3>
-            </div>
-            <div className="card-body">
-              <div className="row">
-                <div className="col-md-6">
-                  <div className="card mb-4">
-                    <div className="card-header">
-                      <h4>Request Appointment</h4>
-                    </div>
-                    <div className="card-body">
-                      <form onSubmit={handleAppointmentSubmit}>
-                        {appointmentError && <div className="alert alert-danger">{appointmentError}</div>}
-                        {user?.user_type === 'parent' && children.length > 0 && (
-                          <div className="form-group mb-3">
-                            <label htmlFor="appointmentFor" className="form-label">For</label>
-                            <select className="form-control" id="appointmentFor" name="appointmentFor">
-                              <option value="">Myself</option>
-                              {children.map(child => (
-                                <option key={child.id} value={child.id}>{child.name}</option>
-                              ))}
-                            </select>
+          <div>
+            <div className="row mb-4">
+              <div className="col-md-8">
+                <EnhancedAppointmentBooking 
+                  onAppointmentBooked={loadDashboardData}
+                  selectedChild={selectedChild}
+                  children={children}
+                />
+              </div>
+              <div className="col-md-4">
+                <div className="card">
+                  <div className="card-header">
+                    <h6 className="mb-0">
+                      <i className="fas fa-calendar-check text-primary me-2"></i>
+                      Your Upcoming Appointments
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    {upcomingAppointments.length > 0 ? (
+                      <div className="list-group list-group-flush">
+                        {upcomingAppointments.map(appointment => (
+                          <div key={appointment.id} className="list-group-item px-0">
+                            <div className="d-flex justify-content-between align-items-start">
+                              <div className="flex-grow-1">
+                                <div className="d-flex align-items-center mb-1">
+                                  <i className="fas fa-calendar text-primary me-2"></i>
+                                  <strong className="small">{formatDate(appointment.date || appointment.appointment_date)}</strong>
+                                </div>
+                                <p className="mb-1 small">{appointment.issue}</p>
+                                {appointment.for_user && (
+                                  <small className="text-muted">
+                                    <i className="fas fa-user me-1"></i>
+                                    For: {appointment.for_user}
+                                  </small>
+                                )}
+                              </div>
+                              <span className={`badge ${
+                                appointment.status.toLowerCase() === 'confirmed' ? 'bg-success' : 
+                                appointment.status.toLowerCase() === 'pending' ? 'bg-warning' : 
+                                appointment.status.toLowerCase() === 'completed' ? 'bg-info' : 'bg-secondary'
+                              }`}>
+                                {appointment.status}
+                              </span>
+                            </div>
                           </div>
-                        )}
-                        <div className="form-group mb-3">
-                          <label htmlFor="issue" className="form-label">Issue/Reason</label>
-                          <textarea 
-                            className="form-control" 
-                            id="issue" 
-                            name="issue"
-                            rows={3}
-                            placeholder="Describe the reason for the appointment..."
-                            required
-                          ></textarea>
-                        </div>
-                        <div className="form-group mb-3">
-                          <label htmlFor="preferredDate" className="form-label">Preferred Date</label>
-                          <input 
-                            type="date" 
-                            className="form-control" 
-                            id="preferredDate" 
-                            name="preferredDate"
-                            min={new Date().toISOString().split('T')[0]}
-                            required 
-                          />
-                        </div>
-                        {/* New actual appointment date field */}
-                        <div className="form-group mb-3">
-                          <label htmlFor="appointmentDate" className="form-label">Appointment Date (Optional)</label>
-                          <input
-                            type="date"
-                            className="form-control"
-                            id="appointmentDate"
-                            name="appointmentDate"
-                            min={new Date().toISOString().split('T')[0]}
-                          />
-                        </div>
-                        <button type="submit" className="btn btn-primary">Request Appointment</button>
-                      </form>
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4">
+                        <i className="fas fa-calendar-plus text-muted mb-3" style={{ fontSize: '2.5rem' }}></i>
+                        <h6 className="text-muted">No Upcoming Appointments</h6>
+                        <p className="text-muted small mb-0">Book your first appointment using the form on the left.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="col-md-6">
-                  <div className="card">
-                    <div className="card-header">
-                      <h4>Upcoming Appointments</h4>
-                    </div>
-                    <div className="card-body">
-                      {upcomingAppointments.length > 0 ? (
-                        <ul className="list-group">
-                          {upcomingAppointments.map(appointment => (
-                            <li key={appointment.id} className="list-group-item">
-                              <div className="d-flex justify-content-between align-items-start">
-                                <div>
-                                  <strong>{formatDate(appointment.date)}</strong>
-                                  <br />
-                                  {appointment.issue}
-                                  {appointment.for_user && (
-                                    <>
-                                      <br />
-                                      <small className="text-muted">For: {appointment.for_user}</small>
-                                    </>
-                                  )}
-                                </div>
-                                <span className={`badge ${appointment.status === 'Confirmed' ? 'bg-success' : 'bg-warning'}`}>
-                                  {appointment.status}
-                                </span>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <div className="text-center py-4">
-                          <i className="fas fa-calendar-plus fa-3x text-muted mb-3"></i>
-                          <p>No upcoming appointments</p>
-                        </div>
-                      )}
+
+                {/* Quick appointment tips */}
+                <div className="card mt-3">
+                  <div className="card-header bg-info text-white">
+                    <h6 className="mb-0">
+                      <i className="fas fa-lightbulb me-2"></i>
+                      Appointment Tips
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <div className="small">
+                      <div className="mb-2">
+                        <i className="fas fa-check text-success me-2"></i>
+                        Book in advance for better availability
+                      </div>
+                      <div className="mb-2">
+                        <i className="fas fa-clock text-info me-2"></i>
+                        Arrive 10 minutes early
+                      </div>
+                      <div className="mb-2">
+                        <i className="fas fa-notes-medical text-warning me-2"></i>
+                        Prepare a list of symptoms or questions
+                      </div>
+                      <div className="mb-0">
+                        <i className="fas fa-id-card text-primary me-2"></i>
+                        Bring your ID and insurance card
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1420,6 +1672,6 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-      </div>
+    </div>
   );
 }

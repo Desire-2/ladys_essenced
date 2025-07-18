@@ -5,6 +5,10 @@ const nextConfig = {
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    // Reduce hydration mismatches
+    optimizeCss: true,
+  },
   async rewrites() {
     return [
       {

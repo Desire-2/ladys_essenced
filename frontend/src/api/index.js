@@ -134,6 +134,20 @@ export const mealAPI = {
 
 // Appointments API
 export const appointmentAPI = {
+  getNextAvailableSlot: (providerId, daysAhead, duration) => {
+    let url = `/api/appointments/next-available-slot?provider_id=${providerId}`;
+    if (daysAhead) url += `&days_ahead=${daysAhead}`;
+    if (duration) url += `&duration=${duration}`;
+    return api.get(url);
+  },
+  getProviderAvailabilitySummary: (providerId, daysAhead) => {
+    let url = `/api/appointments/provider-availability-summary?provider_id=${providerId}`;
+    if (daysAhead) url += `&days_ahead=${daysAhead}`;
+    return api.get(url);
+  },
+  getProviderTimeSlots: (providerId, date) => {
+    return api.get(`/api/appointments/provider-time-slots?provider_id=${providerId}&date=${date}`);
+  },
   getAppointments: (page = 1, perPage = 10, filters = {}) => {
     let url = `/api/appointments/?page=${page}&per_page=${perPage}`;
     if (filters.status) url += `&status=${filters.status}`;
@@ -142,11 +156,11 @@ export const appointmentAPI = {
     return api.get(url);
   },
   getAppointment: (id) => api.get(`/api/appointments/${id}`),
-  create: (appointmentData) => api.post('/api/appointments/', appointmentData),
-  createAppointment: (appointmentData) => api.post('/api/appointments/', appointmentData),
+  create: (appointmentData) => api.post('/api/appointments/test/create', appointmentData),
+  createAppointment: (appointmentData) => api.post('/api/appointments/test/create', appointmentData),
   updateAppointment: (id, appointmentData) => api.put(`/api/appointments/${id}`, appointmentData),
   deleteAppointment: (id) => api.delete(`/api/appointments/${id}`),
-  getUpcoming: () => api.get('/api/appointments/upcoming'),
+  getUpcoming: () => api.get('/api/appointments/test/upcoming'),
 };
 
 // Notifications API
@@ -194,6 +208,55 @@ export const parentAPI = {
     api.get(`/api/parents/children/${id}/meal-logs?page=${page}&per_page=${perPage}`),
   getChildAppointments: (id, page = 1, perPage = 10) => 
     api.get(`/api/parents/children/${id}/appointments?page=${page}&per_page=${perPage}`),
+};
+
+// Health Provider API
+export const healthProviderAPI = {
+  // Dashboard
+  getDashboard: (providerId) => api.get(`/api/health-provider/dashboard?provider_id=${providerId}`),
+  
+  // Appointments
+  getAppointments: (params) => {
+    const queryString = new URLSearchParams(params).toString();
+    return api.get(`/api/health-provider/appointments?${queryString}`);
+  },
+  getAppointment: (id) => api.get(`/api/health-provider/appointments/${id}`),
+  updateAppointment: (id, data) => api.put(`/api/health-provider/appointments/${id}`, data),
+  
+  // Analytics
+  getAnalytics: (providerId, params = {}) => {
+    const queryString = new URLSearchParams({ provider_id: providerId, ...params }).toString();
+    return api.get(`/api/health-provider/analytics?${queryString}`);
+  },
+  
+  // Notifications
+  getNotifications: (providerId, params = {}) => {
+    const queryString = new URLSearchParams({ provider_id: providerId, ...params }).toString();
+    return api.get(`/api/health-provider/notifications?${queryString}`);
+  },
+  markNotificationRead: (notificationId) => api.put(`/api/health-provider/notifications/${notificationId}/read`),
+  deleteNotification: (notificationId) => api.delete(`/api/health-provider/notifications/${notificationId}`),
+  
+  // Availability Management
+  getAvailability: (providerId) => api.get(`/api/health-provider/availability?provider_id=${providerId}`),
+  updateAvailability: (data) => api.put('/api/health-provider/availability', data),
+  createCustomSlot: (data) => api.post('/api/health-provider/availability/slots', data),
+  deleteCustomSlots: (date) => api.delete(`/api/health-provider/availability/slots/${date}`),
+  blockTimeSlot: (data) => api.post('/api/health-provider/availability/block', data),
+  
+  // Profile
+  getProfile: (providerId) => api.get(`/api/health-provider/profile?provider_id=${providerId}`),
+  updateProfile: (data) => api.put('/api/health-provider/profile', data),
+  
+  // Patients
+  getPatients: (providerId, params = {}) => {
+    const queryString = new URLSearchParams({ provider_id: providerId, ...params }).toString();
+    return api.get(`/api/health-provider/patients?${queryString}`);
+  },
+  
+  // Test endpoints for demo (no authentication required)
+  getTestProviders: () => api.get('/api/health-provider/test/providers'),
+  getTestProviderAvailability: (providerId) => api.get(`/api/health-provider/test/availability?provider_id=${providerId}`),
 };
 
 export default api;

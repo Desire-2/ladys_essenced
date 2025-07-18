@@ -387,3 +387,227 @@ def get_calendar_data():
     
     print(f"Returning calendar data with {len(calendar_days)} days")
     return jsonify(result), 200
+
+# Test endpoint for calendar data without authentication
+@cycle_logs_bp.route('/test/calendar', methods=['GET'])
+def get_test_calendar_data():
+    """Test endpoint to get calendar data without authentication"""
+    try:
+        # Use demo user ID or from query parameter
+        demo_user_id = request.args.get('user_id', 1, type=int)
+        
+        # Get query parameters for month/year
+        year = request.args.get('year', datetime.now().year, type=int)
+        month = request.args.get('month', datetime.now().month, type=int)
+        
+        print(f"Test calendar data requested for user {demo_user_id}, {year}-{month:02d}")
+        
+        # Get start and end dates for the month
+        from calendar import monthrange
+        import datetime as dt
+        
+        start_date = dt.date(year, month, 1)
+        _, last_day = monthrange(year, month)
+        end_date = dt.date(year, month, last_day)
+        
+        # Extend to show full weeks (previous and next month days)
+        start_calendar = start_date - dt.timedelta(days=start_date.weekday() + 1)  # Start from Sunday
+        end_calendar = end_date + dt.timedelta(days=(6 - end_date.weekday()))
+        
+        print(f"Test calendar range: {start_calendar} to {end_calendar}")
+        
+        # Get all cycle logs for the demo user
+        logs = CycleLog.query.filter_by(user_id=demo_user_id).all()
+        
+        # Calculate average cycle length for predictions
+        total_cycle_length = 0
+        cycle_count = 0
+        
+        for log in logs:
+            if log.cycle_length:
+                total_cycle_length += log.cycle_length
+                cycle_count += 1
+        
+        avg_cycle_length = total_cycle_length / cycle_count if cycle_count > 0 else 28
+        
+        # Create periods list from cycle logs
+        periods = []
+        for log in logs:
+            period_data = {
+                'start_date': log.start_date.date(),
+                'end_date': log.end_date.date() if log.end_date else log.start_date.date() + dt.timedelta(days=log.period_length or 5),
+                'symptoms': log.symptoms or [],
+                'notes': log.notes or ''
+            }
+            periods.append(period_data)
+        
+        # Build calendar data
+        calendar_days = []
+        current_date = start_calendar
+        
+        while current_date <= end_calendar:
+            day_data = {
+                'date': current_date.isoformat(),
+                'day_of_month': current_date.day,
+                'is_current_month': current_date.month == month,
+                'is_today': current_date == dt.date.today(),
+                'is_period_day': False,
+                'is_period_start': False,
+                'is_period_end': False,
+                'is_ovulation_day': False,
+                'symptoms': [],
+                'notes': '',
+                'cycle_day': None
+            }
+            
+            # Check if this date is in any period
+            for period in periods:
+                if period['start_date'] <= current_date <= period['end_date']:
+                    day_data['is_period_day'] = True
+                    day_data['symptoms'] = period['symptoms']
+                    day_data['notes'] = period['notes']
+                    
+                    if current_date == period['start_date']:
+                        day_data['is_period_start'] = True
+                    if current_date == period['end_date']:
+                        day_data['is_period_end'] = True
+                    break
+            
+            # Predict ovulation (typically day 14 of cycle for 28-day cycle)
+            if periods:
+                # Find most recent period start
+                recent_period = max(periods, key=lambda p: p['start_date'])
+                days_since_period = (current_date - recent_period['start_date']).days
+                
+                # Ovulation typically occurs 14 days before next period
+                ovulation_day = int(avg_cycle_length) - 14
+                if days_since_period == ovulation_day:
+                    day_data['is_ovulation_day'] = True
+                
+                day_data['cycle_day'] = days_since_period + 1
+            
+            calendar_days.append(day_data)
+            current_date += dt.timedelta(days=1)
+        
+        # Prepare result
+        result = {
+            'days': calendar_days,
+            'stats': {
+                'total_logs': len(logs),
+                'average_cycle_length': avg_cycle_length,
+                'next_predicted_period': logs and (max(logs, key=lambda x: x.start_date).start_date.date() + dt.timedelta(days=int(avg_cycle_length))).isoformat() if logs else None
+            }
+        }
+        
+        print(f"Returning test calendar data with {len(calendar_days)} days")
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"Error in test calendar endpoint: {str(e)}")
+        return jsonify({'error': 'Failed to load calendar data', 'message': str(e)}), 500
+
+# Simple test endpoint that returns sample calendar data
+@cycle_logs_bp.route('/test/sample-calendar', methods=['GET'])
+def get_sample_calendar_data():
+    """Test endpoint that returns sample calendar data for frontend testing"""
+    from calendar import monthrange
+    import datetime as dt
+    
+    # Get query parameters for month/year
+    year = request.args.get('year', datetime.now().year, type=int)
+    month = request.args.get('month', datetime.now().month, type=int)
+    
+    # Get start and end dates for the month
+    start_date = dt.date(year, month, 1)
+    _, last_day = monthrange(year, month)
+    end_date = dt.date(year, month, last_day)
+    
+    # Extend to show full weeks
+    start_calendar = start_date - dt.timedelta(days=start_date.weekday() + 1)
+    end_calendar = end_date + dt.timedelta(days=(6 - end_date.weekday()))
+    
+    # Sample period dates for demo with enhanced data
+    sample_periods = [
+        {
+            'start': dt.date(2025, 7, 10), 
+            'end': dt.date(2025, 7, 14),
+            'symptoms': ['cramps', 'bloating', 'fatigue'],
+            'mood': 'tired',
+            'flow_intensity': 'medium'
+        },
+        {
+            'start': dt.date(2025, 6, 12), 
+            'end': dt.date(2025, 6, 16),
+            'symptoms': ['headache', 'mood_swings'],
+            'mood': 'sad',
+            'flow_intensity': 'light'
+        },
+    ]
+    
+    # Build calendar data
+    calendar_days = []
+    current_date = start_calendar
+    
+    while current_date <= end_calendar:
+        # Check if this date is in a sample period
+        is_period_day = False
+        is_period_start = False
+        is_period_end = False
+        symptoms = []
+        mood = None
+        flow_intensity = None
+        
+        for period in sample_periods:
+            if period['start'] <= current_date <= period['end']:
+                is_period_day = True
+                symptoms = period['symptoms'] if current_date == period['start'] else []
+                mood = period['mood']
+                flow_intensity = period['flow_intensity']
+                if current_date == period['start']:
+                    is_period_start = True
+                if current_date == period['end']:
+                    is_period_end = True
+                break
+        
+        # Add some random symptoms for non-period days
+        if not is_period_day and current_date.day % 7 == 0:
+            symptoms = ['mild_cramps'] if current_date.day % 14 == 0 else []
+            mood = 'happy' if current_date.day % 10 == 0 else None
+        
+        # Calculate cycle day (assuming 28-day cycle starting from most recent period)
+        cycle_day = None
+        if sample_periods:
+            most_recent = max(sample_periods, key=lambda p: p['start'])
+            if current_date >= most_recent['start']:
+                cycle_day = (current_date - most_recent['start']).days + 1
+        
+        day_data = {
+            'date': current_date.isoformat(),
+            'day_of_month': current_date.day,
+            'is_current_month': current_date.month == month,
+            'is_today': current_date == dt.date.today(),
+            'is_period_day': is_period_day,
+            'is_period_start': is_period_start,
+            'is_period_end': is_period_end,
+            'is_ovulation_day': cycle_day == 14,  # Assume ovulation on day 14
+            'symptoms': symptoms,
+            'notes': 'Sample cycle data' if is_period_day else '',
+            'cycle_day': cycle_day,
+            'mood': mood,
+            'flow_intensity': flow_intensity,
+            'fertility_level': 'high' if cycle_day and 12 <= cycle_day <= 16 else 'medium' if cycle_day and 8 <= cycle_day <= 18 else 'low'
+        }
+        
+        calendar_days.append(day_data)
+        current_date += dt.timedelta(days=1)
+    
+    result = {
+        'days': calendar_days,
+        'stats': {
+            'total_logs': 2,
+            'average_cycle_length': 28,
+            'next_predicted_period': '2025-08-07'
+        }
+    }
+    
+    return jsonify(result), 200

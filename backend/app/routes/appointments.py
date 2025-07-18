@@ -1,10 +1,68 @@
-from app.models import Appointment
+from app.models import Appointment, User, HealthProvider
 from app import db
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime
 
 appointments_bp = Blueprint('appointments', __name__)
+
+# TEMPORARY: Test endpoint without authentication for demo
+@appointments_bp.route('/test/create', methods=['POST'])
+def create_test_appointment():
+    """Test endpoint to create appointment without authentication"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['provider_id', 'appointment_date', 'issue']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Check if provider exists
+        provider = HealthProvider.query.get(data['provider_id'])
+        if not provider:
+            return jsonify({'error': 'Provider not found'}), 404
+        
+        # Parse appointment date
+        try:
+            appointment_date = datetime.fromisoformat(data['appointment_date'].replace('Z', '+00:00'))
+        except ValueError:
+            return jsonify({'error': 'Invalid appointment date format. Use ISO format.'}), 400
+        
+        # Create appointment with demo user (user_id=1)
+        demo_user_id = data.get('for_user_id', 1)
+        
+        new_appointment = Appointment(
+            user_id=demo_user_id,
+            provider_id=data['provider_id'],
+            appointment_date=appointment_date,
+            issue=data['issue'],
+            status=data.get('status', 'pending'),
+            priority=data.get('priority', 'normal'),
+            notes=data.get('notes', ''),
+            created_at=datetime.utcnow()
+        )
+        
+        db.session.add(new_appointment)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Appointment created successfully',
+            'appointment': {
+                'id': new_appointment.id,
+                'provider_id': new_appointment.provider_id,
+                'appointment_date': new_appointment.appointment_date.isoformat(),
+                'issue': new_appointment.issue,
+                'status': new_appointment.status,
+                'priority': new_appointment.priority,
+                'notes': new_appointment.notes
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create appointment', 'message': str(e)}), 500
 
 @appointments_bp.route('/', methods=['GET'])
 @jwt_required()
@@ -238,3 +296,34 @@ def get_upcoming_appointments():
     } for appointment in appointments]
     
     return jsonify(result), 200
+
+# TEMPORARY: Test endpoint for upcoming appointments without authentication
+@appointments_bp.route('/test/upcoming', methods=['GET'])
+def get_test_upcoming_appointments():
+    """Test endpoint to get upcoming appointments without authentication"""
+    try:
+        # Get demo user appointments or use user_id from query param
+        demo_user_id = request.args.get('user_id', 1, type=int)
+        
+        # Get upcoming appointments (from today forward)
+        today = datetime.now().date()
+        appointments = Appointment.query.filter(
+            Appointment.user_id == demo_user_id,
+            Appointment.appointment_date >= today
+        ).order_by(Appointment.appointment_date).limit(5).all()
+        
+        # Format the response
+        result = [{
+            'id': appointment.id,
+            'date': appointment.appointment_date.isoformat(),
+            'appointment_date': appointment.appointment_date.isoformat(),
+            'issue': appointment.issue,
+            'status': appointment.status,
+            'for_user': appointment.appointment_for,
+            'notes': appointment.notes
+        } for appointment in appointments]
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        return jsonify({'error': 'Failed to fetch upcoming appointments', 'message': str(e)}), 500

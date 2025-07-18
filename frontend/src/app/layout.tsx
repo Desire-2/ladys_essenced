@@ -4,6 +4,7 @@ import { ReactNode, useEffect } from 'react';
 import { Inter } from 'next/font/google';
 import { AppProviders } from '../contexts';
 import { useAuth } from '../contexts/AuthContext';
+import ClientWrapper from '../components/ClientWrapper';
 import '../styles/globals.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -117,7 +118,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
   }, []);
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -133,8 +134,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
         />
       </head>
-      <body className={inter.className}>
+      <body className={inter.className} suppressHydrationWarning>
         <AppProviders>
+          <ClientWrapper>
           {/* Enhanced Header */}
           <header className="sticky-top">
             <nav className="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm" style={{
@@ -278,6 +280,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
               </div>
             </div>
           </footer>
+          </ClientWrapper>
         </AppProviders>
       </body>
     </html>
