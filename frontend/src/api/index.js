@@ -4,7 +4,7 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: process.env.NODE_ENV === 'production' 
     ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
-    : '',  // Use relative URLs in development
+    : 'http://localhost:5001',  // Use port 5001 for development
   headers: {
     'Content-Type': 'application/json',
   },

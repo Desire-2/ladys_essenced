@@ -813,7 +813,7 @@ export default function Dashboard() {
           </div>
         )}
         
-        {/* Dashboard Navigation */}
+        {/* Dashboard Navigation - Overview Only */}
         <div className="card mb-4">
           <div className="card-body">
             <ul className="nav nav-tabs">
@@ -829,56 +829,6 @@ export default function Dashboard() {
                   Overview
                 </a>
               </li>
-              <li className="nav-item">
-                <a 
-                  className={`nav-link ${activeTab === 'cycle' ? 'active' : ''}`} 
-                  href="#" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setActiveTab('cycle');
-                  }}
-                >
-                  Cycle Tracking
-                </a>
-              </li>
-              <li className="nav-item">
-                <a 
-                  className={`nav-link ${activeTab === 'meals' ? 'active' : ''}`} 
-                  href="#" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setActiveTab('meals');
-                  }}
-                >
-                  Meal Logs
-                </a>
-              </li>
-              <li className="nav-item">
-                <a 
-                  className={`nav-link ${activeTab === 'appointments' ? 'active' : ''}`} 
-                  href="#" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setActiveTab('appointments');
-                  }}
-                >
-                  Appointments
-                </a>
-              </li>
-              {user?.user_type === 'parent' && (
-                <li className="nav-item">
-                  <a 
-                    className={`nav-link ${activeTab === 'children' ? 'active' : ''}`} 
-                    href="#" 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setActiveTab('children');
-                    }}
-                  >
-                    Manage Children
-                  </a>
-                </li>
-              )}
             </ul>
           </div>
         </div>
@@ -1139,9 +1089,6 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-
-        {/* Cycle Tracking Tab Content */}
-        {activeTab === 'cycle' && (
           <div>
             <div className="card">
               <div className="card-header">

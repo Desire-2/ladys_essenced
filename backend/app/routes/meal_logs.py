@@ -104,8 +104,26 @@ def create_meal_log():
             return jsonify({'message': f'Missing required field: {field}'}), 400
     
     try:
-        # Parse meal time
-        meal_time = datetime.fromisoformat(data['meal_time'].replace('Z', '+00:00'))
+        # Parse meal time - handle both full datetime and time-only formats
+        meal_time_str = data['meal_time']
+        
+        try:
+            # Try parsing as full ISO datetime
+            meal_time = datetime.fromisoformat(meal_time_str.replace('Z', '+00:00'))
+        except ValueError:
+            # If that fails, try parsing as time only (HH:MM or HH:MM:SS)
+            try:
+                from datetime import datetime as dt
+                time_obj = dt.strptime(meal_time_str, '%H:%M:%S').time()
+                today = dt.now().date()
+                meal_time = dt.combine(today, time_obj)
+            except ValueError:
+                try:
+                    time_obj = dt.strptime(meal_time_str, '%H:%M').time()
+                    today = dt.now().date()
+                    meal_time = dt.combine(today, time_obj)
+                except ValueError:
+                    raise ValueError(f"Invalid time format: '{meal_time_str}'. Expected ISO datetime (2025-11-06T10:46:00) or time format (10:46 or 10:46:30)")
         
         # Create new meal log
         new_log = MealLog(
@@ -151,7 +169,24 @@ def update_meal_log(log_id):
             log.meal_type = data['meal_type']
         
         if 'meal_time' in data:
-            log.meal_time = datetime.fromisoformat(data['meal_time'].replace('Z', '+00:00'))
+            meal_time_str = data['meal_time']
+            try:
+                # Try parsing as full ISO datetime
+                log.meal_time = datetime.fromisoformat(meal_time_str.replace('Z', '+00:00'))
+            except ValueError:
+                # If that fails, try parsing as time only (HH:MM or HH:MM:SS)
+                try:
+                    from datetime import datetime as dt
+                    time_obj = dt.strptime(meal_time_str, '%H:%M:%S').time()
+                    today = dt.now().date()
+                    log.meal_time = dt.combine(today, time_obj)
+                except ValueError:
+                    try:
+                        time_obj = dt.strptime(meal_time_str, '%H:%M').time()
+                        today = dt.now().date()
+                        log.meal_time = dt.combine(today, time_obj)
+                    except ValueError:
+                        raise ValueError(f"Invalid time format: '{meal_time_str}'. Expected ISO datetime (2025-11-06T10:46:00) or time format (10:46 or 10:46:30)")
         
         if 'description' in data:
             log.description = data['description']

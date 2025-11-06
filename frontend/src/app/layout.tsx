@@ -112,31 +112,15 @@ function NavigationMenu() {
   );
 }
 
-export default function RootLayout({ children }: RootLayoutProps) {
-  useEffect(() => {
-    import('bootstrap/dist/js/bootstrap.bundle.min.js');
-  }, []);
+function LayoutContent({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const isAuthenticated = !!user;
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>The Lady's Essence</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@300;400;500;600&display=swap"
-          rel="stylesheet"
-        />
-        <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-        />
-      </head>
-      <body className={inter.className} suppressHydrationWarning>
-        <AppProviders>
-          <ClientWrapper>
+    <>
+      {/* Show header and footer only when user is NOT authenticated */}
+      {!isAuthenticated && (
+        <>
           {/* Enhanced Header */}
           <header className="sticky-top">
             <nav className="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm" style={{
@@ -172,114 +156,150 @@ export default function RootLayout({ children }: RootLayoutProps) {
               </div>
             </nav>
           </header>
+        </>
+      )}
 
-          {/* Main Content with Gradient Background */}
-          <main className="py-5" style={{
-            background: 'linear-gradient(to bottom right,rgb(4, 37, 110) 0%, #fff 100%)',
-            minHeight: 'calc(100vh - 160px)'
-          }}>
-            <div className="container mt-4 mb-5">
-              <div className="bg-white rounded-4 shadow-sm p-4 p-md-5">
-                {children}
+      {/* Main Content with Gradient Background */}
+      <main className="py-5" style={{
+        background: 'linear-gradient(to bottom right,rgb(4, 37, 110) 0%, #fff 100%)',
+        minHeight: 'calc(100vh - 160px)'
+      }}>
+        <div className="container mt-4 mb-5">
+          <div className="bg-white rounded-4 shadow-sm p-4 p-md-5">
+            {children}
+          </div>
+        </div>
+      </main>
+
+      {/* Show footer only when user is NOT authenticated */}
+      {!isAuthenticated && (
+        <footer className="footer bg-dark text-light pt-5 mt-auto">
+          <div className="container">
+            <div className="row g-4 pb-4">
+              <div className="col-lg-4 mb-4">
+                <div className="footer-brand d-flex align-items-center mb-3">
+                  <img
+                    src="/images/icons/logo.svg"
+                    alt="Logo"
+                    className="me-3"
+                    height="40"
+                  />
+                  <h3 className="h5 mb-0 text-white">Lady's Essence</h3>
+                </div>
+                <p className="text-muted">
+                  Empowering women through holistic health management and community support.
+                </p>
+                <div className="social-icons mt-4">
+                  <a href="#" className="text-light me-3">
+                    <i className="fab fa-facebook fa-lg"></i>
+                  </a>
+                  <a href="#" className="text-light me-3">
+                    <i className="fab fa-twitter fa-lg"></i>
+                  </a>
+                  <a href="#" className="text-light me-3">
+                    <i className="fab fa-instagram fa-lg"></i>
+                  </a>
+                  <a href="#" className="text-light">
+                    <i className="fab fa-linkedin fa-lg"></i>
+                  </a>
+                </div>
+              </div>
+
+              <div className="col-lg-2 col-md-4 mb-4">
+                <h5 className="text-uppercase text-primary mb-3">Quick Links</h5>
+                <ul className="list-unstyled">
+                  {['Home', 'About', 'Features', 'Contact'].map((item) => (
+                    <li key={item} className="mb-2">
+                      <a href={`/${item.toLowerCase()}`} className="text-light text-decoration-none hover-underline">
+                        {item}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="col-lg-3 col-md-4 mb-4">
+                <h5 className="text-uppercase text-primary mb-3">Resources</h5>
+                <ul className="list-unstyled">
+                  {['Blog', 'Help Center', 'Privacy Policy', 'Terms of Service'].map((item) => (
+                    <li key={item} className="mb-2">
+                      <a href="#" className="text-light text-decoration-none hover-underline">
+                        {item}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="col-lg-3 col-md-4 mb-4">
+                <h5 className="text-uppercase text-primary mb-3">Contact</h5>
+                <ul className="list-unstyled">
+                  <li className="mb-3">
+                    <i className="fas fa-envelope me-2 text-primary"></i>
+                    ladysessence1@gmail.com
+                  </li>
+                  <li className="mb-3">
+                    <i className="fas fa-phone me-2 text-primary"></i>
+                    +250-780-784-924
+                  </li>
+                  <li className="mb-3">
+                    <i className="fas fa-map-marker-alt me-2 text-primary"></i>
+                    Kigali, Rwanda
+                  </li>
+                </ul>
               </div>
             </div>
-          </main>
 
-          {/* Enhanced Footer */}
-          <footer className="footer bg-dark text-light pt-5 mt-auto">
-            <div className="container">
-              <div className="row g-4 pb-4">
-                <div className="col-lg-4 mb-4">
-                  <div className="footer-brand d-flex align-items-center mb-3">
-                    <img
-                      src="/images/icons/logo.svg"
-                      alt="Logo"
-                      className="me-3"
-                      height="40"
-                    />
-                    <h3 className="h5 mb-0 text-white">Lady's Essence</h3>
-                  </div>
-                  <p className="text-muted">
-                    Empowering women through holistic health management and community support.
+            <div className="footer-bottom border-top border-dark pt-4">
+              <div className="row">
+                <div className="col-md-6 text-center text-md-start mb-3 mb-md-0">
+                  <p className="mb-0 text-muted">
+                    &copy; {new Date().getFullYear()} Lady's Essence. All rights reserved.
                   </p>
-                  <div className="social-icons mt-4">
-                    <a href="#" className="text-light me-3">
-                      <i className="fab fa-facebook fa-lg"></i>
-                    </a>
-                    <a href="#" className="text-light me-3">
-                      <i className="fab fa-twitter fa-lg"></i>
-                    </a>
-                    <a href="#" className="text-light me-3">
-                      <i className="fab fa-instagram fa-lg"></i>
-                    </a>
-                    <a href="#" className="text-light">
-                      <i className="fab fa-linkedin fa-lg"></i>
-                    </a>
-                  </div>
                 </div>
-
-                <div className="col-lg-2 col-md-4 mb-4">
-                  <h5 className="text-uppercase text-primary mb-3">Quick Links</h5>
-                  <ul className="list-unstyled">
-                    {['Home', 'About', 'Features', 'Contact'].map((item) => (
-                      <li key={item} className="mb-2">
-                        <a href={`/${item.toLowerCase()}`} className="text-light text-decoration-none hover-underline">
-                          {item}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="col-lg-3 col-md-4 mb-4">
-                  <h5 className="text-uppercase text-primary mb-3">Resources</h5>
-                  <ul className="list-unstyled">
-                    {['Blog', 'Help Center', 'Privacy Policy', 'Terms of Service'].map((item) => (
-                      <li key={item} className="mb-2">
-                        <a href="#" className="text-light text-decoration-none hover-underline">
-                          {item}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="col-lg-3 col-md-4 mb-4">
-                  <h5 className="text-uppercase text-primary mb-3">Contact</h5>
-                  <ul className="list-unstyled">
-                    <li className="mb-3">
-                      <i className="fas fa-envelope me-2 text-primary"></i>
-                      ladysessence1@gmail.com
-                    </li>
-                    <li className="mb-3">
-                      <i className="fas fa-phone me-2 text-primary"></i>
-                      +250-780-784-924
-                    </li>
-                    <li className="mb-3">
-                      <i className="fas fa-map-marker-alt me-2 text-primary"></i>
-                      Kigali, Rwanda
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              <div className="footer-bottom border-top border-dark pt-4">
-                <div className="row">
-                  <div className="col-md-6 text-center text-md-start mb-3 mb-md-0">
-                    <p className="mb-0 text-muted">
-                      &copy; {new Date().getFullYear()} Lady's Essence. All rights reserved.
-                    </p>
-                  </div>
-                  <div className="col-md-6 text-center text-md-end">
-                    <div className="d-inline-flex">
-                      <a href="#" className="text-muted me-3 hover-underline">Privacy Policy</a>
-                      <a href="#" className="text-muted hover-underline">Terms of Use</a>
-                    </div>
+                <div className="col-md-6 text-center text-md-end">
+                  <div className="d-inline-flex">
+                    <a href="#" className="text-muted me-3 hover-underline">Privacy Policy</a>
+                    <a href="#" className="text-muted hover-underline">Terms of Use</a>
                   </div>
                 </div>
               </div>
             </div>
-          </footer>
+          </div>
+        </footer>
+      )}
+    </>
+  );
+}
+
+export default function RootLayout({ children }: RootLayoutProps) {
+  useEffect(() => {
+    import('bootstrap/dist/js/bootstrap.bundle.min.js');
+  }, []);
+
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>The Lady's Essence</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@300;400;500;600&display=swap"
+          rel="stylesheet"
+        />
+        <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+      </head>
+      <body className={inter.className} suppressHydrationWarning>
+        <AppProviders>
+          <ClientWrapper>
+            <LayoutContent>
+              {children}
+            </LayoutContent>
           </ClientWrapper>
         </AppProviders>
       </body>

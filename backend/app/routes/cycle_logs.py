@@ -300,12 +300,14 @@ def get_calendar_data():
     while current_date <= end_calendar:
         day_data = {
             'date': current_date.isoformat(),
-            'day': current_date.day,
+            'day_of_month': current_date.day,
             'is_current_month': current_date.month == month,
             'is_today': current_date == dt.date.today(),
-            'period_day': False,
-            'ovulation_day': False,
-            'fertile_day': False,
+            'is_period_day': False,
+            'is_period_start': False,
+            'is_period_end': False,
+            'is_ovulation_day': False,
+            'is_fertility_day': False,
             'flow_intensity': None,
             'symptoms': [],
             'notes': None
@@ -318,7 +320,11 @@ def get_calendar_data():
             
             # Check if it's a period day
             if log_start <= current_date <= log_end:
-                day_data['period_day'] = True
+                day_data['is_period_day'] = True
+                if current_date == log_start:
+                    day_data['is_period_start'] = True
+                if current_date == log_end:
+                    day_data['is_period_end'] = True
                 day_data['flow_intensity'] = 'medium'  # Default flow intensity
                 if log.symptoms:
                     # Parse symptoms string into array
@@ -337,12 +343,12 @@ def get_calendar_data():
                 fertile_end = ovulation_date + dt.timedelta(days=2)
                 
                 if current_date == ovulation_date:
-                    day_data['ovulation_day'] = True
+                    day_data['is_ovulation_day'] = True
                 elif fertile_start <= current_date <= fertile_end:
-                    day_data['fertile_day'] = True
+                    day_data['is_fertility_day'] = True
         
         # Predict future periods based on the last cycle
-        if logs and not day_data['period_day']:
+        if logs and not day_data['is_period_day']:
             latest_log = max(logs, key=lambda x: x.start_date)
             next_period_date = latest_log.start_date.date() + dt.timedelta(days=int(avg_cycle_length))
             
@@ -352,7 +358,7 @@ def get_calendar_data():
                 predicted_end = predicted_start + dt.timedelta(days=5)  # Assume 5-day period
                 
                 if predicted_start <= current_date <= predicted_end:
-                    day_data['period_day'] = True
+                    day_data['is_period_day'] = True
                     day_data['predicted'] = True
                     break
                 
@@ -362,11 +368,11 @@ def get_calendar_data():
                 predicted_fertile_end = predicted_ovulation + dt.timedelta(days=2)
                 
                 if current_date == predicted_ovulation:
-                    day_data['ovulation_day'] = True
+                    day_data['is_ovulation_day'] = True
                     day_data['predicted'] = True
                     break
                 elif predicted_fertile_start <= current_date <= predicted_fertile_end:
-                    day_data['fertile_day'] = True
+                    day_data['is_fertility_day'] = True
                     day_data['predicted'] = True
                     break
         

@@ -49,7 +49,7 @@ def _initialize_test_data():
         users_data = [
             {
                 'name': 'Admin User',
-                'phone_number': '+1234567890',
+                'phone_number': '+250780784924',
                 'email': 'admin@ladysessence.com',
                 'password': 'admin123',
                 'user_type': 'admin'
@@ -374,27 +374,37 @@ def create_app():
     print(f"[CORS] Allowed origins: {allowed_origins}")
     print(f"[CORS] Environment: {app.config.get('ENV', 'unknown')}")
     
-    # Configure CORS with explicit settings
-    cors_config = {
-        'origins': allowed_origins,
-        'methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        'allow_headers': ['Content-Type', 'Authorization', 'Access-Control-Allow-Origin', 'Accept', 'Origin', 'X-Requested-With'],
-        'supports_credentials': True,
-        'max_age': 86400,  # 24 hours for preflight cache
-        'send_wildcard': False,
-        'automatic_options': True
-    }
+    # Configure CORS with Flask-CORS extension
+    CORS(app, 
+         origins=allowed_origins,
+         methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+         allow_headers=['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+         supports_credentials=True,
+         max_age=86400)
     
-    CORS(app, resources={r"/api/*": cors_config})
+    # Add response headers for all requests (including preflight)
+    @app.before_request
+    def before_request():
+        """Handle CORS preflight requests"""
+        if request.method == 'OPTIONS':
+            origin = request.headers.get('Origin')
+            if origin in allowed_origins:
+                response = app.make_response('')
+                response.headers['Access-Control-Allow-Origin'] = origin
+                response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, Origin, X-Requested-With'
+                response.headers['Access-Control-Allow-Credentials'] = 'true'
+                response.headers['Access-Control-Max-Age'] = '86400'
+                return response, 200
     
-    # Add response headers for all requests
     @app.after_request
     def after_request(response):
+        """Add CORS headers to all responses"""
         origin = request.headers.get('Origin')
         if origin in allowed_origins:
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Access-Control-Allow-Credentials'] = 'true'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
             response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept, Origin, X-Requested-With'
         return response
     
@@ -454,11 +464,10 @@ def create_app():
                     except Exception as e:
                         print(f"[Lady's Essence] Could not set permissions on {db_path}: {e}")
             
-            # Drop and recreate all tables to ensure clean schema
-            print("🔄 Recreating database with latest schema...")
-            db.drop_all()
-            db.create_all()
-            print("✅ Database tables created with current schema")
+            # Use Flask-Migrate for schema updates (preserves data)
+            print("🔄 Checking database schema with Flask-Migrate...")
+            print("ℹ️  Database migrations are managed via Flask-Migrate")
+            print("ℹ️  To apply pending migrations, run: flask db upgrade")
             
             # Initialize database with test data
             _initialize_test_data()

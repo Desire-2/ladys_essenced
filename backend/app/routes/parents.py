@@ -97,14 +97,15 @@ def add_child():
     data = request.get_json()
     
     # Validate required fields
-    required_fields = ['name', 'phone_number', 'password', 'relationship_type']
+    required_fields = ['name', 'password', 'relationship_type']
     for field in required_fields:
         if field not in data:
             return jsonify({'message': f'Missing required field: {field}'}), 400
     
-    # Check if phone number already exists
-    if User.query.filter_by(phone_number=data['phone_number']).first():
-        return jsonify({'message': 'Phone number already registered'}), 409
+    # Check if phone number already exists (if provided)
+    if data.get('phone_number'):
+        if User.query.filter_by(phone_number=data['phone_number']).first():
+            return jsonify({'message': 'Phone number already registered'}), 409
     
     # Validate relationship type
     valid_relationships = ['mother', 'father', 'guardian']
@@ -116,9 +117,17 @@ def add_child():
         from app import bcrypt
         password_hash = bcrypt.generate_password_hash(data['password']).decode('utf-8')
         
+        # Generate email from name if not provided (make it unique)
+        email = data.get('email')
+        if not email:
+            # Create unique email from name and timestamp
+            import time
+            email = f"{data['name'].lower().replace(' ', '')}{int(time.time())}@ladysessence.local"
+        
         child_user = User(
             name=data['name'],
-            phone_number=data['phone_number'],
+            phone_number=data.get('phone_number'),  # Optional phone number
+            email=email,  # Email is required or auto-generated
             password_hash=password_hash,
             user_type='adolescent'
         )
@@ -301,6 +310,95 @@ def get_child_cycle_logs(adolescent_id):
     }
     
     return jsonify(result), 200
+
+@parents_bp.route('/children/<int:adolescent_id>/cycle-logs', methods=['POST'])
+@jwt_required()
+def create_child_cycle_log(adolescent_id):
+    current_user_id = get_jwt_identity()
+    
+    # Check if user is a parent
+    user = User.query.get(current_user_id)
+    if not user or user.user_type != 'parent':
+        return jsonify({'message': 'Only parent accounts can access this endpoint'}), 403
+    
+    # Get parent record
+    parent = Parent.query.filter_by(user_id=current_user_id).first()
+    if not parent:
+        return jsonify({'message': 'Parent record not found'}), 404
+    
+    # Check if this adolescent is a child of the parent
+    relation = ParentChild.query.filter_by(parent_id=parent.id, adolescent_id=adolescent_id).first()
+    if not relation:
+        return jsonify({'message': 'Child not found or not associated with this parent'}), 404
+    
+    # Get adolescent user ID
+    adolescent = Adolescent.query.get(adolescent_id)
+    adolescent_user_id = adolescent.user_id
+    
+    # Get request data
+    data = request.get_json()
+    
+    # Validate required fields
+    if 'start_date' not in data:
+        return jsonify({'message': 'Start date is required'}), 400
+    
+    try:
+        from app.models import CycleLog, Notification
+        
+        # Parse dates
+        start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
+        end_date = None
+        if 'end_date' in data and data['end_date']:
+            end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+        
+        # Prepare symptoms: accept list or string
+        symptoms_raw = data.get('symptoms')
+        if isinstance(symptoms_raw, list):
+            symptoms_str = ','.join(symptoms_raw)
+        else:
+            symptoms_str = symptoms_raw
+        
+        # Create new cycle log for the child (NOT the parent)
+        new_log = CycleLog(
+            user_id=adolescent_user_id,  # IMPORTANT: Associate with child, not parent
+            start_date=start_date,
+            end_date=end_date,
+            cycle_length=data.get('cycle_length'),
+            period_length=data.get('period_length'),
+            symptoms=symptoms_str,
+            notes=data.get('notes')
+        )
+        
+        db.session.add(new_log)
+        db.session.commit()
+        
+        # Create notification for the child about next cycle prediction if applicable
+        if new_log.cycle_length:
+            import datetime as dt
+            
+            # Calculate predicted next cycle start date
+            next_cycle_date = start_date + dt.timedelta(days=new_log.cycle_length)
+            
+            # Create notification for the child
+            notification = Notification(
+                user_id=adolescent_user_id,  # Notify the child
+                message=f"Your next period is predicted to start on {next_cycle_date.strftime('%Y-%m-%d')}",
+                notification_type='cycle'
+            )
+            
+            db.session.add(notification)
+            db.session.commit()
+        
+        return jsonify({
+            'message': 'Cycle log created successfully for child',
+            'id': new_log.id
+        }), 201
+        
+    except ValueError as e:
+        return jsonify({'message': f'Invalid date format: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': f'Error creating cycle log: {str(e)}'}), 500
 
 @parents_bp.route('/children/<int:adolescent_id>/meal-logs', methods=['GET'])
 @jwt_required()

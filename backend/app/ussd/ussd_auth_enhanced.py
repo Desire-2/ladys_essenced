@@ -255,19 +255,140 @@ class USSDAuthHandlers:
                 "Enter your password:"
             )
         
-        # Password is valid - create user
+        # Password is valid - move to PIN setup
+        menu_data = json.loads(session.menu_data) if session.menu_data else {}
+        menu_data['password'] = password
+        
+        USSDSessionManager.update_session(
+            session, 
+            'registration_pin_option', 
+            menu_data=menu_data
+        )
+        
+        return USSDResponseBuilder.build_response(
+            "🔐 Great! Your password is set.\\n\\n"
+            "🌟 PIN Authentication (Optional)\\n"
+            "Set a 4-digit PIN for faster login\\n"
+            "Useful for quick USSD access!\\n\\n"
+            "Would you like to set a PIN?\\n\\n"
+            "1. Yes, set a PIN\\n"
+            "2. Skip for now"
+        )
+    
+    @staticmethod
+    def handle_registration_pin_option(phone_number, user_input, session):
+        """Handle PIN setup option during registration"""
         menu_data = json.loads(session.menu_data) if session.menu_data else {}
         
+        if user_input == '1':
+            # User wants to set PIN
+            USSDSessionManager.update_session(
+                session, 
+                'registration_pin', 
+                menu_data=menu_data
+            )
+            
+            return USSDResponseBuilder.build_response(
+                "🔐 Perfect! Let's set your PIN.\\n\\n"
+                "Enter a 4-digit PIN\\n"
+                "(Only numbers 0-9)\\n\\n"
+                "💡 Example: 2580, 1357, 9876\\n\\n"
+                "Enter your 4-digit PIN:"
+            )
+        elif user_input == '2':
+            # Skip PIN - proceed to user creation
+            return USSDAuthHandlers._create_user_account(phone_number, session, menu_data, pin=None)
+        else:
+            return USSDResponseBuilder.build_response(
+                "Please select a valid option:\\n\\n"
+                "1. Yes, set a PIN\\n"
+                "2. Skip for now"
+            )
+    
+    @staticmethod
+    def handle_registration_pin(phone_number, user_input, session):
+        """Enhanced PIN validation during registration"""
+        pin = user_input.strip()
+        menu_data = json.loads(session.menu_data) if session.menu_data else {}
+        
+        # Validate PIN format
+        if len(pin) != 4 or not pin.isdigit():
+            return USSDResponseBuilder.build_response(
+                "❌ Invalid PIN format!\\n"
+                "PIN must be exactly 4 digits.\\n\\n"
+                "💡 Examples: 2580, 1357, 9876\\n\\n"
+                "Enter your 4-digit PIN:"
+            )
+        
+        # Check for weak PINs
+        weak_pins = ['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '1234', '4321', '1122', '2211']
+        if pin in weak_pins:
+            return USSDResponseBuilder.build_response(
+                "⚠️ This PIN is too simple!\\n"
+                "Please choose a stronger PIN.\\n\\n"
+                "💡 Avoid: 0000, 1111, 1234, etc.\\n\\n"
+                "Enter a different 4-digit PIN:"
+            )
+        
+        # PIN is valid - confirm PIN
+        menu_data['pin'] = pin
+        
+        USSDSessionManager.update_session(
+            session, 
+            'registration_confirm_pin', 
+            menu_data=menu_data
+        )
+        
+        return USSDResponseBuilder.build_response(
+            "✅ PIN entered: ****\\n\\n"
+            "Please confirm your PIN:\\n"
+            "Enter it again to verify:\\n\\n"
+            "Enter your 4-digit PIN:"
+        )
+    
+    @staticmethod
+    def handle_registration_confirm_pin(phone_number, user_input, session):
+        """Confirm PIN entry during registration"""
+        confirm_pin = user_input.strip()
+        menu_data = json.loads(session.menu_data) if session.menu_data else {}
+        original_pin = menu_data.get('pin', '')
+        
+        if confirm_pin == original_pin:
+            # PINs match - create user with PIN
+            return USSDAuthHandlers._create_user_account(phone_number, session, menu_data, pin=confirm_pin)
+        else:
+            # PINs don't match
+            return USSDResponseBuilder.build_response(
+                "❌ PINs don't match!\\n\\n"
+                "Please try again.\\n\\n"
+                "1. Enter PIN again\\n"
+                "2. Skip PIN setup\\n"
+                "0. Cancel"
+            )
+    
+    @staticmethod
+    def _create_user_account(phone_number, session, menu_data, pin=None):
+        """Create user account with or without PIN"""
         try:
             # Create password hash
+            password = menu_data.get('password', '')
             password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+            
+            # Create PIN hash if provided
+            pin_hash = None
+            enable_pin_auth = False
+            if pin:
+                pin_hash = bcrypt.generate_password_hash(pin).decode('utf-8')
+                enable_pin_auth = True
             
             # Create new user
             new_user = User(
                 name=menu_data['name'],
                 phone_number=phone_number,
                 password_hash=password_hash,
-                user_type=menu_data['user_type']
+                user_type=menu_data['user_type'],
+                pin_hash=pin_hash,
+                enable_pin_auth=enable_pin_auth
             )
             
             db.session.add(new_user)
@@ -302,12 +423,13 @@ class USSDAuthHandlers:
             
             # Generate personalized welcome message
             user_type_msg = "parent dashboard" if menu_data['user_type'] == 'parent' else "cycle tracking"
+            pin_msg = "\\n✅ PIN enabled - fast login!" if enable_pin_auth else ""
             
             return USSDResponseBuilder.build_response(
                 f"🎉 Welcome to Lady's Essence, {menu_data['name']}!\\n\\n"
                 f"✅ Account created successfully\\n"
                 f"🔐 Password secured\\n"
-                f"📱 Phone {phone_number} registered\\n\\n"
+                f"📱 Phone {phone_number} registered{pin_msg}\\n\\n"
                 f"🌟 Ready to explore {user_type_msg}?\\n\\n" +
                 USSDMenuHandlers.get_main_menu(new_user)
             )

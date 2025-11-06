@@ -5,6 +5,7 @@ from app.models import (
     ContentItem, SystemLog, Analytics, Notification, CycleLog, MealLog, Feedback,
     Course, Module, Chapter, ContentCategory
 )
+# Note: Course, Module, Chapter, ContentCategory are imported above and will be available globally
 from app.auth.middleware import (
     admin_required, check_permissions, log_user_activity, RoleBasedAccess
 )
@@ -572,29 +573,14 @@ def reject_content(content_id):
 def get_course_stats():
     """Get course statistics for admin dashboard"""
     try:
-        # Check if Course model exists
-        if 'Course' not in globals():
-            return jsonify({
-                'overview': {
-                    'total_courses': 0,
-                    'published_courses': 0,
-                    'draft_courses': 0,
-                    'total_modules': 0,
-                    'total_chapters': 0
-                },
-                'recent_courses': [],
-                'top_courses': [],
-                'monthly_stats': []
-            }), 200
-        
         # Course overview statistics
         total_courses = Course.query.count()
         published_courses = Course.query.filter_by(status='published').count()
         draft_courses = Course.query.filter_by(status='draft').count()
         
-        # Module and chapter counts (if models exist)
-        total_modules = Module.query.count() if 'Module' in globals() else 0
-        total_chapters = Chapter.query.count() if 'Chapter' in globals() else 0
+        # Module and chapter counts
+        total_modules = Module.query.count()
+        total_chapters = Chapter.query.count()
         
         # Recent courses
         recent_courses = Course.query.order_by(desc(Course.created_at)).limit(5).all()
@@ -653,15 +639,6 @@ def get_course_stats():
 def get_courses():
     """Get all courses with filtering and pagination"""
     try:
-        # Check if Course model exists
-        if 'Course' not in globals():
-            return jsonify({
-                'courses': [],
-                'total': 0,
-                'pages': 0,
-                'current_page': 1
-            }), 200
-        
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         search = request.args.get('search')
@@ -741,10 +718,6 @@ def get_courses():
 def update_course_status(course_id):
     """Update course status"""
     try:
-        # Check if Course model exists
-        if 'Course' not in globals():
-            return jsonify({'error': 'Course management not available'}), 404
-        
         data = request.get_json()
         new_status = data.get('status')
         
@@ -786,10 +759,6 @@ def update_course_status(course_id):
 def delete_course(course_id):
     """Delete a course"""
     try:
-        # Check if Course model exists
-        if 'Course' not in globals():
-            return jsonify({'error': 'Course management not available'}), 404
-        
         course = Course.query.get_or_404(course_id)
         course_title = course.title
         
@@ -820,9 +789,7 @@ def get_content_writers():
         for writer in content_writers:
             # Get content and course counts
             content_count = ContentItem.query.filter_by(author_id=writer.id).count()
-            courses_count = 0
-            if 'Course' in globals():
-                courses_count = Course.query.filter_by(author_id=writer.id).count()
+            courses_count = Course.query.filter_by(author_id=writer.id).count()
             
             writers_data.append({
                 'id': writer.id,

@@ -320,9 +320,45 @@ export const AuthProvider = ({ children }) => {
         return '/content-writer';
       case 'health_provider':
         return '/health-provider';
+      case 'parent':
+        // If parent has no children, redirect to collect/onboarding page
+        if (user.children && user.children.length === 0) {
+          return '/dashboard/parent/collect';
+        }
+        return '/dashboard/parent';
+      case 'adolescent':
+        return '/dashboard';
       default:
         return '/dashboard';
     }
+  };
+
+  // Helper function to allow parent access to child's account
+  const accessChildAccount = (childUserId) => {
+    if (user?.user_type !== 'parent') {
+      console.error('Only parents can access child accounts');
+      return false;
+    }
+
+    // Store the accessed child ID for the parent
+    localStorage.setItem('accessed_child_id', childUserId);
+    return true;
+  };
+
+  // Helper function to get accessed child ID if parent is accessing a child's account
+  const getAccessedChildId = () => {
+    if (user?.user_type !== 'parent') return null;
+    return localStorage.getItem('accessed_child_id');
+  };
+
+  // Helper function to clear accessed child account
+  const clearChildAccess = () => {
+    localStorage.removeItem('accessed_child_id');
+  };
+
+  // Helper function to check if parent is currently accessing a child account
+  const isAccessingChildAccount = () => {
+    return user?.user_type === 'parent' && !!localStorage.getItem('accessed_child_id');
   };
 
   return (
@@ -338,7 +374,11 @@ export const AuthProvider = ({ children }) => {
       hasRole,
       getUserDisplayName,
       getDashboardRoute,
-      makeAuthenticatedRequest
+      makeAuthenticatedRequest,
+      accessChildAccount,
+      getAccessedChildId,
+      clearChildAccess,
+      isAccessingChildAccount
     }}>
       {children}
     </AuthContext.Provider>

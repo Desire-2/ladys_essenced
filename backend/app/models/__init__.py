@@ -9,13 +9,17 @@ class User(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    phone_number = db.Column(db.String(20), unique=True, nullable=False)
+    phone_number = db.Column(db.String(20), unique=True, nullable=True)  # Made optional for children
     email = db.Column(db.String(120), unique=True, nullable=True)  # Added email field
-    password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
     user_type = db.Column(db.String(20), nullable=False)  # 'parent', 'adolescent', 'admin', 'content_writer', 'health_provider'
     is_active = db.Column(db.Boolean, default=True)  # Added for user management
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # PIN authentication fields
+    pin_hash = db.Column(db.String(255), nullable=True)  # Hashed 4-digit PIN
+    enable_pin_auth = db.Column(db.Boolean, default=False)  # Whether to allow PIN login
     
     # Cycle tracking enhanced fields
     personal_cycle_length = db.Column(db.Integer, nullable=True)

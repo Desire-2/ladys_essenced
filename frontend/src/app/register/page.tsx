@@ -11,8 +11,12 @@ export default function Register() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [enablePin, setEnablePin] = useState(false);
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showPin, setShowPin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const router = useRouter();
@@ -34,13 +38,39 @@ export default function Register() {
       return;
     }
 
+    // Validate PIN if enabled
+    if (enablePin) {
+      if (!pin || !confirmPin) {
+        setError('Please enter PIN if PIN authentication is enabled');
+        setIsLoading(false);
+        return;
+      }
+      if (pin !== confirmPin) {
+        setError('PINs do not match');
+        setIsLoading(false);
+        return;
+      }
+      if (pin.length !== 4 || !/^\d+$/.test(pin)) {
+        setError('PIN must be exactly 4 digits');
+        setIsLoading(false);
+        return;
+      }
+    }
+
     try {
-      const result = await register({
+      const registerData: any = {
         user_type: userType,
         name,
         phone_number: phoneNumber,
         password
-      });
+      };
+
+      // Add PIN if enabled
+      if (enablePin) {
+        registerData.pin = pin;
+      }
+
+      const result = await register(registerData);
 
       if (result.success) {
         router.push('/dashboard');
@@ -220,6 +250,101 @@ export default function Register() {
                         <label htmlFor="confirmPassword" className="text-muted">
                           <i className="bi bi-shield-lock me-2"></i>Confirm Password
                         </label>
+                      </div>
+
+                      {/* PIN Authentication Option */}
+                      <div className="card border-light bg-light mb-4">
+                        <div className="card-body">
+                          <div className="form-check">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id="enablePin"
+                              checked={enablePin}
+                              onChange={(e) => {
+                                setEnablePin(e.target.checked);
+                                if (!e.target.checked) {
+                                  setPin('');
+                                  setConfirmPin('');
+                                }
+                              }}
+                            />
+                            <label className="form-check-label" htmlFor="enablePin">
+                              <strong>Enable PIN Authentication</strong>
+                              <br />
+                              <small className="text-muted">
+                                Set up a 4-digit PIN for quick login (optional). Useful for USSD access.
+                              </small>
+                            </label>
+                          </div>
+
+                          {enablePin && (
+                            <div className="mt-3">
+                              {/* PIN Input */}
+                              <div className="form-floating mb-3">
+                                <div className="input-group">
+                                  <input
+                                    type={showPin ? 'text' : 'password'}
+                                    className="form-control"
+                                    id="pin"
+                                    value={pin}
+                                    onChange={(e) => {
+                                      const value = e.target.value.slice(0, 4);
+                                      setPin(value);
+                                    }}
+                                    placeholder="4-digit PIN"
+                                    maxLength={4}
+                                    pattern="\d{4}"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-primary"
+                                    onClick={() => setShowPin(!showPin)}
+                                  >
+                                    <i className={`bi bi-eye${showPin ? '-slash' : ''}`}></i>
+                                  </button>
+                                </div>
+                                <label htmlFor="pin" className="text-muted">
+                                  <i className="bi bi-shield-check me-2"></i>PIN (4 digits)
+                                </label>
+                              </div>
+
+                              {/* Confirm PIN Input */}
+                              <div className="form-floating mb-3">
+                                <div className="input-group">
+                                  <input
+                                    type={showPin ? 'text' : 'password'}
+                                    className="form-control"
+                                    id="confirmPin"
+                                    value={confirmPin}
+                                    onChange={(e) => {
+                                      const value = e.target.value.slice(0, 4);
+                                      setConfirmPin(value);
+                                    }}
+                                    placeholder="Confirm PIN"
+                                    maxLength={4}
+                                    pattern="\d{4}"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-primary"
+                                    onClick={() => setShowPin(!showPin)}
+                                  >
+                                    <i className={`bi bi-eye${showPin ? '-slash' : ''}`}></i>
+                                  </button>
+                                </div>
+                                <label htmlFor="confirmPin" className="text-muted">
+                                  <i className="bi bi-shield-check me-2"></i>Confirm PIN
+                                </label>
+                              </div>
+
+                              <div className="alert alert-info small mb-0">
+                                <i className="bi bi-info-circle me-2"></i>
+                                PIN must be exactly 4 digits (0-9)
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Submit Button */}

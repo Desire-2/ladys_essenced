@@ -6,6 +6,8 @@ import { MealProvider } from './MealContext';
 import { AppointmentProvider } from './AppointmentContext';
 import { NotificationProvider } from './NotificationContext';
 import { ContentProvider } from './ContentContext';
+import { ParentProvider } from './ParentContext';
+import { ChildAccessProvider } from './ChildAccessContext';
 
 // Root provider that combines all context providers
 export const AppProviders = ({ children }) => {
@@ -16,7 +18,11 @@ export const AppProviders = ({ children }) => {
           <MealProvider>
             <AppointmentProvider>
               <ContentProvider>
-                {children}
+                <ParentProvider>
+                  <ChildAccessProvider>
+                    {children}
+                  </ChildAccessProvider>
+                </ParentProvider>
               </ContentProvider>
             </AppointmentProvider>
           </MealProvider>
@@ -33,3 +39,5 @@ export { useMeal } from './MealContext';
 export { useAppointment } from './AppointmentContext';
 export { useNotification } from './NotificationContext';
 export { useContent } from './ContentContext';
+export { useParent } from './ParentContext';
+export { useChildAccess } from './ChildAccessContext';

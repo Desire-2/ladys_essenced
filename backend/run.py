@@ -28,7 +28,7 @@ app = create_app()
 migrate = Migrate(app, db)
 
 if __name__ == '__main__':
-    # Additional database verification before starting server
+    # Verify database connection before starting server
     with app.app_context():
         try:
             # Test database connection
@@ -37,12 +37,8 @@ if __name__ == '__main__':
             print("✅ Database connection verified")
         except Exception as e:
             print(f"⚠️  Database connection issue: {e}")
-            print("Attempting to recreate database...")
-            try:
-                db.create_all()
-                print("✅ Database recreated successfully")
-            except Exception as create_error:
-                print(f"❌ Failed to create database: {create_error}")
+            print("⚠️  Database may need migration. Run: flask db upgrade")
+            print("⚠️  Continuing with server startup...")
     
     print("🚀 Starting Flask application...")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)

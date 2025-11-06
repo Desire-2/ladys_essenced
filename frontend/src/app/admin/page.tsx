@@ -298,7 +298,10 @@ export default function AdminDashboard() {
   }, []);
 
   const buildApiUrl = useCallback((endpoint: string, params?: Record<string, any>) => {
-    const url = new URL(`/api/admin${endpoint}`, window.location.origin);
+    const apiBaseUrl = process.env.NODE_ENV === 'production' 
+      ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
+      : 'http://localhost:5001';
+    const url = new URL(`/api/admin${endpoint}`, apiBaseUrl);
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== '') {

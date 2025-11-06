@@ -28,12 +28,25 @@ def register():
     # Hash password
     password_hash = generate_password_hash(data['password'])
     
+    # Validate and hash PIN if provided
+    pin_hash = None
+    enable_pin_auth = False
+    if 'pin' in data and data['pin']:
+        pin = data['pin'].strip()
+        # Validate PIN: must be exactly 4 digits
+        if len(pin) != 4 or not pin.isdigit():
+            return jsonify({'message': 'PIN must be exactly 4 digits'}), 400
+        pin_hash = bcrypt.generate_password_hash(pin).decode('utf-8')
+        enable_pin_auth = True
+    
     # Create new user
     new_user = User(
         name=data['name'],
         phone_number=data['phone_number'],
         password_hash=password_hash,
-        user_type=data['user_type']
+        user_type=data['user_type'],
+        pin_hash=pin_hash,
+        enable_pin_auth=enable_pin_auth
     )
     
     db.session.add(new_user)
@@ -54,7 +67,8 @@ def register():
     
     return jsonify({
         'message': 'User registered successfully',
-        'user_id': new_user.id
+        'user_id': new_user.id,
+        'pin_enabled': enable_pin_auth
     }), 201
 
 @auth_bp.route('/login', methods=['POST'])
@@ -63,29 +77,55 @@ def login():
         data = request.get_json()
         
         # Validate required fields
-        if not data or 'phone_number' not in data or 'password' not in data:
-            return jsonify({'message': 'Missing phone number or password'}), 400
+        if not data or 'phone_number' not in data:
+            return jsonify({'message': 'Missing phone number'}), 400
+        
+        # Check if either password or pin is provided
+        if 'password' not in data and 'pin' not in data:
+            return jsonify({'message': 'Missing password or PIN'}), 400
         
         # Find user by phone number
         user = User.query.filter_by(phone_number=data['phone_number']).first()
         
-        # Check if user exists and password is correct
-        if not user or not check_password_hash(user.password_hash, data['password']):
+        if not user:
             return jsonify({'message': 'Invalid phone number or password'}), 401
         
-        # Create access and refresh tokens with a string identity
-        user_identity = str(user.id)
-        print(f"Login: Creating tokens for user_id: {user.id}, identity: '{user_identity}' (type: {type(user_identity)})")
-        access_token = create_access_token(identity=user_identity)
-        refresh_token = create_refresh_token(identity=user_identity)
+        # Try PIN authentication if PIN is provided
+        if 'pin' in data and data['pin']:
+            pin = data['pin'].strip()
+            if user.enable_pin_auth and user.pin_hash and check_password_hash(user.pin_hash, pin):
+                # PIN authentication successful
+                user_identity = str(user.id)
+                access_token = create_access_token(identity=user_identity)
+                refresh_token = create_refresh_token(identity=user_identity)
+                
+                return jsonify({
+                    'message': 'Login successful',
+                    'user_id': user.id,
+                    'user_type': user.user_type,
+                    'token': access_token,
+                    'refresh_token': refresh_token,
+                    'auth_method': 'pin'
+                }), 200
+            elif user.enable_pin_auth:
+                return jsonify({'message': 'Invalid PIN'}), 401
         
-        return jsonify({
-            'message': 'Login successful',
-            'user_id': user.id,
-            'user_type': user.user_type,
-            'token': access_token,
-            'refresh_token': refresh_token
-        }), 200
+        # Try password authentication
+        if 'password' in data and check_password_hash(user.password_hash, data['password']):
+            user_identity = str(user.id)
+            access_token = create_access_token(identity=user_identity)
+            refresh_token = create_refresh_token(identity=user_identity)
+            
+            return jsonify({
+                'message': 'Login successful',
+                'user_id': user.id,
+                'user_type': user.user_type,
+                'token': access_token,
+                'refresh_token': refresh_token,
+                'auth_method': 'password'
+            }), 200
+        
+        return jsonify({'message': 'Invalid phone number or password'}), 401
         
     except Exception as e:
         print(f"Login error: {str(e)}")
@@ -198,6 +238,19 @@ def update_profile():
     if 'password' in data:
         user.password_hash = bcrypt.generate_password_hash(data['password']).decode('utf-8')
     
+    # Update PIN if provided
+    if 'pin' in data and data['pin']:
+        pin = data['pin'].strip()
+        # Validate PIN: must be exactly 4 digits
+        if len(pin) != 4 or not pin.isdigit():
+            return jsonify({'message': 'PIN must be exactly 4 digits'}), 400
+        user.pin_hash = bcrypt.generate_password_hash(pin).decode('utf-8')
+        user.enable_pin_auth = True
+    
+    # Allow disabling PIN authentication
+    if 'enable_pin_auth' in data:
+        user.enable_pin_auth = data['enable_pin_auth']
+    
     # Update additional fields based on user type
     if user.user_type == 'adolescent' and 'date_of_birth' in data:
         from app.models import Adolescent
@@ -208,8 +261,9 @@ def update_profile():
     db.session.commit()
     
     return jsonify({
-        'message': 'Profile updated successfully'
-    }, 200)
+        'message': 'Profile updated successfully',
+        'pin_enabled': user.enable_pin_auth
+    }), 200
 
 @auth_bp.route('/test-jwt', methods=['GET'])
 @jwt_required()

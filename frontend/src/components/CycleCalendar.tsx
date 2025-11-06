@@ -1,10 +1,12 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import '../styles/cycle-calendar.css';
 
 // Add extra styles for enhanced UI/UX
 const enhancedStyles = `
 .cycle-calendar {
-  background: #fff;
+  background: #360505ff;
   border-radius: 18px;
   box-shadow: 0 4px 24px rgba(52, 73, 94, 0.08);
   padding: 2.5rem 2rem 2rem 2rem;
@@ -52,12 +54,12 @@ const enhancedStyles = `
   box-shadow: 0 1px 8px rgba(52, 73, 94, 0.04);
 }
 .calendar-header-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.2rem;
   margin-bottom: 0.5rem;
 }
 .calendar-header-day {
-  flex: 1;
   text-align: center;
   font-weight: 600;
   color: #7d3c98;
@@ -66,16 +68,15 @@ const enhancedStyles = `
   padding-bottom: 0.2rem;
 }
 .calendar-week {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.2rem;
   margin-bottom: 0.2rem;
 }
 .calendar-day {
-  flex: 1;
   min-height: 70px;
   background: #fff;
   border-radius: 10px;
-  margin: 0 0.1rem;
   box-shadow: 0 1px 4px rgba(52, 73, 94, 0.04);
   cursor: pointer;
   transition: box-shadow 0.2s, background 0.2s, transform 0.1s;
@@ -423,14 +424,6 @@ const enhancedStyles = `
 }
 `;
 
-// Inject enhanced styles into the document head
-if (typeof window !== 'undefined' && !document.getElementById('cycle-calendar-enhanced-styles')) {
-  const style = document.createElement('style');
-  style.id = 'cycle-calendar-enhanced-styles';
-  style.innerHTML = enhancedStyles;
-  document.head.appendChild(style);
-}
-
 interface CalendarDay {
   date: string;
   day_of_month: number;
@@ -478,6 +471,16 @@ const CycleCalendar: React.FC<CalendarProps> = ({
   const [selectedDay, setSelectedDay] = useState<DayDetailModal>({ day: null, isOpen: false });
   const [view, setView] = useState<'calendar' | 'insights'>('calendar');
   const [filterSymptoms, setFilterSymptoms] = useState<string[]>([]);
+
+  // Inject enhanced styles into the document head on client-side only
+  useEffect(() => {
+    if (typeof document !== 'undefined' && !document.getElementById('cycle-calendar-enhanced-styles')) {
+      const style = document.createElement('style');
+      style.id = 'cycle-calendar-enhanced-styles';
+      style.innerHTML = enhancedStyles;
+      document.head.appendChild(style);
+    }
+  }, []);
 
   // Enhanced symptoms list with icons
   const symptomIcons: { [key: string]: string } = {

@@ -331,7 +331,7 @@ def handle_authenticated_flow(user, input_list, phone_number):
         return "END Session expired. Please start again."
 
 def handle_registration_flow(input_list, phone_number):
-    """Handle user registration flow"""
+    """Handle user registration flow with optional PIN setup"""
     steps = len(input_list)
     
     if steps == 2:  # Name entered
@@ -345,72 +345,142 @@ def handle_registration_flow(input_list, phone_number):
     
     elif steps == 3:  # User type selected
         if input_list[2] in ['1', '2']:
-            return "CON Create a secure 4-digit PIN:"
+            return "CON Create a secure password (4-8 characters):\nExample: 2580 or secure123"
         else:
             return "END Invalid selection. Please try again."
     
-    elif steps == 4:  # PIN entered
-        pin = input_list[3]
+    elif steps == 4:  # Password entered
+        password = input_list[3]
+        if len(password) < 4 or len(password) > 20:
+            return "END Password must be 4-20 characters. Please try again."
+        
+        # Password is valid, ask about PIN setup
+        return "CON Would you like to set a 4-digit PIN for faster login?\n1. Yes, set PIN\n2. Skip"
+    
+    elif steps == 5:  # PIN setup option
+        pin_option = input_list[4]
+        
+        if pin_option == '1':
+            # User wants to set PIN
+            return "CON Enter a 4-digit PIN (numbers only):\nExample: 2580"
+        elif pin_option == '2':
+            # Skip PIN - create user with password only
+            name = input_list[1].strip()
+            password = input_list[3]
+            user_type = 'parent' if input_list[2] == '1' else 'adolescent'
+            
+            return _create_user_from_ussd(name, phone_number, password, user_type, pin=None)
+        else:
+            return "END Invalid option. Please try again."
+    
+    elif steps == 6:  # PIN entered
+        pin = input_list[5]
+        
         if len(pin) != 4 or not pin.isdigit():
             return "END Invalid PIN. Must be exactly 4 digits."
         
-        # Validate name again
+        # PIN is valid, confirm PIN
+        return "CON Confirm your PIN:\nEnter it again:"
+    
+    elif steps == 7:  # Confirm PIN
+        pin = input_list[5]
+        confirm_pin = input_list[6]
+        
+        if pin != confirm_pin:
+            return "END PINs don't match. Please try again."
+        
+        # PINs match - create user with PIN
         name = input_list[1].strip()
-        if len(name) < 2:
-            return "END Invalid name length."
-            
-        try:
-            # Create new user
-            new_user = User(
-                name=name,
-                phone_number=phone_number,
-                password_hash=bcrypt.generate_password_hash(pin).decode('utf-8'),
-                user_type='parent' if input_list[2] == '1' else 'adolescent'
-            )
-            db.session.add(new_user)
-            db.session.flush()  # Get the user ID
-            
-            # Create associated profile
-            if new_user.user_type == 'parent':
-                parent = Parent(user_id=new_user.id)
-                db.session.add(parent)
-            else:
-                adolescent = Adolescent(user_id=new_user.id)
-                db.session.add(adolescent)
-            
-            # Create welcome notification
-            welcome_msg = f"Welcome to The Lady's Essence, {name}! Your account has been created successfully."
-            notification = Notification(
-                user_id=new_user.id,
-                message=welcome_msg,
-                notification_type='welcome'
-            )
-            db.session.add(notification)
-            
-            db.session.commit()
-            return f"END ✅ Registration successful!\nWelcome {name}!\nYou can now access our services."
-            
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Registration error: {str(e)}")
-            return "END Registration failed. Please try again."
+        password = input_list[3]
+        user_type = 'parent' if input_list[2] == '1' else 'adolescent'
+        
+        return _create_user_from_ussd(name, phone_number, password, user_type, pin=pin)
+    
+    return "END Invalid registration flow."
+
+def _create_user_from_ussd(name, phone_number, password, user_type, pin=None):
+    """Helper function to create user from USSD with optional PIN"""
+    try:
+        # Check if user already exists
+        if User.query.filter_by(phone_number=phone_number).first():
+            return "END Phone number already registered. Please login or contact support."
+        
+        # Create password hash
+        password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+        
+        # Create PIN hash if provided
+        pin_hash = None
+        enable_pin_auth = False
+        if pin:
+            pin_hash = bcrypt.generate_password_hash(pin).decode('utf-8')
+            enable_pin_auth = True
+        
+        # Create new user
+        new_user = User(
+            name=name,
+            phone_number=phone_number,
+            password_hash=password_hash,
+            user_type=user_type,
+            pin_hash=pin_hash,
+            enable_pin_auth=enable_pin_auth
+        )
+        db.session.add(new_user)
+        db.session.flush()  # Get the user ID
+        
+        # Create associated profile
+        if new_user.user_type == 'parent':
+            parent = Parent(user_id=new_user.id)
+            db.session.add(parent)
+        else:
+            adolescent = Adolescent(user_id=new_user.id)
+            db.session.add(adolescent)
+        
+        # Create welcome notification
+        welcome_msg = f"Welcome to The Lady's Essence, {name}! Your account has been created successfully."
+        if enable_pin_auth:
+            welcome_msg += " PIN authentication is enabled."
+        
+        notification = Notification(
+            user_id=new_user.id,
+            message=welcome_msg,
+            notification_type='welcome'
+        )
+        db.session.add(notification)
+        
+        db.session.commit()
+        
+        pin_msg = "\nPIN enabled for fast login!" if enable_pin_auth else ""
+        return f"END ✅ Registration successful!\nWelcome {name}!{pin_msg}\nYou can now access our services."
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Registration error: {str(e)}")
+        return "END Registration failed. Please try again."
 
 def handle_login_flow(input_list, phone_number):
-    """Handle user login flow"""
+    """Handle user login flow with PIN or password support"""
     if len(input_list) == 2:
-        pin = input_list[1]
+        # First input after phone number - try to authenticate with PIN
+        pin_or_password = input_list[1]
         user = User.query.filter_by(phone_number=phone_number).first()
         
         if not user:
             return "END No account found with this phone number."
         
-        if len(pin) == 4 and pin.isdigit():
-            if bcrypt.check_password_hash(user.password_hash, pin):
+        # Try PIN authentication first if it's 4 digits
+        if len(pin_or_password) == 4 and pin_or_password.isdigit():
+            if user.enable_pin_auth and user.pin_hash and bcrypt.check_password_hash(user.pin_hash, pin_or_password):
+                # PIN authentication successful
                 return main_menu(user)
-            else:
+            elif user.enable_pin_auth and (not user.pin_hash or not bcrypt.check_password_hash(user.pin_hash, pin_or_password)):
+                # PIN auth enabled but PIN incorrect
                 return "END Invalid PIN. Please try again."
+        
+        # Try password authentication
+        if bcrypt.check_password_hash(user.password_hash, pin_or_password):
+            return main_menu(user)
         else:
-            return "END PIN must be exactly 4 digits."
+            return "END Invalid password. Please try again."
     
     return "END Invalid login attempt."
 
