@@ -40,28 +40,33 @@ function NavigationMenu() {
 
   return (
     <>
-      <ul className="navbar-nav ms-auto mb-2 mb-lg-0">
-        <li className="nav-item mx-2">
-          <a className="nav-link text-black position-relative hover-underline" href="/">
-            Home
-          </a>
-        </li>
-        <li className="nav-item mx-2">
-          <a className="nav-link text-black position-relative hover-underline" href="/about">
-            About
-          </a>
-        </li>
-        {user && (
+      {user && (
+        <ul className="navbar-nav ms-auto mb-2 mb-lg-0">
           <li className="nav-item mx-2">
             <a className="nav-link text-black position-relative hover-underline" href={getDashboardLink()}>
               Dashboard
             </a>
           </li>
-        )}
-      </ul>
+        </ul>
+      )}
+
+      {!user && (
+        <ul className="navbar-nav ms-auto mb-2 mb-lg-0">
+          <li className="nav-item mx-2">
+            <a className="nav-link text-black position-relative hover-underline" href="/">
+              Home
+            </a>
+          </li>
+          <li className="nav-item mx-2">
+            <a className="nav-link text-black position-relative hover-underline" href="/about">
+              About
+            </a>
+          </li>
+        </ul>
+      )}
       
       <div className="d-flex ms-lg-4">
-        {user ? (
+        {user && (
           <div className="d-flex align-items-center">
             <div className="dropdown">
               <button
@@ -97,7 +102,8 @@ function NavigationMenu() {
               </ul>
             </div>
           </div>
-        ) : (
+        )}
+        {!user && (
           <>
             <a href="/login" className="btn btn-outline-light text-primary btn-hover-effect me-2">
               Login
@@ -118,46 +124,78 @@ function LayoutContent({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {/* Show header and footer only when user is NOT authenticated */}
-      {!isAuthenticated && (
-        <>
-          {/* Enhanced Header */}
-          <header className="sticky-top">
-            <nav className="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm" style={{
-              background: 'linear-gradient(135deg,rgb(250, 247, 248) 0%,rgb(249, 243, 246) 100%)'
-            }}>
-              <div className="container">
-                <a className="navbar-brand" href="/">
-                  <div className="d-flex align-items-center">
+      {/* Enhanced Header - Show for all users */}
+      <header className="sticky-top">
+        <nav className="navbar navbar-expand-lg navbar-dark bg-gradient-primary shadow-sm" style={{
+          background: 'linear-gradient(135deg,rgb(250, 247, 248) 0%,rgb(249, 243, 246) 100%)'
+        }}>
+          <div className="container">
+                <a className="navbar-brand" href="/" style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  transition: 'transform 0.3s ease',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <div className="d-flex align-items-center gap-2">
                     <img
                       src="/images/icons/logo.svg"
                       alt="The Lady's Essence"
-                      className="brand-logo me-2"
+                      className="brand-logo"
                       height="50"
+                      style={{
+                        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+                        transition: 'filter 0.3s ease'
+                      }}
                     />
-                    <span className="h3 mb-0 fw-bold text-uppercase brand-name text-black">
-                      Lady's Essence
-                    </span>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center'
+                    }}>
+                      <span style={{
+                        fontSize: '18px',
+                        fontWeight: '700',
+                        letterSpacing: '1px',
+                        background: 'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)',
+                        backgroundClip: 'text',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        margin: '0',
+                        lineHeight: '1.2'
+                      }}>
+                        Lady's Essence
+                      </span>
+                      <span style={{
+                        fontSize: '10px',
+                        letterSpacing: '2px',
+                        color: '#a855f7',
+                        textTransform: 'uppercase',
+                        fontWeight: '500',
+                        margin: '0'
+                      }}>
+                        Wellness Hub
+                      </span>
+                    </div>
                   </div>
-                </a>
-                
-                <button
-                  className="navbar-toggler bg-dark navbar-toggler-custom"
-                  type="button"
-                  data-bs-toggle="collapse"
-                  data-bs-target="#navbarNav"
-                >
-                  <span className="navbar-toggler-icon"></span>
-                </button>
+                </a>            <button
+              className="navbar-toggler bg-dark navbar-toggler-custom"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#navbarNav"
+            >
+              <span className="navbar-toggler-icon"></span>
+            </button>
 
-                <div className="collapse navbar-collapse" id="navbarNav">
-                  <NavigationMenu />
-                </div>
-              </div>
-            </nav>
-          </header>
-        </>
-      )}
+            <div className="collapse navbar-collapse" id="navbarNav">
+              <NavigationMenu />
+            </div>
+          </div>
+        </nav>
+      </header>
 
       {/* Main Content with Gradient Background */}
       <main className="py-5" style={{
