@@ -420,6 +420,7 @@ def create_app():
     from app.routes.admin import admin_bp
     from app.routes.content_writer import content_writer_bp
     from app.routes.health_provider import health_provider_bp
+    from app.routes.parent_appointments import parent_appointments_bp
 
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -433,6 +434,7 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     app.register_blueprint(content_writer_bp, url_prefix='/api/content-writer')
     app.register_blueprint(health_provider_bp, url_prefix='/api/health-provider')
+    app.register_blueprint(parent_appointments_bp, url_prefix='/api')
     
     # Create database tables and ensure proper schema
     with app.app_context():

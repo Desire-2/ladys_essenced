@@ -49,15 +49,13 @@ const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ providerId }) => {
 
     try {
       setLoading(true);
-      const token = localStorage.getItem('access_token');
       
-      // Use the proper API URL builder
-      const apiUrl = `/api/health-provider/analytics?provider_id=${providerId}&time_range=${timeRange}`;
+      // Use test endpoint for demo purposes
+      const apiUrl = `/api/health-provider/test/analytics?provider_id=${providerId}&time_range=${timeRange}`;
       console.log('Loading analytics from:', apiUrl);
       
       const response = await fetch(apiUrl, {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });

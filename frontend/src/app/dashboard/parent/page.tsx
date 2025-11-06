@@ -13,9 +13,11 @@ import { ChildProfile } from '@/components/parent/ChildProfile';
 import { LogCycle } from '@/components/parent/LogCycle';
 import { LogMeal } from '@/components/parent/LogMeal';
 import { AddAppointment } from '@/components/parent/AddAppointment';
+import ChildAppointmentBooking from '@/components/parent/ChildAppointmentBooking';
 import { ChildCalendar } from '@/components/parent/ChildCalendar';
 import { CycleCalendar } from '@/components/parent/CycleCalendar';
 import '../../../styles/parent-dashboard.css';
+import '../../../styles/child-appointment-booking.css';
 
 interface Child {
   id: number;
@@ -439,15 +441,12 @@ function ParentDashboardContent() {
         {/* Add Appointment Tab */}
         {activeTab === 'appointment' && selectedChild && selectedChildData && (
           <div className="tab-pane fade show active">
-            <div className="row">
-              <div className="col-lg-8 mx-auto">
-                <AddAppointment
-                  childId={selectedChild}
-                  childName={selectedChildData.name}
-                  onSuccess={() => setActiveTab('monitoring')}
-                />
-              </div>
-            </div>
+            <ChildAppointmentBooking
+              user={user}
+              onBookingSuccess={() => {
+                setActiveTab('monitoring');
+              }}
+            />
           </div>
         )}
 

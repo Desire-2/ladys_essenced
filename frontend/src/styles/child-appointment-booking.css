@@ -1,0 +1,510 @@
+/* Child Appointment Booking Styles */
+
+.child-appointment-booking {
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.booking-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f8f9fa;
+}
+
+.booking-header h3 {
+  margin: 0;
+  color: #1a3a52;
+  font-weight: 600;
+  flex: 1;
+}
+
+.booking-header .btn-link {
+  padding: 0;
+  text-decoration: none;
+  color: #6c757d;
+  transition: all 0.3s ease;
+}
+
+.booking-header .btn-link:hover {
+  color: #495057;
+  transform: translateX(-3px);
+}
+
+/* Booking Steps */
+.booking-step {
+  margin-bottom: 2rem;
+}
+
+.step-title {
+  color: #1a3a52;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Children List */
+.children-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.child-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 2px solid #e9ecef;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.child-card:hover {
+  border-color: #a1d8ff;
+  background: #f0f8ff;
+  box-shadow: 0 0.25rem 0.5rem rgba(161, 216, 255, 0.2);
+}
+
+.child-avatar {
+  font-size: 2.5rem;
+  color: #a1d8ff;
+  min-width: fit-content;
+}
+
+.child-info {
+  flex: 1;
+}
+
+.child-info h6 {
+  margin: 0;
+  color: #1a3a52;
+  font-weight: 600;
+}
+
+.child-info small {
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.child-action {
+  color: #a1d8ff;
+  transition: all 0.3s ease;
+}
+
+.child-card:hover .child-action {
+  transform: translateX(5px);
+}
+
+/* Provider Search */
+.provider-search {
+  margin-bottom: 1.5rem;
+}
+
+.provider-search .input-group {
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.provider-search .form-control:focus,
+.provider-search .input-group-text {
+  border-color: #a1d8ff;
+}
+
+.provider-search .form-control:focus {
+  box-shadow: 0 0 0 0.2rem rgba(161, 216, 255, 0.25);
+}
+
+/* Providers List */
+.providers-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.provider-card {
+  padding: 1rem;
+  border: 2px solid #e9ecef;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.provider-card:hover {
+  border-color: #a1d8ff;
+  box-shadow: 0 0.5rem 1rem rgba(161, 216, 255, 0.15);
+}
+
+.provider-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.provider-avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a1d8ff 0%, #7bb8d4 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.5rem;
+}
+
+.provider-name {
+  flex: 1;
+  margin: 0;
+  color: #1a3a52;
+  font-weight: 600;
+}
+
+.provider-verified {
+  color: #28a745;
+  font-size: 1.2rem;
+}
+
+.provider-details {
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+}
+
+.provider-detail-item {
+  margin-bottom: 0.5rem;
+  color: #495057;
+}
+
+.provider-detail-item i {
+  color: #a1d8ff;
+  margin-right: 0.5rem;
+  width: 1rem;
+}
+
+.provider-specialization {
+  display: inline-block;
+  background: #e7f5ff;
+  color: #1971c2;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+/* Dates List */
+.dates-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.date-btn {
+  padding: 0.75rem 0.5rem;
+  border: 2px solid #e9ecef;
+  background: white;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.875rem;
+  text-align: center;
+  color: #495057;
+  font-weight: 500;
+}
+
+.date-btn:hover {
+  border-color: #a1d8ff;
+  background: #f0f8ff;
+}
+
+.date-btn.active {
+  border-color: #1971c2;
+  background: #1971c2;
+  color: white;
+}
+
+/* Time Slots */
+.time-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.time-slot {
+  padding: 0.75rem;
+  border: 2px solid #e9ecef;
+  background: white;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #495057;
+}
+
+.time-slot:hover:not(:disabled) {
+  border-color: #a1d8ff;
+  background: #f0f8ff;
+}
+
+.time-slot.active {
+  border-color: #1971c2;
+  background: #1971c2;
+  color: white;
+}
+
+.time-slot:disabled {
+  background: #f8f9fa;
+  color: #cbd2d9;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Form Controls */
+.booking-step .form-label {
+  color: #1a3a52;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.booking-step .form-control,
+.booking-step .form-select {
+  border: 1px solid #e9ecef;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.booking-step .form-control:focus,
+.booking-step .form-select:focus {
+  border-color: #a1d8ff;
+  box-shadow: 0 0 0 0.2rem rgba(161, 216, 255, 0.25);
+}
+
+.form-check-input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.25rem;
+  border: 2px solid #ddd;
+  cursor: pointer;
+}
+
+.form-check-input:checked {
+  background-color: #1971c2;
+  border-color: #1971c2;
+}
+
+.form-check-input:focus {
+  border-color: #a1d8ff;
+  box-shadow: 0 0 0 0.2rem rgba(161, 216, 255, 0.25);
+}
+
+.form-check-label {
+  color: #495057;
+  cursor: pointer;
+  margin-left: 0.5rem;
+}
+
+/* Summary Alert */
+.alert {
+  border-radius: 0.5rem;
+  border: none;
+  margin-bottom: 1rem;
+}
+
+.alert-info {
+  background: #e7f5ff;
+  color: #1971c2;
+  border-left: 4px solid #1971c2;
+}
+
+.alert-info ul {
+  padding-left: 1.25rem;
+}
+
+.alert-info li {
+  margin-bottom: 0.25rem;
+}
+
+.alert-success {
+  background: #d3f9d8;
+  color: #2f7c31;
+  border-left: 4px solid #51cf66;
+}
+
+.alert-danger {
+  background: #ffe0e0;
+  color: #c92a2a;
+  border-left: 4px solid #ff6b6b;
+}
+
+/* Buttons */
+.btn-primary {
+  background: linear-gradient(135deg, #1971c2 0%, #1a5299 100%);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1a5299 0%, #0d3b8f 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(25, 113, 194, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Loading Spinner */
+.spinner-border {
+  border-width: 3px;
+}
+
+.spinner-border-sm {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-width: 2px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .child-appointment-booking {
+    padding: 1rem;
+  }
+
+  .children-list {
+    grid-template-columns: 1fr;
+  }
+
+  .providers-list {
+    grid-template-columns: 1fr;
+  }
+
+  .dates-list {
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  }
+
+  .time-slots {
+    grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
+  }
+
+  .booking-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .row {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .col-md-6 {
+    width: 100% !important;
+    margin-bottom: 1rem;
+  }
+}
+
+/* Step Progress Indicator */
+.step-indicator {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+.step-indicator::before {
+  content: '';
+  position: absolute;
+  top: 1.5rem;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #e9ecef;
+  z-index: 1;
+}
+
+.step-item {
+  flex: 1;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+.step-number {
+  width: 3rem;
+  height: 3rem;
+  margin: 0 auto 0.5rem;
+  background: white;
+  border: 2px solid #e9ecef;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #6c757d;
+  transition: all 0.3s ease;
+}
+
+.step-item.active .step-number {
+  background: #1971c2;
+  border-color: #1971c2;
+  color: white;
+  box-shadow: 0 0 0 4px rgba(25, 113, 194, 0.1);
+}
+
+.step-item.completed .step-number {
+  background: #51cf66;
+  border-color: #51cf66;
+  color: white;
+}
+
+.step-label {
+  font-size: 0.875rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.step-item.active .step-label {
+  color: #1971c2;
+  font-weight: 600;
+}
+
+/* No Children Message */
+.no-content {
+  text-align: center;
+  padding: 2rem;
+  background: #f8f9fa;
+  border-radius: 0.5rem;
+}
+
+.no-content i {
+  font-size: 3rem;
+  color: #cbd2d9;
+  margin-bottom: 1rem;
+}
+
+.no-content h5 {
+  color: #6c757d;
+  margin-bottom: 0.5rem;
+}
+
+.no-content p {
+  color: #999;
+  margin: 0;
+}

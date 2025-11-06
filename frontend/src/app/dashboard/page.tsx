@@ -1089,6 +1089,9 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* Cycle Tracking Tab */}
+        {activeTab === 'cycle' && selectedChild && (
           <div>
             <div className="card">
               <div className="card-header">
