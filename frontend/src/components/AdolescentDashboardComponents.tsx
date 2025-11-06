@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { Card, Badge, ProgressBar, Button, GradientBg } from '../UILibrary';
+import { Card, Badge, ProgressBar, Button, GradientBg } from './UILibrary';
 
 /**
  * CycleQuickLogger

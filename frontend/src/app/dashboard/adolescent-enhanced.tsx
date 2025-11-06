@@ -129,9 +129,11 @@ function DashboardSection() {
             <div className="text-center">
               <p className="text-sm text-gray-600 mb-2">Last Period Started</p>
               <p className="text-2xl font-bold text-gray-900">Mar 5</p>
-              <Badge variant="success" size="sm" className="mt-3">
-                ✓ Logged
-              </Badge>
+              <div className="mt-3">
+                <Badge variant="success" size="sm">
+                  ✓ Logged
+                </Badge>
+              </div>
             </div>
           </Card>
 
@@ -505,9 +507,11 @@ function LearnSection() {
             <div className="flex gap-4">
               <span className="text-5xl">{article.icon}</span>
               <div className="flex-1">
-                <Badge variant="primary" size="sm" className="mb-2">
-                  {article.category}
-                </Badge>
+                <div className="mb-2">
+                  <Badge variant="primary" size="sm">
+                    {article.category}
+                  </Badge>
+                </div>
                 <h4 className="text-lg font-bold text-gray-900 mb-1">{article.title}</h4>
                 <p className="text-gray-600 mb-3">{article.description}</p>
                 <div className="flex items-center justify-between">

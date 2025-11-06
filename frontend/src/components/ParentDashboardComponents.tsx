@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Card, Button, Badge, Avatar, EmptyState } from '../UILibrary';
+import { Card, Button, Badge, Avatar, EmptyState } from './UILibrary';
 
 /**
  * ModernChildCard
@@ -211,7 +211,7 @@ export const ChildHealthPanel: React.FC<{
               icon="📋"
               title="No Appointments"
               description="No upcoming appointments scheduled"
-              actionText="Schedule One"
+              action={{ label: 'Schedule One', onClick: () => {} }}
             />
           )}
         </div>

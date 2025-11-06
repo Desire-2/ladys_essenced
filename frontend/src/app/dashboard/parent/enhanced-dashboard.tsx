@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../../contexts/AuthContext';
-import { useParent } from '../../contexts/ParentContext';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useParent } from '../../../contexts/ParentContext';
 import {
   Card,
   StatCard,
@@ -15,7 +15,7 @@ import {
   Alert,
   GradientBg,
   Avatar,
-} from '../../components/UILibrary';
+} from '../../../components/UILibrary';
 
 /**
  * Enhanced Parent Dashboard
@@ -464,9 +464,11 @@ function ResourcesSection() {
             <div className="flex gap-4">
               <span className="text-4xl">{resource.icon}</span>
               <div className="flex-1">
-                <Badge variant="primary" size="sm" className="mb-2">
-                  {resource.category}
-                </Badge>
+                <div className="mb-2">
+                  <Badge variant="primary" size="sm">
+                    {resource.category}
+                  </Badge>
+                </div>
                 <h4 className="font-bold text-gray-900 mb-2">{resource.title}</h4>
                 <p className="text-sm text-gray-600 mb-4">{resource.description}</p>
                 <Button size="sm" variant="outline">
