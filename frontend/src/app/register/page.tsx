@@ -204,28 +204,29 @@ export default function Register() {
                       </div>
 
                       {/* Password Input */}
-                      <div className="form-floating mb-4">
-                        <div className="input-group">
+                      <div className="mb-4">
+                        <label htmlFor="password" className="form-label fw-500 text-dark mb-2">
+                          <i className="bi bi-lock me-2 text-primary"></i>Password
+                        </label>
+                        <div className="input-group input-group-lg">
                           <input
                             type={showPassword ? 'text' : 'password'}
                             className="form-control"
                             id="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Password"
+                            placeholder="Enter your password"
                             required
                           />
                           <button
                             type="button"
                             className="btn btn-outline-primary"
                             onClick={() => setShowPassword(!showPassword)}
+                            style={{ borderColor: '#0d6efd', backgroundColor: '#ffffff' }}
                           >
-                            <i className={`bi bi-eye${showPassword ? '-slash' : ''}`}></i>
+                            <i className={`bi bi-eye${showPassword ? '-slash' : ''}`} style={{ color: '#000000', fontSize: '1.3rem', fontWeight: 'bold' }}></i>
                           </button>
                         </div>
-                        <label htmlFor="password" className="text-muted">
-                          <i className="bi bi-lock me-2"></i>
-                        </label>
                         <div className="password-strength mt-2">
                           <div className="progress" style={{ height: '4px' }}>
                             <div 
@@ -237,19 +238,29 @@ export default function Register() {
                       </div>
 
                       {/* Confirm Password Input */}
-                      <div className="form-floating mb-4">
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          className="form-control"
-                          id="confirmPassword"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Confirm Password"
-                          required
-                        />
-                        <label htmlFor="confirmPassword" className="text-muted">
-                          <i className="bi bi-shield-lock me-2"></i>Confirm Password
+                      <div className="mb-4">
+                        <label htmlFor="confirmPassword" className="form-label fw-500 text-dark mb-2">
+                          <i className="bi bi-shield-lock me-2 text-primary"></i>Confirm Password
                         </label>
+                        <div className="input-group input-group-lg">
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            className="form-control"
+                            id="confirmPassword"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Confirm your password"
+                            required
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-outline-primary"
+                            onClick={() => setShowPassword(!showPassword)}
+                            style={{ borderColor: '#0d6efd', backgroundColor: '#ffffff' }}
+                          >
+                            <i className={`bi bi-eye${showPassword ? '-slash' : ''}`} style={{ color: '#000000', fontSize: '1.3rem', fontWeight: 'bold' }}></i>
+                          </button>
+                        </div>
                       </div>
 
                       {/* PIN Authentication Option */}
@@ -281,18 +292,21 @@ export default function Register() {
                           {enablePin && (
                             <div className="mt-3">
                               {/* PIN Input */}
-                              <div className="form-floating mb-3">
-                                <div className="input-group">
+                              <div className="mb-3">
+                                <label htmlFor="pin" className="form-label fw-500 text-dark mb-2">
+                                  <i className="bi bi-shield-check me-2 text-primary"></i>4-Digit PIN
+                                </label>
+                                <div className="input-group input-group-lg">
                                   <input
                                     type={showPin ? 'text' : 'password'}
-                                    className="form-control"
+                                    className="form-control text-center"
                                     id="pin"
                                     value={pin}
                                     onChange={(e) => {
-                                      const value = e.target.value.slice(0, 4);
+                                      const value = e.target.value.replace(/\D/g, '').slice(0, 4);
                                       setPin(value);
                                     }}
-                                    placeholder="4-digit PIN"
+                                    placeholder="• • • •"
                                     maxLength={4}
                                     pattern="\d{4}"
                                   />
@@ -300,28 +314,29 @@ export default function Register() {
                                     type="button"
                                     className="btn btn-outline-primary"
                                     onClick={() => setShowPin(!showPin)}
+                                    style={{ borderColor: '#0d6efd', backgroundColor: '#ffffff' }}
                                   >
-                                    <i className={`bi bi-eye${showPin ? '-slash' : ''}`}></i>
+                                    <i className={`bi bi-eye${showPin ? '-slash' : ''}`} style={{ color: '#000000', fontSize: '1.3rem', fontWeight: 'bold' }}></i>
                                   </button>
                                 </div>
-                                <label htmlFor="pin" className="text-muted">
-                                  <i className="bi bi-shield-check me-2"></i>PIN (4 digits)
-                                </label>
                               </div>
 
                               {/* Confirm PIN Input */}
-                              <div className="form-floating mb-3">
-                                <div className="input-group">
+                              <div className="mb-3">
+                                <label htmlFor="confirmPin" className="form-label fw-500 text-dark mb-2">
+                                  <i className="bi bi-shield-check me-2 text-primary"></i>Confirm PIN
+                                </label>
+                                <div className="input-group input-group-lg">
                                   <input
                                     type={showPin ? 'text' : 'password'}
-                                    className="form-control"
+                                    className="form-control text-center"
                                     id="confirmPin"
                                     value={confirmPin}
                                     onChange={(e) => {
-                                      const value = e.target.value.slice(0, 4);
+                                      const value = e.target.value.replace(/\D/g, '').slice(0, 4);
                                       setConfirmPin(value);
                                     }}
-                                    placeholder="Confirm PIN"
+                                    placeholder="• • • •"
                                     maxLength={4}
                                     pattern="\d{4}"
                                   />
@@ -329,13 +344,11 @@ export default function Register() {
                                     type="button"
                                     className="btn btn-outline-primary"
                                     onClick={() => setShowPin(!showPin)}
+                                    style={{ borderColor: '#0d6efd', backgroundColor: '#ffffff' }}
                                   >
-                                    <i className={`bi bi-eye${showPin ? '-slash' : ''}`}></i>
+                                    <i className={`bi bi-eye${showPin ? '-slash' : ''}`} style={{ color: '#000000', fontSize: '1.3rem', fontWeight: 'bold' }}></i>
                                   </button>
                                 </div>
-                                <label htmlFor="confirmPin" className="text-muted">
-                                  <i className="bi bi-shield-check me-2"></i>Confirm PIN
-                                </label>
                               </div>
 
                               <div className="alert alert-info small mb-0">

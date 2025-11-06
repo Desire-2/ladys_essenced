@@ -243,8 +243,9 @@ export default function Login() {
                               type="button"
                               className="btn btn-outline-primary"
                               onClick={() => setShowPassword(!showPassword)}
+                              style={{ borderColor: '#0d6efd', backgroundColor: '#ffffff' }}
                             >
-                              <i className={`bi bi-eye${showPassword ? '-slash' : ''}`}></i>
+                              <i className={`bi bi-eye${showPassword ? '-slash' : ''}`} style={{ color: '#000000', fontSize: '1.3rem', fontWeight: 'bold' }}></i>
                             </button>
                           </div>
                         </div>
@@ -276,8 +277,9 @@ export default function Login() {
                               type="button"
                               className="btn btn-outline-primary"
                               onClick={() => setShowPassword(!showPassword)}
+                              style={{ borderColor: '#0d6efd', backgroundColor: '#ffffff' }}
                             >
-                              <i className={`bi bi-eye${showPassword ? '-slash' : ''}`}></i>
+                              <i className={`bi bi-eye${showPassword ? '-slash' : ''}`} style={{ color: '#000000', fontSize: '1.3rem', fontWeight: 'bold' }}></i>
                             </button>
                           </div>
                           <div className="mt-2">
