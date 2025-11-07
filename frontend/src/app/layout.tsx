@@ -1,14 +1,12 @@
 'use client';
 
 import { ReactNode, useEffect } from 'react';
-import { Inter } from 'next/font/google';
+import Image from 'next/image';
 import { AppProviders } from '../contexts';
 import { useAuth } from '../contexts/AuthContext';
 import ClientWrapper from '../components/ClientWrapper';
 import '../styles/globals.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
-
-const inter = Inter({ subsets: ['latin'] });
 
 interface RootLayoutProps {
   children: ReactNode;
@@ -302,6 +300,59 @@ function LayoutContent({ children }: { children: ReactNode }) {
                   </div>
                 </div>
               </div>
+              
+              {/* Powered by AfriTech Bridge */}
+              <div className="row mt-4 pt-4 border-top border-dark">
+                <div className="col-12">
+                  <div className="d-flex align-items-center justify-content-center gap-2 flex-wrap">
+                    <span className="text-muted small mb-0">Powered by</span>
+                    <a 
+                      href="https://afritechbridge.org" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="d-flex align-items-center gap-2 text-decoration-none"
+                      style={{ 
+                        transition: 'all 0.3s ease',
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        background: 'rgba(245, 183, 0, 0.1)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(245, 183, 0, 0.2)';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(245, 183, 0, 0.1)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }}
+                    >
+                      <Image
+                        src="/images/others/logo.jpg"
+                        alt="AfriTech Bridge"
+                        width={32}
+                        height={32}
+                        style={{
+                          borderRadius: '4px',
+                          objectFit: 'contain'
+                        }}
+                      />
+                      <span 
+                        style={{ 
+                          color: '#F5B700',
+                          fontWeight: '700',
+                          fontSize: '1rem',
+                          letterSpacing: '0.5px'
+                        }}
+                      >
+                        AfriTech Bridge
+                      </span>
+                    </a>
+                  </div>
+                  <p className="text-center text-muted mt-2 mb-0" style={{ fontSize: '0.75rem' }}>
+                    Empowering African Innovation Through Technology
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </footer>
@@ -312,7 +363,9 @@ function LayoutContent({ children }: { children: ReactNode }) {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   useEffect(() => {
-    import('bootstrap/dist/js/bootstrap.bundle.min.js');
+    if (typeof window !== 'undefined') {
+      import('bootstrap/dist/js/bootstrap.bundle.min.js');
+    }
   }, []);
 
   return (
@@ -336,7 +389,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
           href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"
         />
       </head>
-      <body className={inter.className} suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <AppProviders>
           <ClientWrapper>
             <LayoutContent>

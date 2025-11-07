@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
 
+type RouteParams = {
+  params: Promise<{ id: string }>;
+};
+
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: RouteParams
 ) {
   try {
     const token = request.headers.get('authorization');
@@ -14,7 +18,7 @@ export async function PATCH(
     }
 
     const body = await request.json().catch(() => ({}));
-    const { id } = await params;
+    const { id } = await context.params;
 
     const response = await fetch(`${BACKEND_URL}/api/admin/content/${id}/reject`, {
       method: 'PATCH',

@@ -7,7 +7,9 @@ const nextConfig = {
   },
   experimental: {
     // Reduce hydration mismatches
-    optimizeCss: true,
+    // NOTE: disable optimizeCss in development to avoid CSS preloading warnings
+    // (some dev servers may emit preload tags that are not used immediately).
+    optimizeCss: false,
   },
   async rewrites() {
     return [

@@ -3,7 +3,7 @@ from app import db
 from app.models import (
     User, Admin, ContentWriter, HealthProvider, Appointment, 
     ContentItem, SystemLog, Analytics, Notification, CycleLog, MealLog, Feedback,
-    Course, Module, Chapter, ContentCategory
+    Course, Module, Chapter, ContentCategory, Parent, Adolescent
 )
 # Note: Course, Module, Chapter, ContentCategory are imported above and will be available globally
 from app.auth.middleware import (
@@ -464,7 +464,76 @@ def change_user_role(user_id):
         
         user = User.query.get_or_404(user_id)
         old_type = user.user_type
+        
+        # If the role is not changing, just return success
+        if old_type == new_user_type:
+            return jsonify({
+                'message': 'User already has this role',
+                'user_type': new_user_type
+            }), 200
+        
+        # Update user type
         user.user_type = new_user_type
+        
+        # Create the appropriate profile for the new role if it doesn't exist
+        if new_user_type == 'admin':
+            # Check if admin profile already exists
+            admin_profile = Admin.query.filter_by(user_id=user.id).first()
+            if not admin_profile:
+                admin_profile = Admin(
+                    user_id=user.id,
+                    permissions=json.dumps(['all']),  # Grant full permissions by default
+                    department=data.get('department', 'General')
+                )
+                db.session.add(admin_profile)
+                current_app.logger.info(f"Created admin profile for user {user_id}")
+        
+        elif new_user_type == 'content_writer':
+            # Check if content writer profile already exists
+            writer_profile = ContentWriter.query.filter_by(user_id=user.id).first()
+            if not writer_profile:
+                writer_profile = ContentWriter(
+                    user_id=user.id,
+                    bio=data.get('bio', ''),
+                    expertise=data.get('expertise', ''),
+                    is_approved=True  # Auto-approve when admin changes role
+                )
+                db.session.add(writer_profile)
+                current_app.logger.info(f"Created content writer profile for user {user_id}")
+        
+        elif new_user_type == 'health_provider':
+            # Check if health provider profile already exists
+            provider_profile = HealthProvider.query.filter_by(user_id=user.id).first()
+            if not provider_profile:
+                provider_profile = HealthProvider(
+                    user_id=user.id,
+                    specialization=data.get('specialization', 'General Healthcare'),
+                    license_number=data.get('license_number', ''),
+                    bio=data.get('bio', ''),
+                    is_verified=True,  # Auto-verify when admin changes role
+                    is_available=True
+                )
+                db.session.add(provider_profile)
+                current_app.logger.info(f"Created health provider profile for user {user_id}")
+        
+        elif new_user_type == 'parent':
+            # Check if parent profile already exists
+            parent_profile = Parent.query.filter_by(user_id=user.id).first()
+            if not parent_profile:
+                parent_profile = Parent(user_id=user.id)
+                db.session.add(parent_profile)
+                current_app.logger.info(f"Created parent profile for user {user_id}")
+        
+        elif new_user_type == 'adolescent':
+            # Check if adolescent profile already exists
+            adolescent_profile = Adolescent.query.filter_by(user_id=user.id).first()
+            if not adolescent_profile:
+                adolescent_profile = Adolescent(
+                    user_id=user.id,
+                    date_of_birth=data.get('date_of_birth')
+                )
+                db.session.add(adolescent_profile)
+                current_app.logger.info(f"Created adolescent profile for user {user_id}")
         
         db.session.commit()
         

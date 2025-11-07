@@ -136,7 +136,12 @@ class APIClient {
         method: 'POST',
         body: JSON.stringify(data)
       }),
-    getCurrentUser: () => this.request('/api/auth/me')
+    getCurrentUser: () => this.request('/api/auth/me'),
+    getProfile: () => this.request('/api/auth/profile'),
+    updateProfile: (data: any) => this.request('/api/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
   };
 
   // Content API (public)
