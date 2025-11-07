@@ -209,8 +209,11 @@ def get_profile():
         return jsonify({
             'id': user.id,
             'name': user.name,
+            'email': user.email,
             'phone_number': user.phone_number,
+            'phone': user.phone_number,  # Add phone alias for consistency
             'user_type': user.user_type,
+            'enable_pin_auth': user.enable_pin_auth,
             'created_at': user.created_at.isoformat(),
             **additional_info
         }), 200
@@ -233,6 +236,23 @@ def update_profile():
     # Update user fields
     if 'name' in data:
         user.name = data['name']
+    
+    # Update email if provided
+    if 'email' in data and data['email']:
+        # Check if email already exists for another user
+        existing_user = User.query.filter_by(email=data['email']).first()
+        if existing_user and existing_user.id != user.id:
+            return jsonify({'message': 'Email already in use'}), 400
+        user.email = data['email']
+    
+    # Update phone if provided
+    if 'phone' in data and data['phone']:
+        user.phone_number = data['phone']
+    
+    # Update age if provided (for adolescents)
+    if 'age' in data and user.user_type == 'adolescent':
+        # Age is stored in adolescent table via date_of_birth
+        pass  # Handle through date_of_birth calculation if needed
     
     # Update password if provided
     if 'password' in data:

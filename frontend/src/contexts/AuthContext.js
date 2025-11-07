@@ -44,7 +44,15 @@ export const AuthProvider = ({ children }) => {
       }
       const errorText = await response.text();
       console.error(`API Error: ${response.status}`, errorText);
-      throw new Error(`API Error: ${response.status}`);
+      
+      // For non-401 errors, throw a different error that won't trigger logout
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: errorText };
+      }
+      throw new Error(errorData.error || errorData.message || `API Error: ${response.status}`);
     }
 
     const contentType = response.headers.get('content-type');
@@ -77,13 +85,17 @@ export const AuthProvider = ({ children }) => {
           switch (userType) {
             case 'admin':
               // For admin, use basic auth profile (no separate admin profile endpoint exists)
+              console.log('Fetching admin profile from /api/auth/profile');
               profileData = await makeAuthenticatedRequest('/api/auth/profile');
+              console.log('Admin profile data received:', profileData);
               break;
             case 'content_writer':
-              profileData = await makeAuthenticatedRequest('/api/content-writer/profile');
+              const writerResponse = await makeAuthenticatedRequest('/api/content-writer/profile');
+              profileData = writerResponse.profile || writerResponse; // Handle nested profile
               break;
             case 'health_provider':
-              profileData = await makeAuthenticatedRequest('/api/health-provider/profile');
+              const providerResponse = await makeAuthenticatedRequest('/api/health-provider/profile');
+              profileData = providerResponse.profile || providerResponse; // Handle nested profile
               break;
             default:
               // For regular users (parent, adolescent), use basic auth profile endpoint
@@ -91,6 +103,7 @@ export const AuthProvider = ({ children }) => {
               break;
           }
 
+          console.log('Setting user with profile data:', profileData);
           setUser({
             ...profileData,
             user_type: userType,
@@ -98,11 +111,22 @@ export const AuthProvider = ({ children }) => {
           });
         } catch (err) {
           console.error('Failed to fetch user profile:', err);
-          // Clear invalid tokens
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          localStorage.removeItem('user_id');
-          localStorage.removeItem('user_type');
+          console.error('Error message:', err.message);
+          // Only clear tokens if it's an authentication error
+          // Don't logout for other errors (like 404 route not found)
+          if (err.message === 'Authentication expired') {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user_id');
+            localStorage.removeItem('user_type');
+          } else {
+            // For other errors, keep the user logged in with stored data
+            setUser({
+              user_id: localStorage.getItem('user_id'),
+              user_type: userType,
+              name: 'User', // Fallback data
+            });
+          }
         }
       }
       setLoading(false);
@@ -176,7 +200,9 @@ export const AuthProvider = ({ children }) => {
         clearTimeout(profileTimeoutId);
         
         if (profileResponse.ok) {
-          profileData = await profileResponse.json();
+          const rawProfileData = await profileResponse.json();
+          // Handle nested profile data for content_writer and health_provider
+          profileData = rawProfileData.profile || rawProfileData;
         } else {
           console.warn('Profile fetch failed, using basic user data');
           profileData = { user_id, user_type };
@@ -253,15 +279,18 @@ export const AuthProvider = ({ children }) => {
 
       // Refresh user data
       let profileData = null;
+      let rawData = null;
       switch (userType) {
         case 'admin':
           profileData = await makeAuthenticatedRequest('/api/auth/profile');
           break;
         case 'content_writer':
-          profileData = await makeAuthenticatedRequest('/api/content-writer/profile');
+          rawData = await makeAuthenticatedRequest('/api/content-writer/profile');
+          profileData = rawData.profile || rawData;
           break;
         case 'health_provider':
-          profileData = await makeAuthenticatedRequest('/api/health-provider/profile');
+          rawData = await makeAuthenticatedRequest('/api/health-provider/profile');
+          profileData = rawData.profile || rawData;
           break;
         default:
           profileData = await makeAuthenticatedRequest('/api/auth/profile');
