@@ -15,8 +15,42 @@ def get_cycle_logs():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
     
-    # Query cycle logs for the current user, ordered by start date descending
-    logs = CycleLog.query.filter_by(user_id=current_user_id)\
+    # Get optional user_id parameter for parent viewing child's data
+    requested_user_id = request.args.get('user_id', type=int)
+    target_user_id = current_user_id  # Default to current user
+    
+    # If requesting another user's data, verify parent-child relationship
+    if requested_user_id and requested_user_id != current_user_id:
+        from app.models import User, ParentChild, Parent, Adolescent
+        
+        # Check if current user is a parent
+        current_user = User.query.get(current_user_id)
+        if not current_user or current_user.user_type != 'parent':
+            return jsonify({'message': 'Only parents can view child data'}), 403
+        
+        # Get the Parent record for current user
+        parent = Parent.query.filter_by(user_id=current_user_id).first()
+        if not parent:
+            return jsonify({'message': 'Parent record not found'}), 404
+        
+        # Get the Adolescent record for the requested user
+        adolescent = Adolescent.query.filter_by(user_id=requested_user_id).first()
+        if not adolescent:
+            return jsonify({'message': 'Child record not found'}), 404
+        
+        # Verify parent-child relationship
+        parent_child = ParentChild.query.filter_by(
+            parent_id=parent.id,
+            adolescent_id=adolescent.id
+        ).first()
+        
+        if not parent_child:
+            return jsonify({'message': 'Access denied: No relationship found with this child'}), 403
+        
+        target_user_id = requested_user_id
+    
+    # Query cycle logs for the target user, ordered by start date descending
+    logs = CycleLog.query.filter_by(user_id=target_user_id)\
         .order_by(CycleLog.start_date.desc())\
         .paginate(page=page, per_page=per_page)
     
@@ -71,6 +105,34 @@ def create_cycle_log():
     current_user_id = get_jwt_identity()
     data = request.get_json()
     
+    # Get target user_id (for parent creating log for child)
+    target_user_id = data.get('user_id', current_user_id)
+    
+    # If creating for another user, verify parent-child relationship
+    if target_user_id != current_user_id:
+        from app.models import User, Parent, Adolescent, ParentChild
+        
+        # Check if current user is a parent
+        current_user = User.query.get(current_user_id)
+        if not current_user or current_user.user_type != 'parent':
+            return jsonify({'message': 'Only parents can create logs for children'}), 403
+        
+        # Get parent and adolescent records
+        parent = Parent.query.filter_by(user_id=current_user_id).first()
+        adolescent = Adolescent.query.filter_by(user_id=target_user_id).first()
+        
+        if not parent or not adolescent:
+            return jsonify({'message': 'Parent or child record not found'}), 404
+        
+        # Verify parent-child relationship
+        parent_child = ParentChild.query.filter_by(
+            parent_id=parent.id,
+            adolescent_id=adolescent.id
+        ).first()
+        
+        if not parent_child:
+            return jsonify({'message': 'Access denied: No relationship found with this child'}), 403
+    
     # Validate required fields
     if 'start_date' not in data:
         return jsonify({'message': 'Start date is required'}), 400
@@ -90,7 +152,7 @@ def create_cycle_log():
             symptoms_str = symptoms_raw
         # Create new cycle log
         new_log = CycleLog(
-            user_id=current_user_id,
+            user_id=target_user_id,
             start_date=start_date,
             end_date=end_date,
             cycle_length=data.get('cycle_length'),
@@ -112,7 +174,7 @@ def create_cycle_log():
             
             # Create notification
             notification = Notification(
-                user_id=current_user_id,
+                user_id=target_user_id,
                 message=f"Your next period is predicted to start on {next_cycle_date.strftime('%Y-%m-%d')}",
                 notification_type='cycle'
             )
@@ -210,11 +272,46 @@ def delete_cycle_log(log_id):
 @jwt_required()
 def get_cycle_stats():
     current_user_id = get_jwt_identity()
-    print(f"Cycle stats called for user: {current_user_id}")
     
-    # Get all cycle logs for the user
-    logs = CycleLog.query.filter_by(user_id=current_user_id).order_by(CycleLog.start_date).all()
-    print(f"Found {len(logs)} cycle logs for user {current_user_id}")
+    # Get optional user_id parameter for parent viewing child's data
+    requested_user_id = request.args.get('user_id', type=int)
+    target_user_id = current_user_id  # Default to current user
+    
+    # If requesting another user's data, verify parent-child relationship
+    if requested_user_id and requested_user_id != current_user_id:
+        from app.models import User, ParentChild, Parent, Adolescent
+        
+        # Check if current user is a parent
+        current_user = User.query.get(current_user_id)
+        if not current_user or current_user.user_type != 'parent':
+            return jsonify({'message': 'Only parents can view child data'}), 403
+        
+        # Get the Parent record for current user
+        parent = Parent.query.filter_by(user_id=current_user_id).first()
+        if not parent:
+            return jsonify({'message': 'Parent record not found'}), 404
+        
+        # Get the Adolescent record for the requested user
+        adolescent = Adolescent.query.filter_by(user_id=requested_user_id).first()
+        if not adolescent:
+            return jsonify({'message': 'Child record not found'}), 404
+        
+        # Verify parent-child relationship
+        parent_child = ParentChild.query.filter_by(
+            parent_id=parent.id,
+            adolescent_id=adolescent.id
+        ).first()
+        
+        if not parent_child:
+            return jsonify({'message': 'Access denied: No relationship found with this child'}), 403
+        
+        target_user_id = requested_user_id
+    
+    print(f"Cycle stats called for user: {target_user_id} (requested by: {current_user_id})")
+    
+    # Get all cycle logs for the target user
+    logs = CycleLog.query.filter_by(user_id=target_user_id).order_by(CycleLog.start_date).all()
+    print(f"Found {len(logs)} cycle logs for user {target_user_id}")
     
     if not logs:
         print("No cycle logs found, returning empty stats")
@@ -268,7 +365,41 @@ def get_calendar_data():
     year = request.args.get('year', datetime.now().year, type=int)
     month = request.args.get('month', datetime.now().month, type=int)
     
-    print(f"Calendar data requested for user {current_user_id}, {year}-{month:02d}")
+    # Get optional user_id parameter for parent viewing child's data
+    requested_user_id = request.args.get('user_id', type=int)
+    target_user_id = current_user_id  # Default to current user
+    
+    # If requesting another user's data, verify parent-child relationship
+    if requested_user_id and requested_user_id != current_user_id:
+        from app.models import User, ParentChild, Parent, Adolescent
+        
+        # Check if current user is a parent
+        current_user = User.query.get(current_user_id)
+        if not current_user or current_user.user_type != 'parent':
+            return jsonify({'message': 'Only parents can view child data'}), 403
+        
+        # Get the Parent record for current user
+        parent = Parent.query.filter_by(user_id=current_user_id).first()
+        if not parent:
+            return jsonify({'message': 'Parent record not found'}), 404
+        
+        # Get the Adolescent record for the requested user
+        adolescent = Adolescent.query.filter_by(user_id=requested_user_id).first()
+        if not adolescent:
+            return jsonify({'message': 'Child record not found'}), 404
+        
+        # Verify parent-child relationship
+        parent_child = ParentChild.query.filter_by(
+            parent_id=parent.id,
+            adolescent_id=adolescent.id
+        ).first()
+        
+        if not parent_child:
+            return jsonify({'message': 'Access denied: No relationship found with this child'}), 403
+        
+        target_user_id = requested_user_id
+    
+    print(f"Calendar data requested for user {target_user_id} (requested by: {current_user_id}), {year}-{month:02d}")
     
     # Get start and end dates for the month
     from calendar import monthrange
@@ -284,8 +415,8 @@ def get_calendar_data():
     
     print(f"Calendar range: {start_calendar} to {end_calendar}")
     
-    # Get all cycle logs for the user
-    logs = CycleLog.query.filter_by(user_id=current_user_id).all()
+    # Get all cycle logs for the target user
+    logs = CycleLog.query.filter_by(user_id=target_user_id).all()
     
     # Calculate average cycle length for predictions
     cycle_lengths = [log.cycle_length for log in logs if log.cycle_length]

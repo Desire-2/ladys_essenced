@@ -18,11 +18,11 @@ export const CycleProvider = ({ children }) => {
   });
 
   // Fetch cycle logs
-  const fetchCycleLogs = async (page = 1, perPage = 10) => {
+  const fetchCycleLogs = async (page = 1, perPage = 10, userId = null) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await cycleAPI.getLogs(page, perPage);
+      const response = await cycleAPI.getLogs(page, perPage, userId);
       setCycleLogs(response.data.items);
       setPagination({
         currentPage: response.data.current_page,
@@ -39,11 +39,11 @@ export const CycleProvider = ({ children }) => {
   };
 
   // Fetch cycle statistics
-  const fetchCycleStats = async () => {
+  const fetchCycleStats = async (userId = null) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await cycleAPI.getStats();
+      const response = await cycleAPI.getStats(userId);
       setCycleStats(response.data);
       return response.data;
     } catch (err) {

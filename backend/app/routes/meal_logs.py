@@ -18,8 +18,39 @@ def get_meal_logs():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     
+    # Get optional user_id parameter for parent viewing child's data
+    requested_user_id = request.args.get('user_id', type=int)
+    target_user_id = current_user_id  # Default to current user
+    
+    # If requesting another user's data, verify parent-child relationship
+    if requested_user_id and requested_user_id != current_user_id:
+        from app.models import User, Parent, Adolescent, ParentChild
+        
+        # Check if current user is a parent
+        current_user = User.query.get(current_user_id)
+        if not current_user or current_user.user_type != 'parent':
+            return jsonify({'message': 'Only parents can view child data'}), 403
+        
+        # Get parent and adolescent records
+        parent = Parent.query.filter_by(user_id=current_user_id).first()
+        adolescent = Adolescent.query.filter_by(user_id=requested_user_id).first()
+        
+        if not parent or not adolescent:
+            return jsonify({'message': 'Parent or child record not found'}), 404
+        
+        # Verify parent-child relationship
+        parent_child = ParentChild.query.filter_by(
+            parent_id=parent.id,
+            adolescent_id=adolescent.id
+        ).first()
+        
+        if not parent_child:
+            return jsonify({'message': 'Access denied: No relationship found with this child'}), 403
+        
+        target_user_id = requested_user_id
+    
     # Base query
-    query = MealLog.query.filter_by(user_id=current_user_id)
+    query = MealLog.query.filter_by(user_id=target_user_id)
     
     # Apply filters if provided
     if meal_type:
@@ -97,6 +128,34 @@ def create_meal_log():
     current_user_id = get_jwt_identity()
     data = request.get_json()
     
+    # Get target user_id (for parent creating log for child)
+    target_user_id = data.get('user_id', current_user_id)
+    
+    # If creating for another user, verify parent-child relationship
+    if target_user_id != current_user_id:
+        from app.models import User, Parent, Adolescent, ParentChild
+        
+        # Check if current user is a parent
+        current_user = User.query.get(current_user_id)
+        if not current_user or current_user.user_type != 'parent':
+            return jsonify({'message': 'Only parents can create logs for children'}), 403
+        
+        # Get parent and adolescent records
+        parent = Parent.query.filter_by(user_id=current_user_id).first()
+        adolescent = Adolescent.query.filter_by(user_id=target_user_id).first()
+        
+        if not parent or not adolescent:
+            return jsonify({'message': 'Parent or child record not found'}), 404
+        
+        # Verify parent-child relationship
+        parent_child = ParentChild.query.filter_by(
+            parent_id=parent.id,
+            adolescent_id=adolescent.id
+        ).first()
+        
+        if not parent_child:
+            return jsonify({'message': 'Access denied: No relationship found with this child'}), 403
+    
     # Validate required fields
     required_fields = ['meal_type', 'meal_time', 'description']
     for field in required_fields:
@@ -127,7 +186,7 @@ def create_meal_log():
         
         # Create new meal log
         new_log = MealLog(
-            user_id=current_user_id,
+            user_id=target_user_id,
             meal_type=data['meal_type'],
             meal_time=meal_time,
             description=data['description'],

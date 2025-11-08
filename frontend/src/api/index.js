@@ -100,33 +100,47 @@ export const authAPI = {
 
 // Cycle Tracking API
 export const cycleAPI = {
-  getLogs: (page = 1, perPage = 10) => api.get(`/api/cycle-logs/?page=${page}&per_page=${perPage}`),
+  getLogs: (page = 1, perPage = 10, userId = null) => {
+    let url = `/api/cycle-logs/?page=${page}&per_page=${perPage}`;
+    if (userId) url += `&user_id=${userId}`;
+    return api.get(url);
+  },
   getLog: (id) => api.get(`/api/cycle-logs/${id}`),
   createLog: (logData) => api.post('/api/cycle-logs/', logData),
   updateLog: (id, logData) => api.put(`/api/cycle-logs/${id}`, logData),
   deleteLog: (id) => api.delete(`/api/cycle-logs/${id}`),
-  getStats: () => api.get('/api/cycle-logs/stats'),
-  getCalendarData: (year, month) => api.get(`/api/cycle-logs/calendar?year=${year}&month=${month}`),
+  getStats: (userId = null) => {
+    let url = '/api/cycle-logs/stats';
+    if (userId) url += `?user_id=${userId}`;
+    return api.get(url);
+  },
+  getCalendarData: (year, month, userId = null) => {
+    let url = `/api/cycle-logs/calendar?year=${year}&month=${month}`;
+    if (userId) url += `&user_id=${userId}`;
+    return api.get(url);
+  },
 };
 
 // Meal Logging API
 export const mealAPI = {
-  getLogs: (page = 1, perPage = 10, filters = {}) => {
+  getLogs: (page = 1, perPage = 10, filters = {}, userId = null) => {
     let url = `/api/meal-logs/?page=${page}&per_page=${perPage}`;
     if (filters.mealType) url += `&meal_type=${filters.mealType}`;
     if (filters.startDate) url += `&start_date=${filters.startDate}`;
     if (filters.endDate) url += `&end_date=${filters.endDate}`;
+    if (userId) url += `&user_id=${userId}`;
     return api.get(url);
   },
   getLog: (id) => api.get(`/api/meal-logs/${id}`),
   createLog: (logData) => api.post('/api/meal-logs/', logData),
   updateLog: (id, logData) => api.put(`/api/meal-logs/${id}`, logData),
   deleteLog: (id) => api.delete(`/api/meal-logs/${id}`),
-  getStats: (filters = {}) => {
+  getStats: (filters = {}, userId = null) => {
     let url = '/api/meal-logs/stats';
     const params = new URLSearchParams();
     if (filters.startDate) params.append('start_date', filters.startDate);
     if (filters.endDate) params.append('end_date', filters.endDate);
+    if (userId) params.append('user_id', userId);
     if (params.toString()) url += `?${params.toString()}`;
     return api.get(url);
   },
@@ -160,7 +174,11 @@ export const appointmentAPI = {
   createAppointment: (appointmentData) => api.post('/api/appointments/test/create', appointmentData),
   updateAppointment: (id, appointmentData) => api.put(`/api/appointments/${id}`, appointmentData),
   deleteAppointment: (id) => api.delete(`/api/appointments/${id}`),
-  getUpcoming: () => api.get('/api/appointments/test/upcoming'),
+  getUpcoming: (userId = null) => {
+    let url = '/api/appointments/test/upcoming';
+    if (userId) url += `?user_id=${userId}`;
+    return api.get(url);
+  },
 };
 
 // Notifications API

@@ -114,9 +114,33 @@ export default function Dashboard() {
   const [childName, setChildName] = useState('');
   const [childDob, setChildDob] = useState('');
   const [relationshipType, setRelationshipType] = useState('');
+  const [childPhoneNumber, setChildPhoneNumber] = useState('');
+  const [childPassword, setChildPassword] = useState('');
   const [isEditingChild, setIsEditingChild] = useState(false);
   const [editingChildId, setEditingChildId] = useState<number | null>(null);
   const [childFormError, setChildFormError] = useState('');
+  const [childFormSuccess, setChildFormSuccess] = useState('');
+  
+  // View child modal state
+  const [viewingChild, setViewingChild] = useState<any>(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+
+  // Generate random phone number for child
+  const generateRandomPhone = () => {
+    const prefix = '250'; // Rwanda country code
+    const randomDigits = Math.floor(Math.random() * 900000000) + 100000000; // 9 digits
+    return `${prefix}${randomDigits}`;
+  };
+
+  // Generate random password for child
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
+    let password = '';
+    for (let i = 0; i < 10; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  };
 
   const router = useRouter();
 
@@ -258,8 +282,9 @@ export default function Dashboard() {
     clearDataError('cycle');
     
     try {
-      console.log('Dashboard: loading cycle data...');
-      const cycleResponse = await cycleAPI.getStats();
+      console.log('Dashboard: loading cycle data for user:', selectedChild || user.id);
+      // @ts-ignore - cycleAPI.getStats accepts number | null
+      const cycleResponse = await cycleAPI.getStats(selectedChild);
       
       const transformedCycleData = {
         nextPeriod: cycleResponse.data.next_period_prediction 
@@ -296,8 +321,9 @@ export default function Dashboard() {
     clearDataError('meals');
     
     try {
-      console.log('Dashboard: loading recent meals...');
-      const mealsResponse = await mealAPI.getLogs(1, 5);
+      console.log('Dashboard: loading recent meals for user:', selectedChild || user.id);
+      // @ts-ignore - mealAPI.getLogs accepts userId parameter
+      const mealsResponse = await mealAPI.getLogs(1, 5, {}, selectedChild);
       setRecentMeals(mealsResponse.data.logs || []);
       setDataAvailable('meals', true);
       console.log('Dashboard: meals loaded', mealsResponse.data.logs);
@@ -317,8 +343,9 @@ export default function Dashboard() {
     clearDataError('appointments');
     
     try {
-      console.log('Dashboard: loading appointments...');
-      const appointmentsResponse = await appointmentAPI.getUpcoming();
+      console.log('Dashboard: loading appointments for user:', selectedChild || user.id);
+      // @ts-ignore - appointmentAPI.getUpcoming accepts userId parameter
+      const appointmentsResponse = await appointmentAPI.getUpcoming(selectedChild);
       setUpcomingAppointments(appointmentsResponse.data || []);
       setDataAvailable('appointments', true);
       console.log('Dashboard: appointments loaded', appointmentsResponse.data);
@@ -361,10 +388,11 @@ export default function Dashboard() {
     
     try {
       const targetDate = year && month ? new Date(year, month - 1) : currentDate;
-      const response = await cycleAPI.getCalendarData(targetDate.getFullYear(), targetDate.getMonth() + 1);
+      // @ts-ignore - cycleAPI.getCalendarData accepts number | null
+      const response = await cycleAPI.getCalendarData(targetDate.getFullYear(), targetDate.getMonth() + 1, selectedChild);
       setCalendarData(response.data);
       setDataAvailable('calendar', true);
-      console.log('Calendar data loaded:', response.data);
+      console.log('Calendar data loaded for user:', selectedChild || user.id, response.data);
     } catch (err: any) {
       console.error('Failed to load calendar data:', err);
       setDataError('calendar', err.response?.data?.message || 'Failed to load calendar data');
@@ -391,7 +419,31 @@ export default function Dashboard() {
     if (user && activeTab === 'cycle') {
       loadCalendarData();
     }
-  }, [user, activeTab]);
+  }, [user, activeTab, selectedChild]);
+
+  // Reload cycle data when selectedChild changes
+  useEffect(() => {
+    if (user) {
+      console.log('Dashboard: selectedChild changed, reloading cycle data for:', selectedChild || user.id);
+      loadCycleData();
+    }
+  }, [selectedChild, user]);
+
+  // Reload meals data when selectedChild changes
+  useEffect(() => {
+    if (user) {
+      console.log('Dashboard: selectedChild changed, reloading meals data for:', selectedChild || user.id);
+      loadMealsData();
+    }
+  }, [selectedChild, user]);
+
+  // Reload appointments data when selectedChild changes
+  useEffect(() => {
+    if (user) {
+      console.log('Dashboard: selectedChild changed, reloading appointments data for:', selectedChild || user.id);
+      loadAppointmentsData();
+    }
+  }, [selectedChild, user]);
 
   // Handle form submissions
   const handleCycleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -463,25 +515,43 @@ export default function Dashboard() {
   const handleChildFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setChildFormError('');
+    setChildFormSuccess('');
+    
     try {
       if (isEditingChild && editingChildId) {
-        const response = await parentAPI.updateChild(editingChildId, {
+        await parentAPI.updateChild(editingChildId, {
           name: childName,
           date_of_birth: childDob,
-          relationship_type: relationshipType
+          relationship_type: relationshipType,
+          phone_number: childPhoneNumber,
+          password: childPassword
         });
-        setChildren(children.map(c => c.id === editingChildId ? response.data : c));
+        setChildFormSuccess('Child information updated successfully!');
       } else {
-        const response = await parentAPI.addChild({
+        await parentAPI.addChild({
           name: childName,
           date_of_birth: childDob,
-          relationship_type: relationshipType
+          relationship_type: relationshipType,
+          phone_number: childPhoneNumber || generateRandomPhone(),
+          password: childPassword || generateRandomPassword()
         });
-        setChildren([...children, response.data]);
+        setChildFormSuccess('Child added successfully!');
       }
-      // reset form
-      setChildName(''); setChildDob(''); setRelationshipType('');
-      setIsEditingChild(false); setEditingChildId(null);
+      
+      // Reset form
+      setChildName(''); 
+      setChildDob(''); 
+      setRelationshipType('');
+      setChildPhoneNumber('');
+      setChildPassword('');
+      setIsEditingChild(false); 
+      setEditingChildId(null);
+      
+      // Refresh children list
+      await loadChildrenData();
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setChildFormSuccess(''), 3000);
     } catch (err: any) {
       setChildFormError(err.response?.data?.message || 'Failed to save child');
     }
@@ -494,10 +564,34 @@ export default function Dashboard() {
     setChildName(child.name);
     setChildDob(child.date_of_birth?.split('T')[0] || '');
     setRelationshipType(child.relationship || '');
+    setChildPhoneNumber(child.phone_number || '');
+    setChildPassword(''); // Don't show password when editing
   };
+  
+  const viewChild = (child: any) => {
+    setViewingChild(child);
+    setShowViewModal(true);
+  };
+  
+  const closeViewModal = () => {
+    setShowViewModal(false);
+    setViewingChild(null);
+  };
+  
   const deleteChild = async (id: number) => {
-    await parentAPI.deleteChild(id);
-    setChildren(children.filter(c => c.id !== id));
+    try {
+      setChildFormError('');
+      setChildFormSuccess('');
+      await parentAPI.deleteChild(id);
+      // Refresh children list after deletion
+      await loadChildrenData();
+      setChildFormSuccess('Child removed successfully!');
+      // Clear success message after 3 seconds
+      setTimeout(() => setChildFormSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('Failed to delete child:', err);
+      setChildFormError(err.response?.data?.message || 'Failed to delete child');
+    }
   };
 
   // Reusable component for displaying data with loading and error states
@@ -803,8 +897,8 @@ export default function Dashboard() {
                   <button 
                     key={child.id}
                     type="button" 
-                    className={`btn btn-sm ${selectedChild === child.id ? 'btn-primary' : 'btn-outline-primary'} flex-fill flex-md-grow-0`}
-                    onClick={() => setSelectedChild(child.id)}
+                    className={`btn btn-sm ${selectedChild === child.user_id ? 'btn-primary' : 'btn-outline-primary'} flex-fill flex-md-grow-0`}
+                    onClick={() => setSelectedChild(child.user_id || null)}
                   >
                     {child.name}
                   </button>
@@ -908,7 +1002,7 @@ export default function Dashboard() {
                   icon="fas fa-calendar-alt"
                 >
                   {selectedChild && (
-                    <small className="text-muted d-block mb-2 mb-md-3">For: {children.find(c => c.id === selectedChild)?.name}</small>
+                    <small className="text-muted d-block mb-2 mb-md-3">For: {children.find(c => c.user_id === selectedChild)?.name}</small>
                   )}
                   {dataAvailability.cycle ? (
                     <>
@@ -1026,7 +1120,7 @@ export default function Dashboard() {
                   icon="fas fa-utensils"
                 >
                   {selectedChild && (
-                    <small className="text-muted d-block mb-2 mb-md-3">For: {children.find(c => c.id === selectedChild)?.name}</small>
+                    <small className="text-muted d-block mb-2 mb-md-3">For: {children.find(c => c.user_id === selectedChild)?.name}</small>
                   )}
                   {dataAvailability.meals ? (
                     recentMeals.length > 0 ? (
@@ -1160,7 +1254,7 @@ export default function Dashboard() {
               <div className="card-header">
                 <h3>Cycle Tracking</h3>
                 {selectedChild && (
-                  <small className="text-muted">For: {children.find(c => c.id === selectedChild)?.name}</small>
+                  <small className="text-muted">For: {children.find(c => c.user_id === selectedChild)?.name}</small>
                 )}
               </div>
               <div className="card-body">
@@ -1403,7 +1497,7 @@ export default function Dashboard() {
             <div className="card-header">
               <h3>Meal Logging</h3>
               {selectedChild && (
-                <small className="text-muted">For: {children.find(c => c.id === selectedChild)?.name}</small>
+                <small className="text-muted">For: {children.find(c => c.user_id === selectedChild)?.name}</small>
               )}
             </div>
             <div className="card-body">
@@ -1605,6 +1699,7 @@ export default function Dashboard() {
                     </div>
                     <div className="card-body">
                       {childFormError && <div className="alert alert-danger">{childFormError}</div>}
+                      {childFormSuccess && <div className="alert alert-success">{childFormSuccess}</div>}
                       <form onSubmit={handleChildFormSubmit}>
                         <div className="mb-3">
                           <label htmlFor="childName" className="form-label">Name</label>
@@ -1643,9 +1738,96 @@ export default function Dashboard() {
                             <option value="guardian">Guardian</option>
                           </select>
                         </div>
-                        <button type="submit" className="btn btn-primary">
-                          {isEditingChild ? 'Save Changes' : 'Add Child'}
-                        </button>
+                        
+                        {/* Phone Number Field */}
+                        <div className="mb-3">
+                          <label htmlFor="childPhoneNumber" className="form-label d-flex justify-content-between align-items-center">
+                            <span>Phone Number <small className="text-muted">(Optional - can be changed later)</small></span>
+                            <button 
+                              type="button" 
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={() => setChildPhoneNumber(generateRandomPhone())}
+                            >
+                              <i className="fas fa-sync-alt me-1"></i>
+                              Generate
+                            </button>
+                          </label>
+                          <input
+                            type="tel"
+                            id="childPhoneNumber"
+                            className="form-control"
+                            value={childPhoneNumber}
+                            onChange={e => setChildPhoneNumber(e.target.value)}
+                            placeholder="250XXXXXXXXX (leave empty for random)"
+                          />
+                          <small className="form-text text-muted">
+                            If left empty, a random phone number will be assigned that can be changed later when child gets a phone.
+                          </small>
+                        </div>
+
+                        {/* Password Field */}
+                        <div className="mb-3">
+                          <label htmlFor="childPassword" className="form-label d-flex justify-content-between align-items-center">
+                            <span>Password <small className="text-muted">(Optional - can be changed later)</small></span>
+                            <button 
+                              type="button" 
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={() => setChildPassword(generateRandomPassword())}
+                            >
+                              <i className="fas fa-key me-1"></i>
+                              Generate
+                            </button>
+                          </label>
+                          <input
+                            type="text"
+                            id="childPassword"
+                            className="form-control"
+                            value={childPassword}
+                            onChange={e => setChildPassword(e.target.value)}
+                            placeholder="Leave empty for random password"
+                          />
+                          <small className="form-text text-muted">
+                            If left empty, a random password will be generated. Child can change it later.
+                          </small>
+                        </div>
+
+                        <div className="d-flex gap-2">
+                          <button type="submit" className="btn btn-primary flex-grow-1">
+                            <i className={`fas ${isEditingChild ? 'fa-save' : 'fa-plus'} me-2`}></i>
+                            {isEditingChild ? 'Save Changes' : 'Add Child'}
+                          </button>
+                          
+                          {isEditingChild && (
+                            <button 
+                              type="button" 
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                setIsEditingChild(false);
+                                setEditingChildId(null);
+                                setChildName('');
+                                setChildDob('');
+                                setRelationshipType('');
+                                setChildPhoneNumber('');
+                                setChildPassword('');
+                                setChildFormError('');
+                                setChildFormSuccess('');
+                              }}
+                            >
+                              <i className="fas fa-times me-2"></i>
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                        
+                        {!isEditingChild && (
+                          <div className="alert alert-info mt-3 mb-0">
+                            <i className="fas fa-info-circle me-2"></i>
+                            <small>
+                              <strong>Note:</strong> If phone number and password are left empty, random credentials will be generated. 
+                              These can be updated later when the child gets their own phone.
+                            </small>
+                          </div>
+                        )}
                       </form>
                     </div>
                   </div>
@@ -1661,12 +1843,31 @@ export default function Dashboard() {
                             <li key={child.id} className="list-group-item d-flex justify-content-between align-items-center">
                               <div>
                                 <strong>{child.name}</strong><br/>
-                                <small>{child.date_of_birth ? new Date(child.date_of_birth).toLocaleDateString() : ''}</small><br/>
-                                <small className="text-muted">{child.relationship}</small>
+                                <small>{child.date_of_birth ? new Date(child.date_of_birth).toLocaleDateString() : 'No DOB'}</small><br/>
+                                <small className="text-muted">Relationship: {child.relationship}</small>
                               </div>
-                              <div>
-                                <button className="btn btn-sm btn-outline-primary me-2" onClick={() => startEditing(child)}>Edit</button>
-                                <button className="btn btn-sm btn-outline-danger" onClick={() => deleteChild(child.id)}>Delete</button>
+                              <div className="btn-group">
+                                <button 
+                                  className="btn btn-sm btn-outline-info" 
+                                  onClick={() => viewChild(child)}
+                                  title="View child information"
+                                >
+                                  <i className="fas fa-eye"></i>
+                                </button>
+                                <button 
+                                  className="btn btn-sm btn-outline-primary" 
+                                  onClick={() => startEditing(child)}
+                                  title="Edit child information"
+                                >
+                                  <i className="fas fa-edit"></i>
+                                </button>
+                                <button 
+                                  className="btn btn-sm btn-outline-danger" 
+                                  onClick={() => deleteChild(child.id)}
+                                  title="Remove child"
+                                >
+                                  <i className="fas fa-trash"></i>
+                                </button>
                               </div>
                             </li>
                           ))}
@@ -1680,6 +1881,162 @@ export default function Dashboard() {
                       )}
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* View Child Information Modal */}
+        {showViewModal && viewingChild && (
+          <div 
+            className="modal fade show d-block" 
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+            onClick={closeViewModal}
+          >
+            <div 
+              className="modal-dialog modal-dialog-centered"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    <i className="fas fa-user-circle me-2"></i>
+                    Child Information
+                  </h5>
+                  <button 
+                    type="button" 
+                    className="btn-close" 
+                    onClick={closeViewModal}
+                    aria-label="Close"
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <div className="row g-3">
+                    <div className="col-12">
+                      <div className="d-flex align-items-center mb-3">
+                        <div className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                             style={{ width: '60px', height: '60px', fontSize: '24px' }}>
+                          <i className="fas fa-user"></i>
+                        </div>
+                        <div className="ms-3">
+                          <h4 className="mb-0">{viewingChild.name}</h4>
+                          <small className="text-muted">ID: {viewingChild.id}</small>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-6">
+                      <label className="form-label fw-bold text-muted small">Date of Birth</label>
+                      <div className="input-group">
+                        <span className="input-group-text">
+                          <i className="fas fa-calendar"></i>
+                        </span>
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          value={viewingChild.date_of_birth ? new Date(viewingChild.date_of_birth).toLocaleDateString() : 'Not set'} 
+                          readOnly 
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-6">
+                      <label className="form-label fw-bold text-muted small">Age</label>
+                      <div className="input-group">
+                        <span className="input-group-text">
+                          <i className="fas fa-birthday-cake"></i>
+                        </span>
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          value={viewingChild.date_of_birth 
+                            ? `${Math.floor((new Date().getTime() - new Date(viewingChild.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))} years`
+                            : 'N/A'
+                          } 
+                          readOnly 
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-6">
+                      <label className="form-label fw-bold text-muted small">Relationship</label>
+                      <div className="input-group">
+                        <span className="input-group-text">
+                          <i className="fas fa-heart"></i>
+                        </span>
+                        <input 
+                          type="text" 
+                          className="form-control text-capitalize" 
+                          value={viewingChild.relationship || 'Not specified'} 
+                          readOnly 
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-6">
+                      <label className="form-label fw-bold text-muted small">Phone Number</label>
+                      <div className="input-group">
+                        <span className="input-group-text">
+                          <i className="fas fa-phone"></i>
+                        </span>
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          value={viewingChild.phone_number || 'Not set'} 
+                          readOnly 
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="col-12">
+                      <label className="form-label fw-bold text-muted small">User ID</label>
+                      <div className="input-group">
+                        <span className="input-group-text">
+                          <i className="fas fa-id-card"></i>
+                        </span>
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          value={viewingChild.user_id || 'N/A'} 
+                          readOnly 
+                        />
+                      </div>
+                      <small className="text-muted">This ID is used for tracking child's health data</small>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button 
+                    type="button" 
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setSelectedChild(viewingChild.user_id || null);
+                      closeViewModal();
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                  >
+                    <i className="fas fa-chart-line me-2"></i>
+                    View Dashboard
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      startEditing(viewingChild);
+                      closeViewModal();
+                    }}
+                  >
+                    <i className="fas fa-edit me-2"></i>
+                    Edit
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-outline-secondary" 
+                    onClick={closeViewModal}
+                  >
+                    Close
+                  </button>
                 </div>
               </div>
             </div>
