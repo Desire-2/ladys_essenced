@@ -578,6 +578,7 @@ export default function AdminDashboard() {
       setActionLoadingState(`user_details_${userId}`, true);
       const data = await makeApiCall(buildApiUrl(`/users/${userId}`));
       setSelectedUserDetails(data);
+      setShowUserDetailsModal(true); // Open the modal after loading data
     } catch (err: any) {
       console.error('Failed to load user details:', err);
       showToast('error', err.message || 'Failed to load user details');
@@ -3193,8 +3194,8 @@ export default function AdminDashboard() {
                       <input type="text" className="form-control" name="name" />
                     </div>
                     <div className="col-md-6">
-                      <label className="form-label">Email *</label>
-                      <input type="email" className="form-control" name="email" required />
+                      <label className="form-label">Email</label>
+                      <input type="email" className="form-control" name="email" />
                     </div>
                     <div className="col-md-6">
                       <label className="form-label">Phone Number</label>

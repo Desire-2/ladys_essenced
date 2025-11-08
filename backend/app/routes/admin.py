@@ -249,14 +249,16 @@ def create_user():
         data = request.get_json()
         
         # Validate required fields
-        required_fields = ['name', 'phone_number', 'email', 'user_type', 'password']
+        required_fields = ['name', 'phone_number', 'user_type', 'password']
         for field in required_fields:
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
         
         # Check if user already exists
-        if User.query.filter_by(email=data['email']).first():
-            return jsonify({'error': 'User with this email already exists'}), 400
+        # Only check email uniqueness if email is provided and not empty
+        if data.get('email') and data['email'].strip():
+            if User.query.filter_by(email=data['email']).first():
+                return jsonify({'error': 'User with this email already exists'}), 400
         
         if User.query.filter_by(phone_number=data['phone_number']).first():
             return jsonify({'error': 'User with this phone number already exists'}), 400
@@ -264,10 +266,17 @@ def create_user():
         # Create new user
         from app import bcrypt
         
+        # Handle optional email - set to None if not provided or empty
+        email_value = data.get('email')
+        if email_value and email_value.strip():
+            email_value = email_value.strip()
+        else:
+            email_value = None
+        
         user = User(
             name=data['name'],
             phone_number=data['phone_number'],
-            email=data['email'],
+            email=email_value,
             user_type=data['user_type'],
             is_active=data.get('is_active', True)
         )

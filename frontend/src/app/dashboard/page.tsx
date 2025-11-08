@@ -813,7 +813,7 @@ export default function Dashboard() {
           </div>
         )}
         
-        {/* Dashboard Navigation - Overview Only */}
+        {/* Dashboard Navigation */}
         <div className="card mb-4">
           <div className="card-body">
             <ul className="nav nav-tabs">
@@ -826,9 +826,59 @@ export default function Dashboard() {
                     setActiveTab('overview');
                   }}
                 >
-                  Overview
+                  <i className="fas fa-home me-2"></i>Overview
                 </a>
               </li>
+              <li className="nav-item">
+                <a 
+                  className={`nav-link ${activeTab === 'cycle' ? 'active' : ''}`} 
+                  href="#" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActiveTab('cycle');
+                  }}
+                >
+                  <i className="fas fa-calendar-alt me-2"></i>Cycle Tracking
+                </a>
+              </li>
+              <li className="nav-item">
+                <a 
+                  className={`nav-link ${activeTab === 'meals' ? 'active' : ''}`} 
+                  href="#" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActiveTab('meals');
+                  }}
+                >
+                  <i className="fas fa-utensils me-2"></i>Meal Logs
+                </a>
+              </li>
+              <li className="nav-item">
+                <a 
+                  className={`nav-link ${activeTab === 'appointments' ? 'active' : ''}`} 
+                  href="#" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActiveTab('appointments');
+                  }}
+                >
+                  <i className="fas fa-calendar-check me-2"></i>Appointments
+                </a>
+              </li>
+              {user?.user_type === 'parent' && (
+                <li className="nav-item">
+                  <a 
+                    className={`nav-link ${activeTab === 'children' ? 'active' : ''}`} 
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setActiveTab('children');
+                    }}
+                  >
+                    <i className="fas fa-users me-2"></i>Manage Children
+                  </a>
+                </li>
+              )}
             </ul>
           </div>
         </div>
@@ -1091,7 +1141,7 @@ export default function Dashboard() {
         )}
 
         {/* Cycle Tracking Tab */}
-        {activeTab === 'cycle' && selectedChild && (
+        {activeTab === 'cycle' && (
           <div>
             <div className="card">
               <div className="card-header">

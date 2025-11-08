@@ -30,8 +30,15 @@ def create_test_appointment():
         except ValueError:
             return jsonify({'error': 'Invalid appointment date format. Use ISO format.'}), 400
         
-        # Create appointment with demo user (user_id=1)
-        demo_user_id = data.get('for_user_id', 1)
+        # Get user ID - prefer for_user_id from request, or find first available user
+        demo_user_id = data.get('for_user_id')
+        
+        # If no user_id provided or user doesn't exist, find first available user
+        if not demo_user_id or not User.query.get(demo_user_id):
+            first_user = User.query.first()
+            if not first_user:
+                return jsonify({'error': 'No users found in the system. Please create a user first.'}), 400
+            demo_user_id = first_user.id
         
         new_appointment = Appointment(
             user_id=demo_user_id,
@@ -303,14 +310,31 @@ def get_test_upcoming_appointments():
     """Test endpoint to get upcoming appointments without authentication"""
     try:
         # Get demo user appointments or use user_id from query param
-        demo_user_id = request.args.get('user_id', 1, type=int)
+        demo_user_id = request.args.get('user_id', type=int)
         
         # Get upcoming appointments (from today forward)
         today = datetime.now().date()
-        appointments = Appointment.query.filter(
-            Appointment.user_id == demo_user_id,
-            Appointment.appointment_date >= today
-        ).order_by(Appointment.appointment_date).limit(5).all()
+        
+        # If no user_id specified, find first user with appointments or just get all upcoming
+        if demo_user_id:
+            appointments = Appointment.query.filter(
+                Appointment.user_id == demo_user_id,
+                Appointment.appointment_date >= today
+            ).order_by(Appointment.appointment_date).limit(5).all()
+        else:
+            # Find first user with appointments
+            first_appointment = Appointment.query.filter(
+                Appointment.appointment_date >= today
+            ).order_by(Appointment.appointment_date).first()
+            
+            if first_appointment:
+                demo_user_id = first_appointment.user_id
+                appointments = Appointment.query.filter(
+                    Appointment.user_id == demo_user_id,
+                    Appointment.appointment_date >= today
+                ).order_by(Appointment.appointment_date).limit(5).all()
+            else:
+                appointments = []
         
         # Format the response
         result = [{

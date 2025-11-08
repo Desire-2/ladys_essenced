@@ -74,39 +74,58 @@ const enhancedStyles = `
   margin-bottom: 0.2rem;
 }
 .calendar-day {
-  min-height: 70px;
+  min-height: 80px;
   background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(52, 73, 94, 0.04);
+  border-radius: 8px;
   cursor: pointer;
   transition: box-shadow 0.2s, background 0.2s, transform 0.1s;
   position: relative;
-  border: 2px solid transparent;
+  border: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 .calendar-day:hover, .calendar-day:focus {
-  box-shadow: 0 4px 16px rgba(155, 89, 182, 0.13);
-  background: #f9e7f7;
-  border: 2px solid #a569bd;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 2;
-  transform: scale(1.04);
+  transform: scale(1.02);
 }
 .calendar-day.today {
-  border: 2px solid #f39c12;
-  background: #fffbe6;
+  border: 3px solid #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
 }
 .calendar-day.period-day {
-  background: #fdeef0;
-  border: 2px solid #e74c3c;
+  background: #dc3545;
+  color: #fff;
+  border: 1px solid #c82333;
 }
 .calendar-day.ovulation-day {
-  background: #fff7e6;
-  border: 2px solid #f39c12;
+  background: #ffc107;
+  color: #000;
+  border: 1px solid #e0a800;
 }
 .calendar-day.high-fertility {
-  box-shadow: 0 0 0 2px #f9e79f inset;
+  background: #ffc107;
+  color: #000;
+  border: 1px solid #e0a800;
 }
-.calendar-day.medium-fertility {
-  box-shadow: 0 0 0 2px #d6eaf8 inset;
+.calendar-day.safe-day {
+  background: #28a745;
+  color: #fff;
+  border: 1px solid #218838;
+}
+.calendar-day.logged {
+  position: relative;
+}
+.calendar-day.logged::after {
+  content: '✓';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  font-size: 14px;
+  font-weight: bold;
+  color: inherit;
 }
 .calendar-day .day-content {
   display: flex;
@@ -117,17 +136,17 @@ const enhancedStyles = `
   padding: 0.2rem 0.1rem;
 }
   .day-number {
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     font-weight: 700;
-    color: #e67e22; /* Changed from purple to a vibrant orange for better visibility */
-    text-shadow: 0 1px 2px #fff6, 0 0px 2px #e67e221a;
+    color: inherit;
     letter-spacing: 0.5px;
     transition: color 0.2s;
   }
 .cycle-day {
-  font-size: 0.85rem;
-  color: #a569bd;
-  margin-bottom: 0.1rem;
+  font-size: 0.75rem;
+  color: inherit;
+  opacity: 0.8;
+  margin-top: 2px;
 }
 .fertility-indicator {
   font-size: 1.1rem;
@@ -165,61 +184,113 @@ const enhancedStyles = `
   background: #f8fafc;
   border-radius: 12px;
   box-shadow: 0 1px 8px rgba(52, 73, 94, 0.04);
-  padding: 1.2rem 1rem 1.2rem 1rem;
+  padding: 1.2rem 1rem;
   margin-top: 2rem;
 }
 .legend-title {
-  color: #7d3c98;
-  font-weight: 600;
+  color: #333;
+  font-weight: 700;
   font-size: 1.1rem;
+  margin-bottom: 1rem;
 }
 .legend-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem 0;
-}
-.legend-col {
-  flex: 1 1 0;
-  min-width: 220px;
-}
-.legend-section-title {
-  font-weight: 700;
-  color: #a569bd;
-  margin-bottom: 0.5rem;
+  gap: 1rem;
+  align-items: center;
 }
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.4rem;
-  padding: 0.2rem 0.1rem;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
   border-radius: 6px;
   transition: background 0.2s;
 }
-.legend-item:focus, .legend-item:hover {
-  background: #f9e7f7;
-  outline: none;
-}
 .legend-color {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
   display: inline-block;
-  margin-right: 0.3rem;
+  border: 1px solid #ddd;
+}
+.legend-color.period {
+  background: #dc3545;
+}
+.legend-color.fertile {
+  background: #ffc107;
+}
+.legend-color.safe {
+  background: #28a745;
 }
 .legend-color.today {
-  background: #f39c12;
+  background: #fff;
+  border: 3px solid #3498db;
 }
-.legend-color.period-day {
-  background: #e74c3c;
+.legend-label {
+  font-size: 0.9rem;
+  color: #333;
+  font-weight: 500;
 }
-.phase-color {
-  border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-}
-.fertility-emoji {
+.legend-emoji {
   font-size: 1.2rem;
   margin-right: 0.3rem;
+}
+/* Recent Cycle History Styles */
+.recent-cycle-history {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.history-title {
+  color: #333;
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid #dc3545;
+  padding-left: 0.75rem;
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  border-left: 4px solid #dc3545;
+  transition: all 0.2s;
+}
+.history-item:hover {
+  background: #e9ecef;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transform: translateX(4px);
+}
+.history-date {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95rem;
+}
+.history-duration {
+  color: #495057;
+  font-size: 0.85rem;
+  background: #fff;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+.history-symptoms {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #6c757d;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+.history-symptoms i {
+  font-size: 0.75rem;
 }
 .upcoming-event {
   background: #fff;
@@ -469,8 +540,6 @@ const CycleCalendar: React.FC<CalendarProps> = ({
   showInsights = true
 }) => {
   const [selectedDay, setSelectedDay] = useState<DayDetailModal>({ day: null, isOpen: false });
-  const [view, setView] = useState<'calendar' | 'insights'>('calendar');
-  const [filterSymptoms, setFilterSymptoms] = useState<string[]>([]);
 
   // Inject enhanced styles into the document head on client-side only
   useEffect(() => {
@@ -558,19 +627,20 @@ const CycleCalendar: React.FC<CalendarProps> = ({
     
     if (!day.is_current_month) classes += ' other-month';
     if (day.is_today) classes += ' today';
-    if (day.is_period_day) classes += ' period-day';
-    if (day.is_period_start) classes += ' period-start';
-    if (day.is_period_end) classes += ' period-end';
-    if (day.is_ovulation_day) classes += ' ovulation-day';
     
-    // Add fertility classes
-    const fertility = getFertilityLevel(day.cycle_day);
-    if (fertility === 'high' && !day.is_period_day) classes += ' high-fertility';
-    if (fertility === 'medium' && !day.is_period_day) classes += ' medium-fertility';
+    // Determine day type based on cycle
+    if (day.is_period_day) {
+      classes += ' period-day';
+    } else if (day.is_ovulation_day || (day.cycle_day && day.cycle_day >= 12 && day.cycle_day <= 16)) {
+      classes += ' high-fertility ovulation-day';
+    } else if (day.cycle_day && ((day.cycle_day >= 1 && day.cycle_day <= 7) || day.cycle_day >= 19)) {
+      classes += ' safe-day';
+    }
     
-    // Add phase classes
-    const phase = getCurrentPhase(day.cycle_day);
-    if (phase) classes += ` phase-${phase.name.toLowerCase()}`;
+    // Add logged class if there's any data
+    if (day.symptoms.length > 0 || day.notes || day.flow_intensity || day.mood) {
+      classes += ' logged';
+    }
     
     return classes;
   };
@@ -621,11 +691,93 @@ const CycleCalendar: React.FC<CalendarProps> = ({
       .slice(0, 5);
   };
 
+  const getRecentCycles = () => {
+    if (!calendarData) return [];
+    
+    // Group period days into cycles
+    const cycles: Array<{
+      startDate: string;
+      endDate: string;
+      duration: string;
+      symptoms: string[];
+    }> = [];
+    
+    let currentCycle: CalendarDay[] = [];
+    
+    calendarData.days.forEach((day, index) => {
+      if (day.is_period_day) {
+        currentCycle.push(day);
+      } else if (currentCycle.length > 0) {
+        // End of a cycle
+        const startDate = new Date(currentCycle[0].date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        const endDate = new Date(currentCycle[currentCycle.length - 1].date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        const duration = `${currentCycle.length}d`;
+        
+        // Collect unique symptoms from the cycle
+        const symptomsSet = new Set<string>();
+        currentCycle.forEach(day => {
+          day.symptoms.forEach(symptom => symptomsSet.add(symptom.replace('_', ' ')));
+        });
+        
+        cycles.push({
+          startDate,
+          endDate,
+          duration,
+          symptoms: Array.from(symptomsSet).slice(0, 3) // Limit to 3 symptoms
+        });
+        
+        currentCycle = [];
+      }
+    });
+    
+    // Handle last cycle if it exists
+    if (currentCycle.length > 0) {
+      const startDate = new Date(currentCycle[0].date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+      const endDate = new Date(currentCycle[currentCycle.length - 1].date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+      const duration = `${currentCycle.length}d`;
+      
+      const symptomsSet = new Set<string>();
+      currentCycle.forEach(day => {
+        day.symptoms.forEach(symptom => symptomsSet.add(symptom.replace('_', ' ')));
+      });
+      
+      cycles.push({
+        startDate,
+        endDate,
+        duration,
+        symptoms: Array.from(symptomsSet).slice(0, 3)
+      });
+    }
+    
+    return cycles.slice(-3).reverse(); // Return last 3 cycles, most recent first
+  };
+
   return (
     <div className="cycle-calendar">
-      {/* Enhanced Header with Phase Info */}
+      {/* Enhanced Header */}
       <div className="calendar-header-enhanced">
-        <div className="d-flex justify-content-between align-items-center mb-3">
+        {/* Next Predicted Period Info Box */}
+        {calendarData?.stats?.next_predicted_period && (
+          <div className="alert alert-info mb-3 d-flex align-items-center">
+            <i className="fas fa-calendar-alt me-2"></i>
+            <strong>Next Predicted Period:</strong>
+            <span className="ms-2">
+              {new Date(calendarData.stats.next_predicted_period).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit' 
+              })}
+              {' to '}
+              {new Date(new Date(calendarData.stats.next_predicted_period).getTime() + 4 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit' 
+              })}
+            </span>
+          </div>
+        )}
+        
+        <div className="d-flex justify-content-between align-items-center">
           <button 
             className="btn btn-outline-primary btn-sm"
             onClick={() => onNavigateMonth('prev')}
@@ -634,20 +786,9 @@ const CycleCalendar: React.FC<CalendarProps> = ({
           </button>
           
           <div className="text-center">
-            <h5 className="mb-1">
+            <h5 className="mb-0">
               {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h5>
-            {getPhaseInfo() && (
-              <div className="current-phase">
-                <span 
-                  className="phase-indicator"
-                  style={{ backgroundColor: getPhaseInfo()?.phase.color }}
-                ></span>
-                <small className="text-muted">
-                  {getPhaseInfo()?.phase.name} Phase - Day {getPhaseInfo()?.dayInPhase}/{getPhaseInfo()?.totalDays}
-                </small>
-              </div>
-            )}
           </div>
           
           <button 
@@ -657,30 +798,10 @@ const CycleCalendar: React.FC<CalendarProps> = ({
             <i className="fas fa-chevron-right"></i>
           </button>
         </div>
-
-        {/* View Toggle */}
-        <div className="view-toggle mb-3">
-          <div className="btn-group w-100" role="group">
-            <button 
-              className={`btn ${view === 'calendar' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setView('calendar')}
-            >
-              <i className="fas fa-calendar-alt me-1"></i>
-              Calendar
-            </button>
-            <button 
-              className={`btn ${view === 'insights' ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => setView('insights')}
-            >
-              <i className="fas fa-chart-line me-1"></i>
-              Insights
-            </button>
-          </div>
-        </div>
       </div>
 
-      {view === 'calendar' ? (
-        <>
+      {/* Calendar View */}
+      <>
           {/* Calendar Grid */}
           <div className="calendar-grid">
             {/* Day headers */}
@@ -704,49 +825,6 @@ const CycleCalendar: React.FC<CalendarProps> = ({
                   >
                     <div className="day-content">
                       <div className="day-number">{day.day_of_month}</div>
-                      
-                      {day.cycle_day && (
-                        <div className="cycle-day">Day {day.cycle_day}</div>
-                      )}
-                      
-                      {/* Fertility indicator */}
-                      {day.cycle_day && (
-                        <div className={`fertility-indicator fertility-${getFertilityLevel(day.cycle_day)}`}>
-                          {getFertilityLevel(day.cycle_day) === 'high' && '🥚'}
-                          {getFertilityLevel(day.cycle_day) === 'medium' && '🌱'}
-                          {getFertilityLevel(day.cycle_day) === 'low' && '💧'}
-                        </div>
-                      )}
-
-                      {/* Flow intensity for period days */}
-                      {day.is_period_day && day.flow_intensity && (
-                        <div className="flow-intensity">
-                          {day.flow_intensity === 'heavy' && '🔴🔴🔴'}
-                          {day.flow_intensity === 'medium' && '🔴🔴'}
-                          {day.flow_intensity === 'light' && '🔴'}
-                        </div>
-                      )}
-
-                      {/* Mood indicator */}
-                      {day.mood && (
-                        <div className="mood-indicator">
-                          {moodEmojis[day.mood]}
-                        </div>
-                      )}
-                      
-                      {/* Symptoms */}
-                      {day.symptoms.length > 0 && (
-                        <div className="symptoms">
-                          {day.symptoms.slice(0, 3).map(symptom => (
-                            <span key={symptom} className="symptom-icon" title={symptom}>
-                              {symptomIcons[symptom] || '•'}
-                            </span>
-                          ))}
-                          {day.symptoms.length > 3 && (
-                            <span className="more-symptoms">+{day.symptoms.length - 3}</span>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
                 ))}
@@ -756,173 +834,64 @@ const CycleCalendar: React.FC<CalendarProps> = ({
 
           {/* Enhanced Legend */}
           <div className="calendar-legend mt-4 enhanced-legend">
-            <h6 className="mb-3 legend-title">
-              <i className="fas fa-info-circle me-2"></i>
-              <span>Legend & Quick Info</span>
-            </h6>
-            <div className="row legend-row">
-              <div className="col-md-4 legend-col">
-                <h6 className="text-muted small legend-section-title">CYCLE PHASES</h6>
-                {phases.map(phase => (
-                  <div key={phase.name} className="legend-item" tabIndex={0} aria-label={`${phase.name} phase: ${phase.description}`}
-                    title={`${phase.name} phase: ${phase.description}`}
-                  >
-                    <span 
-                      className="legend-color phase-color"
-                      style={{ backgroundColor: phase.color }}
-                    ></span>
-                    <small>
-                      <strong>{phase.name}</strong> <span className="d-none d-md-inline">- {phase.description}</span>
-                    </small>
-                  </div>
-                ))}
+            <h6 className="legend-title">Legend:</h6>
+            <div className="legend-row">
+              <div className="legend-item">
+                <span className="legend-color period"></span>
+                <span className="legend-label">
+                  <span className="legend-emoji">🩸</span>
+                  Period
+                </span>
               </div>
-              <div className="col-md-4 legend-col">
-                <h6 className="text-muted small legend-section-title">FERTILITY</h6>
-                <div className="legend-item" tabIndex={0} title="High fertility (ovulation window)" aria-label="High fertility (ovulation window)">
-                  <span className="fertility-emoji">🥚</span>
-                  <small>High fertility <span className="d-none d-md-inline">(ovulation window)</span></small>
-                </div>
-                <div className="legend-item" tabIndex={0} title="Medium fertility" aria-label="Medium fertility">
-                  <span className="fertility-emoji">🌱</span>
-                  <small>Medium fertility</small>
-                </div>
-                <div className="legend-item" tabIndex={0} title="Low fertility" aria-label="Low fertility">
-                  <span className="fertility-emoji">💧</span>
-                  <small>Low fertility</small>
-                </div>
-                <h6 className="text-muted small mt-3 legend-section-title">INDICATORS</h6>
-                <div className="legend-item" tabIndex={0} title="Today" aria-label="Today">
-                  <span className="legend-color today"></span>
-                  <small>Today</small>
-                </div>
-                <div className="legend-item" tabIndex={0} title="Period Day" aria-label="Period Day">
-                  <span className="legend-color period-day"></span>
-                  <small>Period Day</small>
-                </div>
+              <div className="legend-item">
+                <span className="legend-color fertile"></span>
+                <span className="legend-label">
+                  <span className="legend-emoji">🔥</span>
+                  Fertile Window
+                </span>
               </div>
-              <div className="col-md-4 legend-col">
-                <h6 className="text-muted small legend-section-title">UPCOMING EVENTS</h6>
-                {getUpcomingEvents().length === 0 && (
-                  <div className="upcoming-event empty-upcoming" tabIndex={0} aria-label="No upcoming events">
-                    <i className="fas fa-calendar-alt me-2 text-muted"></i>
-                    <small>No upcoming events</small>
-                  </div>
-                )}
-                {getUpcomingEvents().map((event, index) => (
-                  <div
-                    key={index}
-                    className="upcoming-event"
-                    tabIndex={0}
-                    aria-label={event.is_ovulation_day ? `Ovulation on ${new Date(event.date).toLocaleDateString()}` : `Period starts on ${new Date(event.date).toLocaleDateString()}`}
-                    title={event.is_ovulation_day ? `Ovulation on ${new Date(event.date).toLocaleDateString()}` : `Period starts on ${new Date(event.date).toLocaleDateString()}`}
-                  >
-                    <div className="d-flex align-items-center">
-                      <span className="event-icon me-2">
-                        {event.is_ovulation_day ? (
-                          <span role="img" aria-label="Egg" style={{ fontSize: '1.5rem' }}>🥚</span>
-                        ) : (
-                          <span role="img" aria-label="Period" style={{ fontSize: '1.5rem' }}>🔴</span>
-                        )}
-                      </span>
-                      <small>
-                        <strong style={{ color: event.is_ovulation_day ? '#f39c12' : '#e74c3c' }}>{new Date(event.date).toLocaleDateString()}</strong>
-                        <br />
-                        <span style={{ color: event.is_ovulation_day ? '#f39c12' : '#e74c3c', fontWeight: 600 }}>
-                          {event.is_ovulation_day ? 'Ovulation' : 'Period starts'}
-                        </span>
-                      </small>
-                    </div>
-                  </div>
-                ))}
+              <div className="legend-item">
+                <span className="legend-color safe"></span>
+                <span className="legend-label">
+                  <span className="legend-emoji">✓</span>
+                  Safe Days
+                </span>
               </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        /* Insights View */
-        <div className="insights-view">
-          <div className="row">
-            <div className="col-md-6">
-              <div className="insight-card">
-                <h6><i className="fas fa-chart-pie me-2"></i>Cycle Statistics</h6>
-                <div className="stats-grid">
-                  <div className="stat-item">
-                    <div className="stat-number">{calendarData?.stats.average_cycle_length}</div>
-                    <div className="stat-label">Avg Cycle Length</div>
-                  </div>
-                  <div className="stat-item">
-                    <div className="stat-number">{calendarData?.stats.total_logs}</div>
-                    <div className="stat-label">Cycles Tracked</div>
-                  </div>
-                  <div className="stat-item">
-                    <div className="stat-number">
-                      {calendarData?.days.filter(d => d.is_period_day).length}
-                    </div>
-                    <div className="stat-label">Period Days This Month</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="col-md-6">
-              <div className="insight-card">
-                <h6><i className="fas fa-symptoms me-2"></i>Top Symptoms</h6>
-                <div className="symptom-list">
-                  {getSymptomSummary().map(([symptom, count]) => (
-                    <div key={symptom} className="symptom-stat">
-                      <span className="symptom-icon">{symptomIcons[symptom] || '•'}</span>
-                      <span className="symptom-name">{symptom.replace('_', ' ')}</span>
-                      <span className="symptom-count">{count} days</span>
-                    </div>
-                  ))}
-                </div>
+              <div className="legend-item">
+                <span className="legend-color today"></span>
+                <span className="legend-label">Today</span>
               </div>
             </div>
           </div>
 
-          <div className="row mt-4">
-            <div className="col-md-12">
-              <div className="insight-card">
-                <h6><i className="fas fa-lightbulb me-2"></i>Personalized Tips</h6>
-                <div className="tips-grid">
-                  {getPhaseInfo() && (
-                    <div className="tip-item">
-                      <div className="tip-icon">💡</div>
-                      <div className="tip-content">
-                        <strong>Current Phase:</strong> {getPhaseInfo()?.phase.description}
-                        <br />
-                        <small>Focus on {getPhaseInfo()?.phase.name === 'Menstrual' ? 'rest and self-care' : 
-                                        getPhaseInfo()?.phase.name === 'Follicular' ? 'energy and new activities' :
-                                        getPhaseInfo()?.phase.name === 'Ovulation' ? 'peak fertility window' :
-                                        'preparing for next cycle'}</small>
+          {/* Recent Cycle History */}
+          <div className="recent-cycle-history">
+            <h6 className="history-title">Recent Cycle History</h6>
+            {getRecentCycles().length > 0 ? (
+              getRecentCycles().map((cycle, index) => (
+                <div key={index} className="history-item">
+                  <div>
+                    <div className="history-date">
+                      {cycle.startDate} - {cycle.endDate}
+                    </div>
+                    {cycle.symptoms && cycle.symptoms.length > 0 && (
+                      <div className="history-symptoms">
+                        <i className="fas fa-heart-pulse"></i>
+                        <span>{cycle.symptoms.join(', ')}</span>
                       </div>
-                    </div>
-                  )}
-                  
-                  <div className="tip-item">
-                    <div className="tip-icon">🥗</div>
-                    <div className="tip-content">
-                      <strong>Nutrition:</strong> Focus on iron-rich foods during menstruation
-                      <br />
-                      <small>Spinach, lean meats, and legumes help replenish iron levels</small>
-                    </div>
+                    )}
                   </div>
-                  
-                  <div className="tip-item">
-                    <div className="tip-icon">💧</div>
-                    <div className="tip-content">
-                      <strong>Hydration:</strong> Drink 8-10 glasses of water daily
-                      <br />
-                      <small>Helps reduce bloating and supports overall cycle health</small>
-                    </div>
-                  </div>
+                  <div className="history-duration">{cycle.duration}</div>
                 </div>
+              ))
+            ) : (
+              <div className="text-center text-muted py-3">
+                <i className="fas fa-calendar-alt me-2"></i>
+                No recent cycle data available
               </div>
-            </div>
+            )}
           </div>
-        </div>
-      )}
+        </>
 
       {/* Day Detail Modal */}
       {selectedDay.isOpen && selectedDay.day && (
