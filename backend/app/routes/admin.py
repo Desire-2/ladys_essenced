@@ -262,7 +262,7 @@ def create_user():
             return jsonify({'error': 'User with this phone number already exists'}), 400
         
         # Create new user
-        from werkzeug.security import generate_password_hash
+        from app import bcrypt
         
         user = User(
             name=data['name'],
@@ -271,7 +271,7 @@ def create_user():
             user_type=data['user_type'],
             is_active=data.get('is_active', True)
         )
-        user.password_hash = generate_password_hash(data['password'])
+        user.password_hash = bcrypt.generate_password_hash(data['password']).decode('utf-8')
         
         db.session.add(user)
         db.session.commit()

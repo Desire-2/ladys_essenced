@@ -93,7 +93,7 @@ def login():
         # Try PIN authentication if PIN is provided
         if 'pin' in data and data['pin']:
             pin = data['pin'].strip()
-            if user.enable_pin_auth and user.pin_hash and check_password_hash(user.pin_hash, pin):
+            if user.enable_pin_auth and user.pin_hash and bcrypt.check_password_hash(user.pin_hash, pin):
                 # PIN authentication successful
                 user_identity = str(user.id)
                 access_token = create_access_token(identity=user_identity)
