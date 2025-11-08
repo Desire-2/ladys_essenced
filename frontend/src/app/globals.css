@@ -1794,3 +1794,231 @@ img {
     display: none;
   }
 }
+
+/* ===== ADMIN DASHBOARD RESPONSIVE ENHANCEMENTS ===== */
+/* Ensure smooth font size scaling */
+@media (max-width: 768px) {
+  .h3-md {
+    font-size: 1.5rem !important;
+  }
+  
+  .small-md {
+    font-size: 0.9rem;
+  }
+}
+
+/* Responsive table improvements */
+.table-responsive {
+  -webkit-overflow-scrolling: touch;
+  border-radius: 0.375rem;
+}
+
+@media (max-width: 768px) {
+  .table {
+    font-size: 0.875rem;
+  }
+  
+  .table thead th {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.75rem;
+  }
+  
+  .table tbody td {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.813rem;
+  }
+  
+  /* Stack badges on mobile */
+  .badge {
+    display: inline-block;
+    margin-bottom: 0.25rem;
+    font-size: 0.7rem;
+  }
+}
+
+/* Responsive button improvements */
+@media (max-width: 576px) {
+  .btn-sm {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.8rem;
+  }
+  
+  .btn-group .btn {
+    padding: 0.25rem 0.5rem;
+  }
+}
+
+/* Modal responsive improvements */
+@media (max-width: 576px) {
+  .modal-dialog {
+    margin: 0.5rem;
+  }
+  
+  .modal-body {
+    padding: 1rem;
+  }
+  
+  .modal-header,
+  .modal-footer {
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* Card responsive improvements */
+@media (max-width: 576px) {
+  .card {
+    margin-bottom: 0.75rem;
+  }
+  
+  .card-body {
+    padding: 1rem;
+  }
+  
+  .card-header {
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+  }
+}
+
+/* Dropdown menu improvements for mobile */
+@media (max-width: 768px) {
+  .dropdown-menu {
+    font-size: 0.9rem;
+  }
+  
+  .dropdown-item {
+    padding: 0.5rem 1rem;
+  }
+}
+
+/* Ensure icons don't overflow on small screens */
+.fa-2x {
+  font-size: 1.75em;
+}
+
+@media (max-width: 576px) {
+  .fa-2x {
+    font-size: 1.5em;
+  }
+}
+
+/* Ensure gradients look good on small screens */
+@media (max-width: 576px) {
+  [style*="background: linear-gradient"] {
+    background-attachment: scroll !important;
+  }
+}
+
+/* Fix flex-wrap issues on mobile */
+.d-flex.gap-2 {
+  flex-wrap: wrap;
+}
+
+/* Ensure text doesn't overflow in cards */
+.card-body p,
+.card-body h1,
+.card-body h2,
+.card-body h3,
+.card-body h4,
+.card-body h5 {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Improve pagination on mobile */
+@media (max-width: 576px) {
+  .pagination {
+    font-size: 0.875rem;
+  }
+  
+  .pagination .page-link {
+    padding: 0.375rem 0.625rem;
+  }
+}
+
+/* Toast notifications responsive */
+@media (max-width: 576px) {
+  .toast-container {
+    width: calc(100% - 1rem);
+    right: 0.5rem !important;
+    left: 0.5rem;
+  }
+  
+  .toast {
+    font-size: 0.875rem;
+  }
+}
+
+/* Responsive utility - hide text on small screens, show icons */
+@media (max-width: 576px) {
+  .btn-responsive-icon .btn-text {
+    display: none;
+  }
+  
+  .btn-responsive-icon .fa {
+    margin: 0 !important;
+  }
+}
+
+/* Ensure horizontal scroll indicators are visible */
+.overflow-auto::-webkit-scrollbar {
+  height: 6px;
+  background-color: #f1f1f1;
+}
+
+.overflow-auto::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 3px;
+}
+
+.overflow-auto::-webkit-scrollbar-thumb:hover {
+  background-color: #555;
+}
+
+/* Mobile-friendly input groups */
+@media (max-width: 576px) {
+  .input-group {
+    flex-wrap: nowrap;
+  }
+  
+  .input-group-text {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+  }
+  
+  .input-group .form-control {
+    font-size: 0.875rem;
+  }
+}
+
+/* Ensure select dropdowns work well on mobile */
+@media (max-width: 576px) {
+  select.form-select,
+  select.form-control {
+    font-size: 0.875rem;
+    padding: 0.375rem 2rem 0.375rem 0.5rem;
+  }
+}
+
+/* Stats cards responsive improvements */
+@media (max-width: 768px) {
+  .card [class*="fa-"].opacity-75 {
+    font-size: 1.5rem;
+  }
+}
+
+/* Ensure charts are responsive */
+.chart-container {
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix dropdown menus appearing off-screen on mobile */
+@media (max-width: 768px) {
+  .dropdown-menu-end {
+    right: 0 !important;
+    left: auto !important;
+  }
+}

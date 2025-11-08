@@ -771,29 +771,30 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="container py-4">
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <h1>Dashboard - Welcome, {user?.name}</h1>
+    <div className="container py-3 py-md-4 px-2 px-md-3">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 mb-md-4 gap-2">
+          <h1 className="h4 h3-md mb-0">Dashboard - Welcome, {user?.name}</h1>
           <button 
-            className="btn btn-outline-secondary"
+            className="btn btn-outline-secondary btn-sm w-100 w-md-auto"
             onClick={() => {
               localStorage.removeItem('access_token');
               router.push('/login');
             }}
           >
+            <i className="fas fa-sign-out-alt me-2"></i>
             Logout
           </button>
         </div>
 
-        {/* Parent-specific child selector */}
+        {/* Parent-specific child selector - Responsive */}
         {user?.user_type === 'parent' && children.length > 0 && (
-          <div className="card mb-4">
-            <div className="card-body">
-              <h5 className="card-title">Viewing Data For:</h5>
-              <div className="btn-group" role="group">
+          <div className="card mb-3 mb-md-4">
+            <div className="card-body p-2 p-md-3">
+              <h5 className="card-title small mb-2">Viewing Data For:</h5>
+              <div className="d-flex flex-wrap gap-2" role="group">
                 <button 
                   type="button" 
-                  className={`btn ${!selectedChild ? 'btn-primary' : 'btn-outline-primary'}`}
+                  className={`btn btn-sm ${!selectedChild ? 'btn-primary' : 'btn-outline-primary'} flex-fill flex-md-grow-0`}
                   onClick={() => setSelectedChild(null)}
                 >
                   Myself
@@ -802,7 +803,7 @@ export default function Dashboard() {
                   <button 
                     key={child.id}
                     type="button" 
-                    className={`btn ${selectedChild === child.id ? 'btn-primary' : 'btn-outline-primary'}`}
+                    className={`btn btn-sm ${selectedChild === child.id ? 'btn-primary' : 'btn-outline-primary'} flex-fill flex-md-grow-0`}
                     onClick={() => setSelectedChild(child.id)}
                   >
                     {child.name}
@@ -813,44 +814,51 @@ export default function Dashboard() {
           </div>
         )}
         
-        {/* Dashboard Navigation */}
-        <div className="card mb-4">
-          <div className="card-body">
-            <ul className="nav nav-tabs">
-              <li className="nav-item">
-                <a 
-                  className={`nav-link ${activeTab === 'overview' ? 'active' : ''}`} 
-                  href="#" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setActiveTab('overview');
-                  }}
-                >
-                  <i className="fas fa-home me-2"></i>Overview
-                </a>
-              </li>
-              <li className="nav-item">
-                <a 
-                  className={`nav-link ${activeTab === 'cycle' ? 'active' : ''}`} 
-                  href="#" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setActiveTab('cycle');
-                  }}
-                >
-                  <i className="fas fa-calendar-alt me-2"></i>Cycle Tracking
-                </a>
-              </li>
-              <li className="nav-item">
-                <a 
-                  className={`nav-link ${activeTab === 'meals' ? 'active' : ''}`} 
-                  href="#" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setActiveTab('meals');
-                  }}
-                >
-                  <i className="fas fa-utensils me-2"></i>Meal Logs
+        {/* Dashboard Navigation - Responsive with horizontal scroll */}
+        <div className="card mb-3 mb-md-4">
+          <div className="card-body p-0">
+            <div className="overflow-auto">
+              <ul className="nav nav-tabs border-0 flex-nowrap" style={{ minWidth: 'max-content' }}>
+                <li className="nav-item">
+                  <a 
+                    className={`nav-link ${activeTab === 'overview' ? 'active' : ''}`} 
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setActiveTab('overview');
+                    }}
+                  >
+                    <i className="fas fa-home me-1 me-md-2"></i>
+                    <span className="d-none d-sm-inline">Overview</span>
+                    <span className="d-inline d-sm-none">Home</span>
+                  </a>
+                </li>
+                <li className="nav-item">
+                  <a 
+                    className={`nav-link ${activeTab === 'cycle' ? 'active' : ''}`} 
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setActiveTab('cycle');
+                    }}
+                  >
+                    <i className="fas fa-calendar-alt me-1 me-md-2"></i>
+                    <span className="d-none d-sm-inline">Cycle Tracking</span>
+                    <span className="d-inline d-sm-none">Cycle</span>
+                  </a>
+                </li>
+                <li className="nav-item">
+                  <a 
+                    className={`nav-link ${activeTab === 'meals' ? 'active' : ''}`} 
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setActiveTab('meals');
+                    }}
+                  >
+                    <i className="fas fa-utensils me-1 me-md-2"></i>
+                    <span className="d-none d-sm-inline">Meal Logs</span>
+                    <span className="d-inline d-sm-none">Meals</span>
                 </a>
               </li>
               <li className="nav-item">
@@ -862,7 +870,9 @@ export default function Dashboard() {
                     setActiveTab('appointments');
                   }}
                 >
-                  <i className="fas fa-calendar-check me-2"></i>Appointments
+                  <i className="fas fa-calendar-check me-1 me-md-2"></i>
+                  <span className="d-none d-sm-inline">Appointments</span>
+                  <span className="d-inline d-sm-none">Appts</span>
                 </a>
               </li>
               {user?.user_type === 'parent' && (
@@ -875,59 +885,62 @@ export default function Dashboard() {
                       setActiveTab('children');
                     }}
                   >
-                    <i className="fas fa-users me-2"></i>Manage Children
+                    <i className="fas fa-users me-1 me-md-2"></i>
+                    <span className="d-none d-sm-inline">Manage Children</span>
+                    <span className="d-inline d-sm-none">Children</span>
                   </a>
                 </li>
               )}
             </ul>
+            </div>
           </div>
         </div>
         
-        {/* Overview Tab Content */}
+        {/* Overview Tab Content - Responsive */}
         {activeTab === 'overview' && (
           <div>
-            <div className="row">
+            <div className="row g-3 g-md-4">
               {/* Cycle Summary */}
-              <div className="col-md-6 mb-4">
+              <div className="col-12 col-lg-6 mb-3 mb-md-4">
                 <DataSection
                   title="Cycle Summary"
                   dataType="cycle"
                   icon="fas fa-calendar-alt"
                 >
                   {selectedChild && (
-                    <small className="text-muted d-block mb-3">For: {children.find(c => c.id === selectedChild)?.name}</small>
+                    <small className="text-muted d-block mb-2 mb-md-3">For: {children.find(c => c.id === selectedChild)?.name}</small>
                   )}
                   {dataAvailability.cycle ? (
                     <>
-                      <div className="d-flex justify-content-between mb-3">
-                        <div>
+                      <div className="d-flex justify-content-between mb-2 mb-md-3">
+                        <div className="small">
                           <strong>Next Period:</strong>
                         </div>
-                        <div className={cycleData.nextPeriod ? 'text-primary fw-bold' : 'text-muted'}>
+                        <div className={`${cycleData.nextPeriod ? 'text-primary fw-bold' : 'text-muted'} small`}>
                           {cycleData.nextPeriod || 'Not available'}
                         </div>
                       </div>
-                      <div className="d-flex justify-content-between mb-3">
-                        <div>
+                      <div className="d-flex justify-content-between mb-2 mb-md-3">
+                        <div className="small">
                           <strong>Last Period:</strong>
                         </div>
-                        <div className={cycleData.lastPeriod ? 'text-success' : 'text-muted'}>
+                        <div className={`${cycleData.lastPeriod ? 'text-success' : 'text-muted'} small`}>
                           {cycleData.lastPeriod || 'Not logged yet'}
                         </div>
                       </div>
-                      <div className="d-flex justify-content-between mb-3">
-                        <div>
+                      <div className="d-flex justify-content-between mb-2 mb-md-3">
+                        <div className="small">
                           <strong>Average Cycle Length:</strong>
                         </div>
-                        <div className={cycleData.cycleLength ? 'text-info fw-bold' : 'text-muted'}>
+                        <div className={`${cycleData.cycleLength ? 'text-info fw-bold' : 'text-muted'} small`}>
                           {cycleData.cycleLength ? `${cycleData.cycleLength} days` : 'N/A'}
                         </div>
                       </div>
-                      <div className="d-flex justify-content-between mb-3">
-                        <div>
+                      <div className="d-flex justify-content-between mb-2 mb-md-3">
+                        <div className="small">
                           <strong>Total Logs:</strong>
                         </div>
-                        <div className="text-secondary fw-bold">
+                        <div className="text-secondary fw-bold small">
                           {cycleData.totalLogs} cycles
                         </div>
                       </div>
@@ -953,8 +966,8 @@ export default function Dashboard() {
                 </DataSection>
               </div>
               
-              {/* Notifications */}
-              <div className="col-md-6 mb-4">
+              {/* Notifications - Responsive */}
+              <div className="col-12 col-lg-6 mb-3 mb-md-4">
                 <DataSection
                   title="Notifications"
                   dataType="notifications"
@@ -965,22 +978,22 @@ export default function Dashboard() {
                       <>
                         <ul className="list-group list-group-flush">
                           {notifications.slice(0, 5).map(notification => (
-                            <li key={notification.id} className={`list-group-item px-0 ${!notification.is_read ? 'bg-light border-start border-primary border-3' : ''}`}>
-                              <div className="d-flex justify-content-between align-items-start">
+                            <li key={notification.id} className={`list-group-item px-0 py-2 ${!notification.is_read ? 'bg-light border-start border-primary border-3' : ''}`}>
+                              <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-1">
                                 <div className="flex-grow-1">
                                   <div className="d-flex align-items-center mb-1">
-                                    {!notification.is_read && <span className="badge bg-primary me-2">New</span>}
-                                    <span className={!notification.is_read ? 'fw-bold' : ''}>{notification.message}</span>
+                                    {!notification.is_read && <span className="badge bg-primary me-2 small">New</span>}
+                                    <span className={`${!notification.is_read ? 'fw-bold' : ''} small`}>{notification.message}</span>
                                   </div>
                                 </div>
-                                <small className="text-muted">{formatDate(notification.date)}</small>
+                                <small className="text-muted" style={{ fontSize: '0.75rem' }}>{formatDate(notification.date)}</small>
                               </div>
                             </li>
                           ))}
                         </ul>
                         {notifications.length > 5 && (
-                          <div className="mt-3 text-center">
-                            <a href="/notifications" className="btn btn-sm btn-outline-primary">
+                          <div className="mt-2 mt-md-3 text-center">
+                            <a href="/notifications" className="btn btn-sm btn-outline-primary w-100 w-md-auto">
                               View All {notifications.length} Notifications
                             </a>
                           </div>
@@ -1004,27 +1017,27 @@ export default function Dashboard() {
               </div>
             </div>
             
-            <div className="row">
-              {/* Recent Meals */}
-              <div className="col-md-6 mb-4">
+            <div className="row g-3 g-md-4">
+              {/* Recent Meals - Responsive */}
+              <div className="col-12 col-lg-6 mb-3 mb-md-4">
                 <DataSection
                   title="Recent Meals"
                   dataType="meals"
                   icon="fas fa-utensils"
                 >
                   {selectedChild && (
-                    <small className="text-muted d-block mb-3">For: {children.find(c => c.id === selectedChild)?.name}</small>
+                    <small className="text-muted d-block mb-2 mb-md-3">For: {children.find(c => c.id === selectedChild)?.name}</small>
                   )}
                   {dataAvailability.meals ? (
                     recentMeals.length > 0 ? (
                       <>
                         <ul className="list-group list-group-flush">
                           {recentMeals.map(meal => (
-                            <li key={meal.id} className="list-group-item px-0">
-                              <div className="d-flex justify-content-between align-items-start">
+                            <li key={meal.id} className="list-group-item px-0 py-2">
+                              <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-1">
                                 <div className="flex-grow-1">
                                   <div className="d-flex align-items-center mb-1">
-                                    <span className={`badge me-2 ${
+                                    <span className={`badge me-2 small ${
                                       meal.meal_type === 'breakfast' ? 'bg-warning' :
                                       meal.meal_type === 'lunch' ? 'bg-success' :
                                       meal.meal_type === 'dinner' ? 'bg-info' :
@@ -1032,18 +1045,18 @@ export default function Dashboard() {
                                     }`}>
                                       {meal.meal_type}
                                     </span>
-                                    <strong className="text-capitalize">{meal.meal_type}</strong>
+                                    <strong className="text-capitalize small">{meal.meal_type}</strong>
                                   </div>
                                   <p className="mb-0 text-muted small">{meal.description || meal.details}</p>
                                 </div>
-                                <small className="text-muted">{formatDate(meal.meal_time || meal.date)}</small>
+                                <small className="text-muted" style={{ fontSize: '0.75rem' }}>{formatDate(meal.meal_time || meal.date)}</small>
                               </div>
                             </li>
                           ))}
                         </ul>
-                        <div className="mt-4">
+                        <div className="mt-3 mt-md-4">
                           <button 
-                            className="btn btn-primary w-100"
+                            className="btn btn-primary btn-sm w-100"
                             onClick={() => setActiveTab('meals')}
                           >
                             <i className="fas fa-plus-circle me-2"></i>
@@ -1070,8 +1083,8 @@ export default function Dashboard() {
                 </DataSection>
               </div>
               
-              {/* Upcoming Appointments */}
-              <div className="col-md-6 mb-4">
+              {/* Upcoming Appointments - Responsive */}
+              <div className="col-12 col-lg-6 mb-3 mb-md-4">
                 <DataSection
                   title="Upcoming Appointments"
                   dataType="appointments"
@@ -1082,22 +1095,22 @@ export default function Dashboard() {
                       <>
                         <ul className="list-group list-group-flush">
                           {upcomingAppointments.map(appointment => (
-                            <li key={appointment.id} className="list-group-item px-0">
-                              <div className="d-flex justify-content-between align-items-start">
+                            <li key={appointment.id} className="list-group-item px-0 py-2">
+                              <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2">
                                 <div className="flex-grow-1">
                                   <div className="d-flex align-items-center mb-2">
                                     <i className="fas fa-calendar text-primary me-2"></i>
-                                    <strong>{formatDate(appointment.appointment_date || appointment.date)}</strong>
+                                    <strong className="small">{formatDate(appointment.appointment_date || appointment.date)}</strong>
                                   </div>
-                                  <p className="mb-1">{appointment.issue}</p>
+                                  <p className="mb-1 small">{appointment.issue}</p>
                                   {appointment.for_user && (
-                                    <small className="text-muted">
+                                    <small className="text-muted" style={{ fontSize: '0.75rem' }}>
                                       <i className="fas fa-user me-1"></i>
                                       For: {appointment.for_user}
                                     </small>
                                   )}
                                 </div>
-                                <span className={`badge ${
+                                <span className={`badge align-self-md-start ${
                                   appointment.status.toLowerCase() === 'confirmed' ? 'bg-success' : 
                                   appointment.status.toLowerCase() === 'pending' ? 'bg-warning' : 
                                   appointment.status.toLowerCase() === 'completed' ? 'bg-info' : 'bg-secondary'
@@ -1108,9 +1121,9 @@ export default function Dashboard() {
                             </li>
                           ))}
                         </ul>
-                        <div className="mt-4">
+                        <div className="mt-3 mt-md-4">
                           <button 
-                            className="btn btn-primary w-100"
+                            className="btn btn-primary btn-sm w-100"
                             onClick={() => setActiveTab('appointments')}
                           >
                             <i className="fas fa-plus-circle me-2"></i>

@@ -1439,34 +1439,34 @@ export default function AdminDashboard() {
       <UserModal />
       <ContentModal />
       
-      <div className="container-fluid py-4">
-        {/* Enhanced Header */}
-        <div className="row align-items-center mb-4">
-          <div className="col">
-            <h1 className="h3 mb-0">
+      <div className="container-fluid py-3 py-md-4 px-2 px-md-3">
+        {/* Enhanced Header - Responsive */}
+        <div className="row align-items-center mb-3 mb-md-4 g-2">
+          <div className="col-12 col-md">
+            <h1 className="h4 h3-md mb-0">
               <i className="fas fa-tachometer-alt text-primary me-2"></i>
               Admin Dashboard
             </h1>
-            <p className="text-muted mb-0">Welcome back, {user?.name}</p>
+            <p className="text-muted mb-0 small">Welcome back, {user?.name}</p>
           </div>
-          <div className="col-auto">
-            <div className="d-flex gap-2">
+          <div className="col-12 col-md-auto">
+            <div className="d-flex gap-2 flex-wrap">
               <button 
-                className="btn btn-outline-primary btn-sm"
+                className="btn btn-outline-primary btn-sm flex-fill flex-md-grow-0"
                 onClick={loadDashboardData}
                 disabled={loading}
               >
                 <i className="fas fa-sync-alt me-1"></i>
-                Refresh
+                <span className="d-none d-sm-inline">Refresh</span>
               </button>
               <button 
-                className="btn btn-outline-secondary btn-sm dropdown-toggle"
+                className="btn btn-outline-secondary btn-sm dropdown-toggle flex-fill flex-md-grow-0"
                 data-bs-toggle="dropdown"
               >
                 <i className="fas fa-user-circle me-1"></i>
-                {user?.name}
+                <span className="d-none d-sm-inline">{user?.name}</span>
               </button>
-              <ul className="dropdown-menu">
+              <ul className="dropdown-menu dropdown-menu-end">
                 <li>
                   <button 
                     className="dropdown-item"
@@ -1484,34 +1484,38 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Enhanced Navigation */}
-        <div className="card shadow-sm mb-4">
+        {/* Enhanced Navigation - Responsive with horizontal scroll on mobile */}
+        <div className="card shadow-sm mb-3 mb-md-4">
           <div className="card-body p-0">
-            <nav className="nav nav-tabs border-0" style={{ borderRadius: '0.375rem 0.375rem 0 0' }}>
-              {[
-                { id: 'overview', label: 'Overview', icon: 'fas fa-chart-line' },
-                { id: 'users', label: 'User Management', icon: 'fas fa-users' },
-                { id: 'content', label: 'Content Review', icon: 'fas fa-file-alt' },
-                { id: 'courses', label: 'Course Management', icon: 'fas fa-graduation-cap' },
-                { id: 'appointments', label: 'Appointments', icon: 'fas fa-calendar-check' },
-                { id: 'logs', label: 'System Logs', icon: 'fas fa-list-alt' },
-                { id: 'analytics', label: 'Analytics', icon: 'fas fa-chart-bar' }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  className={`nav-link border-0 px-4 py-3 ${activeTab === tab.id ? 'active' : ''}`}
-                  onClick={() => handleTabChange(tab.id)}
-                  style={{ 
-                    backgroundColor: activeTab === tab.id ? '#0d6efd' : 'transparent',
-                    color: activeTab === tab.id ? 'white' : '#6c757d',
-                    borderRadius: activeTab === tab.id ? '0.375rem 0.375rem 0 0' : '0'
-                  }}
-                >
-                  <i className={`${tab.icon} me-2`}></i>
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
+            <div className="overflow-auto">
+              <nav className="nav nav-tabs border-0 flex-nowrap" style={{ borderRadius: '0.375rem 0.375rem 0 0', minWidth: 'max-content' }}>
+                {[
+                  { id: 'overview', label: 'Overview', icon: 'fas fa-chart-line', shortLabel: 'Overview' },
+                  { id: 'users', label: 'User Management', icon: 'fas fa-users', shortLabel: 'Users' },
+                  { id: 'content', label: 'Content Review', icon: 'fas fa-file-alt', shortLabel: 'Content' },
+                  { id: 'courses', label: 'Course Management', icon: 'fas fa-graduation-cap', shortLabel: 'Courses' },
+                  { id: 'appointments', label: 'Appointments', icon: 'fas fa-calendar-check', shortLabel: 'Appts' },
+                  { id: 'logs', label: 'System Logs', icon: 'fas fa-list-alt', shortLabel: 'Logs' },
+                  { id: 'analytics', label: 'Analytics', icon: 'fas fa-chart-bar', shortLabel: 'Stats' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    className={`nav-link border-0 px-3 px-md-4 py-2 py-md-3 ${activeTab === tab.id ? 'active' : ''}`}
+                    onClick={() => handleTabChange(tab.id)}
+                    style={{ 
+                      backgroundColor: activeTab === tab.id ? '#0d6efd' : 'transparent',
+                      color: activeTab === tab.id ? 'white' : '#6c757d',
+                      borderRadius: activeTab === tab.id ? '0.375rem 0.375rem 0 0' : '0',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    <i className={`${tab.icon} me-1 me-md-2`}></i>
+                    <span className="d-none d-md-inline">{tab.label}</span>
+                    <span className="d-inline d-md-none">{tab.shortLabel}</span>
+                  </button>
+                ))}
+              </nav>
+            </div>
           </div>
         </div>
 
@@ -1526,15 +1530,15 @@ export default function AdminDashboard() {
         {/* Enhanced Overview Tab */}
         {activeTab === 'overview' && stats && (
           <div>
-            {/* Enhanced Statistics Cards */}
-            <div className="row g-4 mb-4">
-              <div className="col-lg-3 col-md-6">
+            {/* Enhanced Statistics Cards - Fully Responsive */}
+            <div className="row g-3 g-md-4 mb-3 mb-md-4">
+              <div className="col-12 col-sm-6 col-lg-3">
                 <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                  <div className="card-body text-white">
+                  <div className="card-body text-white p-3 p-md-4">
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
-                        <h2 className="mb-1">{stats.users.total.toLocaleString()}</h2>
-                        <p className="mb-0 opacity-75">Total Users</p>
+                        <h2 className="mb-1 h3">{stats.users.total.toLocaleString()}</h2>
+                        <p className="mb-0 opacity-75 small">Total Users</p>
                         <small className="opacity-75">
                           <i className="fas fa-arrow-up me-1"></i>
                           +{stats.users.new_today} today
@@ -1548,13 +1552,13 @@ export default function AdminDashboard() {
                 </div>
               </div>
               
-              <div className="col-lg-3 col-md-6">
+              <div className="col-12 col-sm-6 col-lg-3">
                 <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
-                  <div className="card-body text-white">
+                  <div className="card-body text-white p-3 p-md-4">
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
-                        <h2 className="mb-1">{stats.content.published.toLocaleString()}</h2>
-                        <p className="mb-0 opacity-75">Published Content</p>
+                        <h2 className="mb-1 h3">{stats.content.published.toLocaleString()}</h2>
+                        <p className="mb-0 opacity-75 small">Published Content</p>
                         <small className="opacity-75">
                           <i className="fas fa-clock me-1"></i>
                           {stats.content.draft} pending
@@ -1568,13 +1572,13 @@ export default function AdminDashboard() {
                 </div>
               </div>
               
-              <div className="col-lg-3 col-md-6">
+              <div className="col-12 col-sm-6 col-lg-3">
                 <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }}>
-                  <div className="card-body text-white">
+                  <div className="card-body text-white p-3 p-md-4">
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
-                        <h2 className="mb-1">{stats.appointments.pending.toLocaleString()}</h2>
-                        <p className="mb-0 opacity-75">Pending Appointments</p>
+                        <h2 className="mb-1 h3">{stats.appointments.pending.toLocaleString()}</h2>
+                        <p className="mb-0 opacity-75 small">Pending Appointments</p>
                         <small className="opacity-75">
                           <i className="fas fa-calendar me-1"></i>
                           {stats.appointments.total} total
@@ -1588,9 +1592,9 @@ export default function AdminDashboard() {
                 </div>
               </div>
               
-              <div className="col-lg-3 col-md-6">
+              <div className="col-12 col-sm-6 col-lg-3">
                 <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' }}>
-                  <div className="card-body text-white">
+                  <div className="card-body text-white p-3 p-md-4">
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
                         <h2 className="mb-1">{stats.users.active.toLocaleString()}</h2>
@@ -1609,49 +1613,51 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Enhanced Charts Section */}
-            <div className="row g-4 mb-4">
-              <div className="col-lg-8">
+            {/* Enhanced Charts Section - Responsive */}
+            <div className="row g-3 g-md-4 mb-3 mb-md-4">
+              <div className="col-12 col-lg-8">
                 <div className="card shadow-sm">
                   <div className="card-header bg-transparent border-0 pb-0">
-                    <h5 className="card-title mb-0">
+                    <h5 className="card-title mb-0 small-md">
                       <i className="fas fa-chart-line text-primary me-2"></i>
                       User Growth Trend
                     </h5>
                   </div>
-                  <div className="card-body">
-                    <div className="row text-center">
-                      {stats.monthly_growth.reverse().map((month, index) => (
-                        <div key={index} className="col">
-                          <div className="mb-2">
-                            <div 
-                              className="bg-primary rounded-top mx-auto" 
-                              style={{ 
-                                height: `${Math.max(20, (month.users / Math.max(...stats.monthly_growth.map(m => m.users))) * 100)}px`,
-                                width: '40px'
-                              }}
-                            ></div>
-                            <div className="bg-light p-2 rounded-bottom">
-                              <div className="fw-bold text-primary">{month.users}</div>
-                              <small className="text-muted">{month.month}</small>
+                  <div className="card-body p-2 p-md-3">
+                    <div className="overflow-auto">
+                      <div className="d-flex justify-content-around text-center" style={{ minWidth: '400px' }}>
+                        {stats.monthly_growth.reverse().map((month, index) => (
+                          <div key={index} className="flex-fill">
+                            <div className="mb-2">
+                              <div 
+                                className="bg-primary rounded-top mx-auto" 
+                                style={{ 
+                                  height: `${Math.max(20, (month.users / Math.max(...stats.monthly_growth.map(m => m.users))) * 100)}px`,
+                                  width: '30px'
+                                }}
+                              ></div>
+                              <div className="bg-light p-1 p-md-2 rounded-bottom">
+                                <div className="fw-bold text-primary small">{month.users}</div>
+                                <small className="text-muted" style={{ fontSize: '0.7rem' }}>{month.month}</small>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
               
-              <div className="col-lg-4">
+              <div className="col-12 col-lg-4">
                 <div className="card shadow-sm">
                   <div className="card-header bg-transparent border-0 pb-0">
-                    <h5 className="card-title mb-0">
+                    <h5 className="card-title mb-0 small-md">
                       <i className="fas fa-chart-pie text-success me-2"></i>
                       User Distribution
                     </h5>
                   </div>
-                  <div className="card-body">
+                  <div className="card-body p-2 p-md-3">
                     <div className="d-grid gap-3">
                       {[
                         { type: 'Parents', count: stats.users.parents, color: '#0d6efd' },
@@ -1765,16 +1771,16 @@ export default function AdminDashboard() {
         {/* Enhanced Users Tab */}
         {activeTab === 'users' && (
           <div>
-            {/* User Statistics Cards */}
+            {/* User Statistics Cards - Responsive */}
             {userStatistics && (
-              <div className="row g-4 mb-4">
-                <div className="col-lg-3 col-md-6">
+              <div className="row g-3 g-md-4 mb-3 mb-md-4">
+                <div className="col-12 col-sm-6 col-lg-3">
                   <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                    <div className="card-body text-white">
+                    <div className="card-body text-white p-3 p-md-4">
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h2 className="mb-1">{userStatistics.overview.total_users}</h2>
-                          <p className="mb-0 opacity-75">Total Users</p>
+                          <h2 className="mb-1 h3">{userStatistics.overview.total_users}</h2>
+                          <p className="mb-0 opacity-75 small">Total Users</p>
                           <small className="opacity-75">
                             <i className="fas fa-user-check me-1"></i>
                             {userStatistics.overview.active_users} active
@@ -1788,13 +1794,13 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 
-                <div className="col-lg-3 col-md-6">
+                <div className="col-12 col-sm-6 col-lg-3">
                   <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
-                    <div className="card-body text-white">
+                    <div className="card-body text-white p-3 p-md-4">
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h2 className="mb-1">{userStatistics.overview.active_users}</h2>
-                          <p className="mb-0 opacity-75">Active Users</p>
+                          <h2 className="mb-1 h3">{userStatistics.overview.active_users}</h2>
+                          <p className="mb-0 opacity-75 small">Active Users</p>
                           <small className="opacity-75">
                             <i className="fas fa-chart-line me-1"></i>
                             {((userStatistics.overview.active_users / userStatistics.overview.total_users) * 100).toFixed(1)}% active rate
@@ -1808,13 +1814,13 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 
-                <div className="col-lg-3 col-md-6">
+                <div className="col-12 col-sm-6 col-lg-3">
                   <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }}>
-                    <div className="card-body text-white">
+                    <div className="card-body text-white p-3 p-md-4">
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h2 className="mb-1">{userStatistics.user_types?.find((ut: any) => ut.type === 'parent')?.count || 0}</h2>
-                          <p className="mb-0 opacity-75">Parents</p>
+                          <h2 className="mb-1 h3">{userStatistics.user_types?.find((ut: any) => ut.type === 'parent')?.count || 0}</h2>
+                          <p className="mb-0 opacity-75 small">Parents</p>
                           <small className="opacity-75">
                             <i className="fas fa-baby me-1"></i>
                             {userStatistics.user_types?.find((ut: any) => ut.type === 'adolescent')?.count || 0} adolescents
@@ -1828,13 +1834,13 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 
-                <div className="col-lg-3 col-md-6">
+                <div className="col-12 col-sm-6 col-lg-3">
                   <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' }}>
-                    <div className="card-body text-white">
+                    <div className="card-body text-white p-3 p-md-4">
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h2 className="mb-1">{userStatistics.user_types?.filter((ut: any) => ['content_writer', 'health_provider', 'admin'].includes(ut.type)).reduce((sum: number, ut: any) => sum + ut.count, 0) || 0}</h2>
-                          <p className="mb-0 opacity-75">Staff</p>
+                          <h2 className="mb-1 h3">{userStatistics.user_types?.filter((ut: any) => ['content_writer', 'health_provider', 'admin'].includes(ut.type)).reduce((sum: number, ut: any) => sum + ut.count, 0) || 0}</h2>
+                          <p className="mb-0 opacity-75 small">Staff</p>
                           <small className="opacity-75">
                             <i className="fas fa-user-tie me-1"></i>
                             Writers & Providers
@@ -1850,12 +1856,12 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* Enhanced Action Bar */}
-            <div className="card shadow-sm mb-4">
-              <div className="card-body">
-                <div className="row g-3 align-items-center">
-                  <div className="col-md-3">
-                    <div className="input-group">
+            {/* Enhanced Action Bar - Fully Responsive */}
+            <div className="card shadow-sm mb-3 mb-md-4">
+              <div className="card-body p-2 p-md-3">
+                <div className="row g-2 g-md-3 align-items-center">
+                  <div className="col-12 col-md-3">
+                    <div className="input-group input-group-sm">
                       <span className="input-group-text">
                         <i className="fas fa-search"></i>
                       </span>
@@ -1868,9 +1874,9 @@ export default function AdminDashboard() {
                       />
                     </div>
                   </div>
-                  <div className="col-md-2">
+                  <div className="col-6 col-md-2">
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={filters.userType}
                       onChange={(e) => handleFilterChange('userType', e.target.value)}
                     >
@@ -1882,9 +1888,9 @@ export default function AdminDashboard() {
                       <option value="admin">Admins</option>
                     </select>
                   </div>
-                  <div className="col-md-2">
+                  <div className="col-6 col-md-2">
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={filters.status}
                       onChange={(e) => handleFilterChange('status', e.target.value)}
                     >
@@ -1893,38 +1899,42 @@ export default function AdminDashboard() {
                       <option value="inactive">Inactive</option>
                     </select>
                   </div>
-                  <div className="col-md-5">
-                    <div className="btn-group w-100">
+                  <div className="col-12 col-md-5">
+                    <div className="d-flex flex-wrap gap-2">
                       <button
-                        className="btn btn-primary"
+                        className="btn btn-primary btn-sm flex-fill flex-md-grow-0"
                         onClick={() => setShowCreateUserModal(true)}
                       >
-                        <i className="fas fa-plus me-2"></i>
-                        Add User
+                        <i className="fas fa-plus me-1 d-none d-md-inline"></i>
+                        <span className="d-none d-sm-inline">Add User</span>
+                        <i className="fas fa-plus d-inline d-sm-none"></i>
                       </button>
                       <button
-                        className="btn btn-outline-success"
+                        className="btn btn-outline-success btn-sm flex-fill flex-md-grow-0"
                         onClick={exportUsers}
                         disabled={actionLoading.export_users}
                       >
-                        <i className="fas fa-download me-2"></i>
-                        Export
+                        <i className="fas fa-download me-1 d-none d-md-inline"></i>
+                        <span className="d-none d-sm-inline">Export</span>
+                        <i className="fas fa-download d-inline d-sm-none"></i>
                       </button>
                       {selectedUsers.length > 0 && (
                         <button
-                          className="btn btn-outline-warning"
+                          className="btn btn-outline-warning btn-sm flex-fill flex-md-grow-0"
                           onClick={() => setShowBulkActionModal(true)}
                         >
-                          <i className="fas fa-tasks me-2"></i>
-                          Bulk Action ({selectedUsers.length})
+                          <i className="fas fa-tasks me-1"></i>
+                          <span className="d-none d-md-inline">Bulk ({selectedUsers.length})</span>
+                          <span className="d-inline d-md-none">{selectedUsers.length}</span>
                         </button>
                       )}
                       <button
-                        className="btn btn-outline-secondary"
+                        className="btn btn-outline-secondary btn-sm flex-fill flex-md-grow-0"
                         onClick={clearFilters}
                       >
-                        <i className="fas fa-times me-2"></i>
-                        Clear
+                        <i className="fas fa-times me-1 d-none d-md-inline"></i>
+                        <span className="d-none d-sm-inline">Clear</span>
+                        <i className="fas fa-times d-inline d-sm-none"></i>
                       </button>
                     </div>
                   </div>
