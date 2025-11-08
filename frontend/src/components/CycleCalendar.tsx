@@ -92,28 +92,54 @@ const enhancedStyles = `
   transform: scale(1.02);
 }
 .calendar-day.today {
-  border: 3px solid #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 2px solid #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.3);
+  font-weight: 600;
+}
+.calendar-day.today .day-number {
+  color: #1565c0;
+  font-weight: 800;
 }
 .calendar-day.period-day {
-  background: #dc3545;
-  color: #fff;
-  border: 1px solid #c82333;
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  color: #b71c1c;
+  border: 1px solid #f44336;
+  border-left: 4px solid #f44336;
+}
+.calendar-day.period-day .day-number {
+  color: #b71c1c;
+  font-weight: 700;
 }
 .calendar-day.ovulation-day {
-  background: #ffc107;
-  color: #000;
-  border: 1px solid #e0a800;
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  color: #e65100;
+  border: 1px solid #ff9800;
+  border-left: 4px solid #ff9800;
+}
+.calendar-day.ovulation-day .day-number {
+  color: #e65100;
+  font-weight: 700;
 }
 .calendar-day.high-fertility {
-  background: #ffc107;
-  color: #000;
-  border: 1px solid #e0a800;
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+  color: #4a148c;
+  border: 1px solid #9c27b0;
+  border-left: 4px solid #9c27b0;
+}
+.calendar-day.high-fertility .day-number {
+  color: #4a148c;
+  font-weight: 700;
 }
 .calendar-day.safe-day {
-  background: #28a745;
-  color: #fff;
-  border: 1px solid #218838;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  color: #1b5e20;
+  border: 1px solid #4caf50;
+  border-left: 4px solid #4caf50;
+}
+.calendar-day.safe-day .day-number {
+  color: #1b5e20;
+  font-weight: 700;
 }
 .calendar-day.logged {
   position: relative;
@@ -180,6 +206,39 @@ const enhancedStyles = `
   color: #b2babb;
   pointer-events: none;
 }
+.calendar-day.dimmed {
+  opacity: 0.3;
+  filter: grayscale(60%);
+}
+.calendar-day.highlighted {
+  animation: highlightPulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(33, 150, 243, 0.6);
+  z-index: 5;
+}
+@keyframes highlightPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 12px rgba(33, 150, 243, 0.6); }
+  50% { transform: scale(1.03); box-shadow: 0 0 20px rgba(33, 150, 243, 0.8); }
+}
+.calendar-day.predicted {
+  opacity: 0.7;
+  border-style: dashed !important;
+}
+.calendar-day.predicted::after {
+  content: '?';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 10px;
+  font-weight: bold;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+}
 .calendar-legend.enhanced-legend {
   background: #f8fafc;
   border-radius: 12px;
@@ -205,7 +264,18 @@ const enhancedStyles = `
   gap: 0.5rem;
   padding: 0.3rem 0.5rem;
   border-radius: 6px;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+.legend-item:hover {
+  background: #f0f0f0;
+  transform: translateY(-1px);
+}
+.legend-item.active {
+  background: #e3f2fd;
+  border: 2px solid #2196f3;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
 }
 .legend-color {
   width: 24px;
@@ -213,19 +283,31 @@ const enhancedStyles = `
   border-radius: 4px;
   display: inline-block;
   border: 1px solid #ddd;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 .legend-color.period {
-  background: #dc3545;
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border: 1px solid #f44336;
+  border-left: 3px solid #f44336;
+}
+.legend-color.ovulation {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 1px solid #ff9800;
+  border-left: 3px solid #ff9800;
 }
 .legend-color.fertile {
-  background: #ffc107;
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+  border: 1px solid #9c27b0;
+  border-left: 3px solid #9c27b0;
 }
 .legend-color.safe {
-  background: #28a745;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: 1px solid #4caf50;
+  border-left: 3px solid #4caf50;
 }
 .legend-color.today {
-  background: #fff;
-  border: 3px solid #3498db;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 2px solid #2196f3;
 }
 .legend-label {
   font-size: 0.9rem;
@@ -504,6 +586,8 @@ interface CalendarDay {
   is_period_start: boolean;
   is_period_end: boolean;
   is_ovulation_day: boolean;
+  is_fertility_day?: boolean;
+  predicted?: boolean;
   symptoms: string[];
   notes: string;
   cycle_day?: number;
@@ -532,6 +616,8 @@ interface DayDetailModal {
   isOpen: boolean;
 }
 
+type LegendFilter = 'all' | 'period' | 'ovulation' | 'fertile' | 'safe' | 'today';
+
 const CycleCalendar: React.FC<CalendarProps> = ({ 
   calendarData, 
   currentDate, 
@@ -540,6 +626,7 @@ const CycleCalendar: React.FC<CalendarProps> = ({
   showInsights = true
 }) => {
   const [selectedDay, setSelectedDay] = useState<DayDetailModal>({ day: null, isOpen: false });
+  const [activeLegendFilter, setActiveLegendFilter] = useState<LegendFilter>('all');
 
   // Inject enhanced styles into the document head on client-side only
   useEffect(() => {
@@ -622,18 +709,36 @@ const CycleCalendar: React.FC<CalendarProps> = ({
     weeks.push(calendarData.days.slice(i, i + 7));
   }
 
-  const getDayClasses = (day: CalendarDay) => {
+    const getDayClasses = (day: CalendarDay) => {
     let classes = 'calendar-day';
     
     if (!day.is_current_month) classes += ' other-month';
     if (day.is_today) classes += ' today';
     
-    // Determine day type based on cycle
+    // Apply dimmed class if legend filter is active
+    if (activeLegendFilter) {
+      const shouldDim = 
+        (activeLegendFilter === 'period' && !day.is_period_day) ||
+        (activeLegendFilter === 'ovulation' && !day.is_ovulation_day) ||
+        (activeLegendFilter === 'fertile' && !day.is_fertility_day) ||
+        (activeLegendFilter === 'safe' && (day.is_period_day || day.is_ovulation_day || day.is_fertility_day));
+      
+      if (shouldDim) {
+        classes += ' dimmed';
+      }
+    }
+    
+    // Determine day type based on backend data
     if (day.is_period_day) {
       classes += ' period-day';
-    } else if (day.is_ovulation_day || (day.cycle_day && day.cycle_day >= 12 && day.cycle_day <= 16)) {
-      classes += ' high-fertility ovulation-day';
-    } else if (day.cycle_day && ((day.cycle_day >= 1 && day.cycle_day <= 7) || day.cycle_day >= 19)) {
+      if (day.is_period_start) classes += ' period-start';
+      if (day.is_period_end) classes += ' period-end';
+    } else if (day.is_ovulation_day) {
+      classes += ' ovulation-day';
+    } else if (day.is_fertility_day) {
+      classes += ' high-fertility';
+    } else if (!day.is_period_day && !day.is_ovulation_day && !day.is_fertility_day) {
+      // Safe days are days that are not period, ovulation, or fertile
       classes += ' safe-day';
     }
     
@@ -643,6 +748,10 @@ const CycleCalendar: React.FC<CalendarProps> = ({
     }
     
     return classes;
+  };
+  
+  const handleLegendClick = (filterType: LegendFilter) => {
+    setActiveLegendFilter(prev => prev === filterType ? 'all' : filterType);
   };
 
   const handleDayClick = (day: CalendarDay) => {
@@ -820,11 +929,40 @@ const CycleCalendar: React.FC<CalendarProps> = ({
                   <div 
                     key={`${weekIndex}-${dayIndex}`} 
                     className={getDayClasses(day)}
-                    title={`${day.notes} ${day.symptoms.join(', ')}`}
+                    title={`${day.notes || ''} ${day.symptoms?.join(', ') || ''}`}
                     onClick={() => handleDayClick(day)}
                   >
                     <div className="day-content">
                       <div className="day-number">{day.day_of_month}</div>
+                      {day.is_ovulation_day && (
+                        <div className="fertility-indicator" title="Ovulation Day">
+                          🥚
+                        </div>
+                      )}
+                      {day.is_fertility_day && !day.is_ovulation_day && (
+                        <div className="fertility-indicator" title="Fertile Window">
+                          🔥
+                        </div>
+                      )}
+                      {day.flow_intensity && (
+                        <div className="flow-intensity" title={`Flow: ${day.flow_intensity}`}>
+                          {day.flow_intensity === 'heavy' && '🩸🩸🩸'}
+                          {day.flow_intensity === 'medium' && '🩸🩸'}
+                          {day.flow_intensity === 'light' && '🩸'}
+                        </div>
+                      )}
+                      {day.symptoms && day.symptoms.length > 0 && (
+                        <div className="symptoms">
+                          {day.symptoms.slice(0, 2).map((symptom, idx) => (
+                            <span key={idx} className="symptom-icon" title={symptom}>
+                              {symptomIcons[symptom] || '•'}
+                            </span>
+                          ))}
+                          {day.symptoms.length > 2 && (
+                            <span className="more-symptoms">+{day.symptoms.length - 2}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -834,33 +972,78 @@ const CycleCalendar: React.FC<CalendarProps> = ({
 
           {/* Enhanced Legend */}
           <div className="calendar-legend mt-4 enhanced-legend">
-            <h6 className="legend-title">Legend:</h6>
+            <h6 className="legend-title">
+              Legend: 
+              {activeLegendFilter !== 'all' && (
+                <span style={{ fontSize: '0.85rem', color: '#2196f3', marginLeft: '0.5rem' }}>
+                  (Click again to show all)
+                </span>
+              )}
+            </h6>
             <div className="legend-row">
-              <div className="legend-item">
+              <div 
+                className={`legend-item ${activeLegendFilter === 'period' ? 'active' : ''}`}
+                onClick={() => handleLegendClick('period')}
+                role="button"
+                tabIndex={0}
+              >
                 <span className="legend-color period"></span>
                 <span className="legend-label">
                   <span className="legend-emoji">🩸</span>
                   Period
                 </span>
               </div>
-              <div className="legend-item">
+              <div 
+                className={`legend-item ${activeLegendFilter === 'ovulation' ? 'active' : ''}`}
+                onClick={() => handleLegendClick('ovulation')}
+                role="button"
+                tabIndex={0}
+              >
+                <span className="legend-color ovulation"></span>
+                <span className="legend-label">
+                  <span className="legend-emoji">🥚</span>
+                  Ovulation Day
+                </span>
+              </div>
+              <div 
+                className={`legend-item ${activeLegendFilter === 'fertile' ? 'active' : ''}`}
+                onClick={() => handleLegendClick('fertile')}
+                role="button"
+                tabIndex={0}
+              >
                 <span className="legend-color fertile"></span>
                 <span className="legend-label">
                   <span className="legend-emoji">🔥</span>
                   Fertile Window
                 </span>
               </div>
-              <div className="legend-item">
+              <div 
+                className={`legend-item ${activeLegendFilter === 'safe' ? 'active' : ''}`}
+                onClick={() => handleLegendClick('safe')}
+                role="button"
+                tabIndex={0}
+              >
                 <span className="legend-color safe"></span>
                 <span className="legend-label">
-                  <span className="legend-emoji">✓</span>
+                  <span className="legend-emoji">✅</span>
                   Safe Days
                 </span>
               </div>
-              <div className="legend-item">
+              <div 
+                className={`legend-item ${activeLegendFilter === 'today' ? 'active' : ''}`}
+                onClick={() => handleLegendClick('today')}
+                role="button"
+                tabIndex={0}
+              >
                 <span className="legend-color today"></span>
-                <span className="legend-label">Today</span>
+                <span className="legend-label">
+                  <span className="legend-emoji">📍</span>
+                  Today
+                </span>
               </div>
+            </div>
+            <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#666', fontStyle: 'italic' }}>
+              💡 Tip: Click on any legend item to highlight those days on the calendar
             </div>
           </div>
 
@@ -916,33 +1099,84 @@ const CycleCalendar: React.FC<CalendarProps> = ({
             </div>
             
             <div className="modal-body">
-              {selectedDay.day.cycle_day && (
+              {selectedDay.day.predicted && (
+                <div className="alert alert-info mb-3" style={{ fontSize: '0.9rem', padding: '0.5rem 0.75rem' }}>
+                  <i className="fas fa-info-circle me-2"></i>
+                  <strong>Predicted Data:</strong> This information is based on your cycle patterns
+                </div>
+              )}
+              
+              {selectedDay.day.is_period_day && (
                 <div className="cycle-info mb-3">
-                  <h6>Cycle Information</h6>
+                  <h6>
+                    <i className="fas fa-tint me-2"></i>
+                    Period Information
+                  </h6>
                   <div className="info-grid">
-                    <div className="info-item">
-                      <span className="info-label">Cycle Day:</span>
-                      <span className="info-value">{selectedDay.day.cycle_day}</span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Phase:</span>
-                      <span className="info-value">
-                        {getCurrentPhase(selectedDay.day.cycle_day)?.name}
-                      </span>
-                    </div>
-                    <div className="info-item">
-                      <span className="info-label">Fertility:</span>
-                      <span className="info-value">
-                        {getFertilityLevel(selectedDay.day.cycle_day)}
-                      </span>
-                    </div>
+                    {selectedDay.day.is_period_start && (
+                      <div className="info-item">
+                        <span className="info-label">Status:</span>
+                        <span className="info-value">Period Start</span>
+                      </div>
+                    )}
+                    {selectedDay.day.is_period_end && (
+                      <div className="info-item">
+                        <span className="info-label">Status:</span>
+                        <span className="info-value">Period End</span>
+                      </div>
+                    )}
+                    {selectedDay.day.flow_intensity && (
+                      <div className="info-item">
+                        <span className="info-label">Flow:</span>
+                        <span className="info-value">{selectedDay.day.flow_intensity}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
               
-              {selectedDay.day.symptoms.length > 0 && (
+              {selectedDay.day.is_ovulation_day && (
+                <div className="cycle-info mb-3" style={{ background: '#fff3e0', borderLeft: '4px solid #ff9800' }}>
+                  <h6>
+                    <i className="fas fa-egg me-2"></i>
+                    Ovulation Day
+                  </h6>
+                  <p style={{ fontSize: '0.9rem', margin: '0.5rem 0 0 0', color: '#e65100' }}>
+                    This is your most fertile day. Likelihood of conception is highest.
+                  </p>
+                </div>
+              )}
+              
+              {selectedDay.day.is_fertility_day && !selectedDay.day.is_ovulation_day && (
+                <div className="cycle-info mb-3" style={{ background: '#f3e5f5', borderLeft: '4px solid #9c27b0' }}>
+                  <h6>
+                    <i className="fas fa-fire me-2"></i>
+                    Fertile Window
+                  </h6>
+                  <p style={{ fontSize: '0.9rem', margin: '0.5rem 0 0 0', color: '#4a148c' }}>
+                    You're in your fertile window. Pregnancy is possible during this time.
+                  </p>
+                </div>
+              )}
+              
+              {!selectedDay.day.is_period_day && !selectedDay.day.is_ovulation_day && !selectedDay.day.is_fertility_day && selectedDay.day.is_current_month && (
+                <div className="cycle-info mb-3" style={{ background: '#e8f5e9', borderLeft: '4px solid #4caf50' }}>
+                  <h6>
+                    <i className="fas fa-check-circle me-2"></i>
+                    Safe Day
+                  </h6>
+                  <p style={{ fontSize: '0.9rem', margin: '0.5rem 0 0 0', color: '#1b5e20' }}>
+                    Lower likelihood of fertility on this day.
+                  </p>
+                </div>
+              )}
+              
+              {selectedDay.day.symptoms && selectedDay.day.symptoms.length > 0 && (
                 <div className="symptoms-detail mb-3">
-                  <h6>Symptoms</h6>
+                  <h6>
+                    <i className="fas fa-heart-pulse me-2"></i>
+                    Symptoms
+                  </h6>
                   <div className="symptom-tags">
                     {selectedDay.day.symptoms.map(symptom => (
                       <span key={symptom} className="symptom-tag">
@@ -955,12 +1189,15 @@ const CycleCalendar: React.FC<CalendarProps> = ({
               
               {selectedDay.day.notes && (
                 <div className="notes-detail">
-                  <h6>Notes</h6>
+                  <h6>
+                    <i className="fas fa-clipboard me-2"></i>
+                    Notes
+                  </h6>
                   <p>{selectedDay.day.notes}</p>
                 </div>
               )}
               
-              {(!selectedDay.day.symptoms.length && !selectedDay.day.notes) && (
+              {!selectedDay.day.is_period_day && (!selectedDay.day.symptoms || selectedDay.day.symptoms.length === 0) && !selectedDay.day.notes && (
                 <div className="text-center text-muted py-4">
                   <i className="fas fa-clipboard me-2"></i>
                   No data recorded for this day

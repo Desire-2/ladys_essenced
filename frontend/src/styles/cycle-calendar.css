@@ -281,11 +281,72 @@
   box-shadow: none;
 }
 
+/* Legend filter states */
+.calendar-day.dimmed {
+  opacity: 0.25;
+  filter: grayscale(70%);
+  pointer-events: none;
+}
+
+.calendar-day.highlighted {
+  animation: highlightPulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 16px rgba(33, 150, 243, 0.7) !important;
+  z-index: 5;
+  transform: scale(1.02);
+}
+
+@keyframes highlightPulse {
+  0%, 100% { 
+    transform: scale(1.02); 
+    box-shadow: 0 0 16px rgba(33, 150, 243, 0.7); 
+  }
+  50% { 
+    transform: scale(1.05); 
+    box-shadow: 0 0 24px rgba(33, 150, 243, 0.9); 
+  }
+}
+
+/* Predicted days styling */
+.calendar-day.predicted {
+  opacity: 0.7;
+  border-style: dashed !important;
+  position: relative;
+}
+
+.calendar-day.predicted::before {
+  content: '?';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  font-size: 10px;
+  font-weight: bold;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  z-index: 1;
+}
+
 .calendar-day.today {
   background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
   border: 2px solid #2196f3;
-  box-shadow: 0 0 12px rgba(33, 150, 243, 0.4), inset 0 0 0 1px rgba(33, 150, 243, 0.2);
+  box-shadow: 0 0 12px rgba(33, 150, 243, 0.5), inset 0 0 0 1px rgba(33, 150, 243, 0.2);
   font-weight: 600;
+}
+
+.calendar-day.today .day-number {
+  color: #1565c0;
+  font-weight: 800;
+}
+
+.calendar-day.today .cycle-day {
+  background: rgba(21, 101, 192, 0.15);
+  color: #1565c0;
 }
 
 .calendar-day.today::before {
@@ -312,10 +373,20 @@
 .calendar-day.period-day {
   background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
   border-left: 4px solid #f44336;
+  color: #b71c1c;
+}
+
+.calendar-day.period-day .day-number {
+  color: #b71c1c;
+}
+
+.calendar-day.period-day .cycle-day {
+  background: rgba(183, 28, 28, 0.15);
+  color: #b71c1c;
 }
 
 .calendar-day.period-day:hover {
-  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.2);
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
 }
 
 .calendar-day.period-start {
@@ -347,28 +418,58 @@
   background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
   border-left: 4px solid #ff9800;
   font-weight: 600;
+  color: #e65100;
+}
+
+.calendar-day.ovulation-day .day-number {
+  color: #e65100;
+}
+
+.calendar-day.ovulation-day .cycle-day {
+  background: rgba(230, 81, 0, 0.15);
+  color: #e65100;
 }
 
 .calendar-day.ovulation-day:hover {
-  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
 }
 
 .calendar-day.high-fertility {
   background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
   border-left: 4px solid #9c27b0;
+  color: #4a148c;
+}
+
+.calendar-day.high-fertility .day-number {
+  color: #4a148c;
+}
+
+.calendar-day.high-fertility .cycle-day {
+  background: rgba(74, 20, 140, 0.15);
+  color: #4a148c;
 }
 
 .calendar-day.high-fertility:hover {
-  box-shadow: 0 4px 12px rgba(156, 39, 176, 0.2);
+  box-shadow: 0 4px 12px rgba(156, 39, 176, 0.3);
 }
 
 .calendar-day.medium-fertility {
   background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
   border-left: 4px solid #4caf50;
+  color: #1b5e20;
+}
+
+.calendar-day.medium-fertility .day-number {
+  color: #1b5e20;
+}
+
+.calendar-day.medium-fertility .cycle-day {
+  background: rgba(27, 94, 32, 0.15);
+  color: #1b5e20;
 }
 
 .calendar-day.medium-fertility:hover {
-  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
 }
 
 /* Phase Colors */
@@ -403,7 +504,35 @@
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
-  padding: 0.25rem 0;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  outline: none;
+}
+
+.legend-item:hover {
+  background: #f0f0f0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.legend-item:focus {
+  outline: 2px solid #2196f3;
+  outline-offset: 2px;
+}
+
+.legend-item.active {
+  background: #e3f2fd;
+  border: 2px solid #2196f3;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+  transform: translateY(-2px);
+}
+
+.legend-item.active .legend-label {
+  color: #1565c0;
+  font-weight: 600;
 }
 
 .legend-color {
@@ -414,6 +543,37 @@
   border: 1px solid #dee2e6;
   display: inline-block;
   flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Legend color styles matching calendar */
+.legend-color.period-day {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border: 1px solid #f44336;
+  border-left: 3px solid #f44336;
+}
+
+.legend-color.ovulation-day {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 1px solid #ff9800;
+  border-left: 3px solid #ff9800;
+}
+
+.legend-color.high-fertility {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+  border: 1px solid #9c27b0;
+  border-left: 3px solid #9c27b0;
+}
+
+.legend-color.safe-day {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: 1px solid #4caf50;
+  border-left: 3px solid #4caf50;
+}
+
+.legend-color.today {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 2px solid #2196f3;
 }
 
 .phase-color {

@@ -423,6 +423,9 @@ def get_calendar_data():
     avg_cycle_length = sum(cycle_lengths) / len(cycle_lengths) if cycle_lengths else 28
     
     print(f"Found {len(logs)} logs, average cycle: {avg_cycle_length}")
+    if logs:
+        print(f"Sample log: start={logs[0].start_date.date()}, cycle_length={logs[0].cycle_length}")
+
     
     # Build calendar data
     calendar_days = []
@@ -465,18 +468,31 @@ def get_calendar_data():
                         day_data['symptoms'] = log.symptoms
                 if log.notes:
                     day_data['notes'] = log.notes
-                break
             
-            # Calculate ovulation and fertile window
-            if log.cycle_length:
-                ovulation_date = log_start + dt.timedelta(days=log.cycle_length // 2)
-                fertile_start = ovulation_date - dt.timedelta(days=2)
-                fertile_end = ovulation_date + dt.timedelta(days=2)
-                
+            # Calculate ovulation and fertile window based on this cycle
+            # Use stored cycle_length if available, otherwise use average
+            cycle_len = log.cycle_length if log.cycle_length else int(avg_cycle_length)
+            
+            # Ovulation typically occurs 14 days BEFORE the next period
+            ovulation_date = log_start + dt.timedelta(days=cycle_len - 14)
+            # Fertile window is typically 5 days before ovulation to 1 day after
+            fertile_start = ovulation_date - dt.timedelta(days=5)
+            fertile_end = ovulation_date + dt.timedelta(days=1)
+            
+            # Debug: print ovulation calculation for first log
+            if current_date == start_calendar and logs.index(log) == 0:
+                print(f"Ovulation calc: period_start={log_start}, cycle_len={cycle_len}, ovulation={ovulation_date}, fertile_window={fertile_start} to {fertile_end}")
+            
+            # Only mark ovulation/fertility if date is within this cycle and NOT a period day
+            cycle_end = log_start + dt.timedelta(days=cycle_len)
+            if log_start <= current_date <= cycle_end and not day_data['is_period_day']:
                 if current_date == ovulation_date:
                     day_data['is_ovulation_day'] = True
+                    print(f"Marked {current_date} as ovulation day")
                 elif fertile_start <= current_date <= fertile_end:
                     day_data['is_fertility_day'] = True
+                    if current_date == fertile_start:
+                        print(f"Marked {current_date} as start of fertile window")
         
         # Predict future periods based on the last cycle
         if logs and not day_data['is_period_day']:
@@ -494,9 +510,9 @@ def get_calendar_data():
                     break
                 
                 # Predicted ovulation and fertile window
-                predicted_ovulation = predicted_start + dt.timedelta(days=int(avg_cycle_length) // 2)
-                predicted_fertile_start = predicted_ovulation - dt.timedelta(days=2)
-                predicted_fertile_end = predicted_ovulation + dt.timedelta(days=2)
+                predicted_ovulation = predicted_start + dt.timedelta(days=int(avg_cycle_length) - 14)
+                predicted_fertile_start = predicted_ovulation - dt.timedelta(days=5)
+                predicted_fertile_end = predicted_ovulation + dt.timedelta(days=1)
                 
                 if current_date == predicted_ovulation:
                     day_data['is_ovulation_day'] = True
