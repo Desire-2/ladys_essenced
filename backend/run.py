@@ -41,4 +41,5 @@ if __name__ == '__main__':
             print("⚠️  Continuing with server startup...")
     
     print("🚀 Starting Flask application...")
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    app.run(host='0.0.0.0', port=5001, debug=debug_mode)

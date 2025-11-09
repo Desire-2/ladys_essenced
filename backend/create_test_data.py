@@ -4,7 +4,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app import create_app, db
+from app import create_app, db, bcrypt
 from app.models import User, HealthProvider, Appointment
 from datetime import datetime, timedelta
 
@@ -52,41 +52,45 @@ def create_test_data():
             provider = health_providers[0]
             print(f"\n🔄 Creating test appointments for provider {provider.id}...")
             
+            # Generate a proper bcrypt hash for test users
+            # Default password: "password123"
+            test_password_hash = bcrypt.generate_password_hash('password123').decode('utf-8')
+            
             # First, create test users (patients)
             test_users = [
                 {
                     'name': 'Alice Johnson',
                     'phone_number': '+250-780-123-456',
                     'email': 'alice@example.com',
-                    'password_hash': 'hashed_password',  # Simple placeholder
+                    'password_hash': test_password_hash,
                     'user_type': 'patient'
                 },
                 {
                     'name': 'Betty Smith',
                     'phone_number': '+250-780-789-123',
                     'email': 'betty@example.com',
-                    'password_hash': 'hashed_password',
+                    'password_hash': test_password_hash,
                     'user_type': 'patient'
                 },
                 {
                     'name': 'Carol Williams',
                     'phone_number': '+250-780-456-789',
                     'email': 'carol@example.com',
-                    'password_hash': 'hashed_password',
+                    'password_hash': test_password_hash,
                     'user_type': 'patient'
                 },
                 {
                     'name': 'Diana Brown',
                     'phone_number': '+250-780-321-654',
                     'email': 'diana@example.com',
-                    'password_hash': 'hashed_password',
+                    'password_hash': test_password_hash,
                     'user_type': 'patient'
                 },
                 {
                     'name': 'Eva Davis',
                     'phone_number': '+250-780-987-321',
                     'email': 'eva@example.com',
-                    'password_hash': 'hashed_password',
+                    'password_hash': test_password_hash,
                     'user_type': 'patient'
                 }
             ]

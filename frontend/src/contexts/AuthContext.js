@@ -355,9 +355,9 @@ export const AuthProvider = ({ children }) => {
       case 'parent':
         // If parent has no children, redirect to collect/onboarding page
         if (user.children && user.children.length === 0) {
-          return '/dashboard/parent/collect';
+          return '/dashboard';
         }
-        return '/dashboard/parent';
+        return '/dashboard';
       case 'adolescent':
         return '/dashboard';
       default:

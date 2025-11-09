@@ -701,6 +701,31 @@ export default function AdminDashboard() {
     }
   }, [makeApiCall, showToast, buildApiUrl, setActionLoadingState, loadUsers, usersPagination.current_page, loadUserStatistics]);
 
+  const handleResetPassword = useCallback(async (userId: number, userName: string) => {
+    const actionKey = `reset-password-${userId}`;
+    
+    confirmActionDialog(
+      `Reset password to default (password) for ${userName}? They will need to change it on next login.`,
+      async () => {
+        try {
+          setActionLoadingState(actionKey, true);
+          const data = await makeApiCall(buildApiUrl(`/users/${userId}/reset-password`), {
+            method: 'PATCH'
+          });
+          
+          showToast('success', data.message || 'Password reset successfully to default');
+          loadUsers(usersPagination.current_page);
+          loadDashboardData();
+        } catch (err: any) {
+          console.error('Failed to reset user password:', err);
+          showToast('error', err.message || 'Failed to reset user password');
+        } finally {
+          setActionLoadingState(actionKey, false);
+        }
+      }
+    );
+  }, [buildApiUrl, makeApiCall, showToast, setActionLoadingState, loadUsers, usersPagination.current_page, loadDashboardData, confirmActionDialog]);
+
   // === END ENHANCED USER MANAGEMENT FUNCTIONS ===
 
   // Enhanced action functions
@@ -2169,6 +2194,13 @@ export default function AdminDashboard() {
                                   title="Change Role"
                                 >
                                   <i className="fas fa-user-cog"></i>
+                                </button>
+                                <button
+                                  className="btn btn-outline-info btn-sm"
+                                  onClick={() => handleResetPassword(user.id, user.name)}
+                                  title="Reset Password to Default"
+                                >
+                                  <i className="fas fa-key"></i>
                                 </button>
                                 <button
                                   className="btn btn-outline-secondary btn-sm"

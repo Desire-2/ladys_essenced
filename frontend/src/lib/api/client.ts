@@ -154,19 +154,42 @@ class APIClient {
     getContentItem: (id: number) => this.request(`/api/content/${id}`)
   };
 
-  // Cycle API
+  // Cycle API - Enhanced with Intelligent Predictions
   cycle = {
-    getLogs: (page?: number, per_page?: number) => {
-      const query = page || per_page ? `?page=${page || 1}&per_page=${per_page || 10}` : '';
+    getLogs: (page?: number, per_page?: number, userId?: number | null) => {
+      const params: string[] = [];
+      if (page) params.push(`page=${page}`);
+      if (per_page) params.push(`per_page=${per_page}`);
+      if (userId) params.push(`user_id=${userId}`);
+      const query = params.length > 0 ? `?${params.join('&')}` : '';
       return this.request(`/api/cycle-logs${query}`);
     },
     createLog: (data: any) => this.request('/api/cycle-logs', {
       method: 'POST',
       body: JSON.stringify(data)
     }),
-    getStats: () => this.request('/api/cycle-logs/stats'),
-    getCalendarData: (year: number, month: number) => 
-      this.request(`/api/cycle-logs/calendar?year=${year}&month=${month}`)
+    // Enhanced stats with predictions, variability, and health insights
+    getStats: (userId?: number | null) => {
+      const query = userId ? `?user_id=${userId}` : '';
+      return this.request(`/api/cycle-logs/stats${query}`);
+    },
+    // NEW: Get personalized insights and recommendations
+    getInsights: (userId?: number | null) => {
+      const query = userId ? `?user_id=${userId}` : '';
+      return this.request(`/api/cycle-logs/insights${query}`);
+    },
+    // NEW: Get future predictions for planning
+    getPredictions: (months: number = 3, userId?: number | null) => {
+      const params: string[] = [`months=${months}`];
+      if (userId) params.push(`user_id=${userId}`);
+      return this.request(`/api/cycle-logs/predictions?${params.join('&')}`);
+    },
+    // Enhanced calendar with phases, confidence, and cycle days
+    getCalendarData: (year: number, month: number, userId?: number | null) => {
+      const params: string[] = [`year=${year}`, `month=${month}`];
+      if (userId) params.push(`user_id=${userId}`);
+      return this.request(`/api/cycle-logs/calendar?${params.join('&')}`);
+    }
   };
 
   // Meal API

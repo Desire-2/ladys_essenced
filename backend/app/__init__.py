@@ -138,6 +138,11 @@ def create_app():
     @app.before_request
     def before_request():
         """Handle CORS preflight requests"""
+        # Log every request
+        with open('/tmp/flask_before_request.log', 'a') as f:
+            f.write(f"BEFORE REQUEST: {request.method} {request.path}\n")
+            f.flush()
+        
         if request.method == 'OPTIONS':
             origin = request.headers.get('Origin')
             if origin in allowed_origins:
@@ -161,7 +166,16 @@ def create_app():
         return response
     
     # Register blueprints
+    with open('/tmp/blueprint_registration.log', 'w') as f:
+        f.write("Starting blueprint imports...\n")
+        f.flush()
+    
     from app.routes.auth import auth_bp
+    with open('/tmp/blueprint_registration.log', 'a') as f:
+        f.write(f"Auth blueprint imported: {auth_bp}\n")
+        f.write(f"Auth blueprint name: {auth_bp.name}\n")
+        f.flush()
+    
     from app.routes.cycle_logs import cycle_logs_bp
     from app.routes.meal_logs import meal_logs_bp
     from app.routes.appointments import appointments_bp
@@ -175,7 +189,14 @@ def create_app():
     from app.routes.parent_appointments import parent_appointments_bp
 
     
+    with open('/tmp/blueprint_registration.log', 'a') as f:
+        f.write("About to register auth_bp...\n")
+        f.flush()
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    with open('/tmp/blueprint_registration.log', 'a') as f:
+        f.write("Auth blueprint registered!\n")
+        f.write(f"App url_map: {list(app.url_map.iter_rules())}\n")
+        f.flush()
     app.register_blueprint(cycle_logs_bp, url_prefix='/api/cycle-logs')
     app.register_blueprint(meal_logs_bp, url_prefix='/api/meal-logs')
     app.register_blueprint(appointments_bp, url_prefix='/api/appointments')

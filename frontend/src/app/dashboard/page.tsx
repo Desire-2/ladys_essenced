@@ -10,6 +10,7 @@ import { useAppointment } from '../../contexts/AppointmentContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import EnhancedAppointmentBooking from '../../components/EnhancedAppointmentBooking';
 import CycleCalendar from '../../components/CycleCalendar';
+import CycleInsights from '../../components/CycleInsights';
 
 interface User {
   id: number;
@@ -994,70 +995,50 @@ export default function Dashboard() {
         {activeTab === 'overview' && (
           <div>
             <div className="row g-3 g-md-4">
-              {/* Cycle Summary */}
-              <div className="col-12 col-lg-6 mb-3 mb-md-4">
-                <DataSection
-                  title="Cycle Summary"
-                  dataType="cycle"
-                  icon="fas fa-calendar-alt"
-                >
-                  {selectedChild && (
-                    <small className="text-muted d-block mb-2 mb-md-3">For: {children.find(c => c.user_id === selectedChild)?.name}</small>
-                  )}
-                  {dataAvailability.cycle ? (
-                    <>
-                      <div className="d-flex justify-content-between mb-2 mb-md-3">
-                        <div className="small">
-                          <strong>Next Period:</strong>
-                        </div>
-                        <div className={`${cycleData.nextPeriod ? 'text-primary fw-bold' : 'text-muted'} small`}>
-                          {cycleData.nextPeriod || 'Not available'}
-                        </div>
-                      </div>
-                      <div className="d-flex justify-content-between mb-2 mb-md-3">
-                        <div className="small">
-                          <strong>Last Period:</strong>
-                        </div>
-                        <div className={`${cycleData.lastPeriod ? 'text-success' : 'text-muted'} small`}>
-                          {cycleData.lastPeriod || 'Not logged yet'}
-                        </div>
-                      </div>
-                      <div className="d-flex justify-content-between mb-2 mb-md-3">
-                        <div className="small">
-                          <strong>Average Cycle Length:</strong>
-                        </div>
-                        <div className={`${cycleData.cycleLength ? 'text-info fw-bold' : 'text-muted'} small`}>
-                          {cycleData.cycleLength ? `${cycleData.cycleLength} days` : 'N/A'}
-                        </div>
-                      </div>
-                      <div className="d-flex justify-content-between mb-2 mb-md-3">
-                        <div className="small">
-                          <strong>Total Logs:</strong>
-                        </div>
-                        <div className="text-secondary fw-bold small">
-                          {cycleData.totalLogs} cycles
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <button 
-                          className="btn btn-primary w-100"
-                          onClick={() => setActiveTab('cycle')}
-                        >
-                          <i className="fas fa-plus-circle me-2"></i>
-                          Track Cycle
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <EmptyState
-                      icon="fas fa-calendar-plus"
-                      title="No Cycle Data"
-                      description="Start tracking your menstrual cycle to see insights and predictions."
-                      actionText="Start Tracking"
-                      onAction={() => setActiveTab('cycle')}
-                    />
-                  )}
-                </DataSection>
+              {/* Intelligent Cycle Insights - Enhanced */}
+              <div className="col-12 col-lg-8 mb-3 mb-md-4">
+                {selectedChild && (
+                  <div className="alert alert-info mb-3">
+                    <i className="fas fa-info-circle me-2"></i>
+                    Viewing intelligent cycle insights for: <strong>{children.find(c => c.user_id === selectedChild)?.name}</strong>
+                  </div>
+                )}
+                <CycleInsights userId={selectedChild} />
+              </div>
+              
+              {/* Quick Actions - Compact */}
+              <div className="col-12 col-lg-4 mb-3 mb-md-4">
+                <div className="card mb-3">
+                  <div className="card-header bg-primary text-white">
+                    <h6 className="mb-0">
+                      <i className="fas fa-bolt me-2"></i>
+                      Quick Actions
+                    </h6>
+                  </div>
+                  <div className="card-body">
+                    <button 
+                      className="btn btn-primary w-100 mb-3"
+                      onClick={() => setActiveTab('cycle')}
+                    >
+                      <i className="fas fa-plus-circle me-2"></i>
+                      Log Cycle
+                    </button>
+                    <button 
+                      className="btn btn-outline-success w-100 mb-3"
+                      onClick={() => setActiveTab('meals')}
+                    >
+                      <i className="fas fa-utensils me-2"></i>
+                      Log Meal
+                    </button>
+                    <button 
+                      className="btn btn-outline-info w-100"
+                      onClick={() => setActiveTab('appointments')}
+                    >
+                      <i className="fas fa-calendar-check me-2"></i>
+                      Book Appointment
+                    </button>
+                  </div>
+                </div>
               </div>
               
               {/* Notifications - Responsive */}
