@@ -146,31 +146,81 @@ export default function CycleInsights({ userId }: CycleInsightsProps) {
     );
   }
 
+  // Handle case when no cycle data exists yet
+  if (!stats.basic_stats || (stats.basic_stats.total_logs === 0)) {
+    return (
+      <div className="cycle-insights">
+        <div className="card">
+          <div className="card-body text-center py-5">
+            <div className="mb-4">
+              <i className="fas fa-calendar-plus fa-4x text-muted mb-3"></i>
+              <h5 className="text-muted">Start Your Cycle Journey</h5>
+              <p className="text-muted mb-4">
+                Begin tracking your menstrual cycle to unlock intelligent insights, 
+                accurate predictions, and personalized health recommendations.
+              </p>
+            </div>
+            
+            <div className="row g-3 mb-4">
+              <div className="col-md-4">
+                <div className="text-center">
+                  <i className="fas fa-chart-line fa-2x text-primary mb-2"></i>
+                  <h6>Smart Predictions</h6>
+                  <small className="text-muted">Get accurate forecasts up to 12 months ahead</small>
+                </div>
+              </div>
+              <div className="col-md-4">
+                <div className="text-center">
+                  <i className="fas fa-heartbeat fa-2x text-success mb-2"></i>
+                  <h6>Health Insights</h6>
+                  <small className="text-muted">Understand your cycle patterns and phases</small>
+                </div>
+              </div>
+              <div className="col-md-4">
+                <div className="text-center">
+                  <i className="fas fa-lightbulb fa-2x text-warning mb-2"></i>
+                  <h6>Personal Tips</h6>
+                  <small className="text-muted">Phase-specific guidance and recommendations</small>
+                </div>
+              </div>
+            </div>
+            
+            <div className="alert alert-info">
+              <i className="fas fa-info-circle me-2"></i>
+              <strong>Getting Started:</strong> Log your first period to begin receiving intelligent insights. 
+              The more you track, the more accurate your predictions become!
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="cycle-insights">
       {/* Current Phase Banner */}
-      {stats.basic_stats.current_cycle_phase && (
+      {stats.basic_stats?.current_cycle_phase && (
         <div 
           className="card mb-4 text-white" 
           style={{ 
-            background: `linear-gradient(135deg, ${getPhaseColor(stats.basic_stats.current_cycle_phase)}, ${getPhaseColor(stats.basic_stats.current_cycle_phase)}dd)`,
+            background: `linear-gradient(135deg, ${getPhaseColor(stats.basic_stats?.current_cycle_phase)}, ${getPhaseColor(stats.basic_stats?.current_cycle_phase)}dd)`,
             border: 'none'
           }}
         >
           <div className="card-body">
             <div className="row align-items-center">
               <div className="col-auto">
-                <i className={`fas fa-${getPhaseIcon(stats.basic_stats.current_cycle_phase)} fa-3x`}></i>
+                <i className={`fas fa-${getPhaseIcon(stats.basic_stats?.current_cycle_phase)} fa-3x`}></i>
               </div>
               <div className="col">
                 <h5 className="mb-1 text-capitalize">
-                  {stats.basic_stats.current_cycle_phase} Phase
+                  {stats.basic_stats?.current_cycle_phase} Phase
                 </h5>
                 <p className="mb-0">
-                  Day {stats.basic_stats.days_since_period} since last period
+                  Day {stats.basic_stats?.days_since_period} since last period
                 </p>
               </div>
-              {stats.basic_stats.weighted_cycle_length && (
+              {stats.basic_stats?.weighted_cycle_length && (
                 <div className="col-auto">
                   <div className="text-end">
                     <div className="h3 mb-0">{Math.round(stats.basic_stats.weighted_cycle_length)}</div>
@@ -272,7 +322,7 @@ export default function CycleInsights({ userId }: CycleInsightsProps) {
               </div>
             ))}
             
-            {stats.basic_stats.data_points < 6 && (
+            {stats.basic_stats?.data_points < 6 && (
               <div className="alert alert-info mt-3 mb-0">
                 <i className="fas fa-info-circle me-2"></i>
                 <small>
@@ -352,24 +402,24 @@ export default function CycleInsights({ userId }: CycleInsightsProps) {
           <div className="d-flex justify-content-between align-items-center mb-2">
             <span className="fw-bold">Data Quality</span>
             <span className="badge bg-primary">
-              {stats.basic_stats.total_logs} cycles logged
+              {stats.basic_stats?.total_logs || 0} cycles logged
             </span>
           </div>
           <div className="progress" style={{ height: '12px' }}>
             <div 
               className={`progress-bar ${
-                stats.basic_stats.total_logs >= 6 ? 'bg-success' :
-                stats.basic_stats.total_logs >= 3 ? 'bg-warning' :
+                (stats.basic_stats?.total_logs || 0) >= 6 ? 'bg-success' :
+                (stats.basic_stats?.total_logs || 0) >= 3 ? 'bg-warning' :
                 'bg-danger'
               }`}
-              style={{ width: `${Math.min(100, (stats.basic_stats.total_logs / 6) * 100)}%` }}
+              style={{ width: `${Math.min(100, ((stats.basic_stats?.total_logs || 0) / 6) * 100)}%` }}
             >
-              {Math.round((stats.basic_stats.total_logs / 6) * 100)}%
+              {Math.round(((stats.basic_stats?.total_logs || 0) / 6) * 100)}%
             </div>
           </div>
           <small className="text-muted d-block mt-2">
-            {stats.basic_stats.total_logs < 6 
-              ? `Log ${6 - stats.basic_stats.total_logs} more cycle(s) for best accuracy`
+            {(stats.basic_stats?.total_logs || 0) < 6 
+              ? `Log ${6 - (stats.basic_stats?.total_logs || 0)} more cycle(s) for best accuracy`
               : 'Excellent! Your predictions are highly accurate'}
           </small>
         </div>

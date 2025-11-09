@@ -49,34 +49,34 @@ const enhancedStyles = `
 }
 .calendar-grid {
   background: #f8fafc;
-  border-radius: 12px;
-  padding: 1.2rem 0.7rem 1.2rem 0.7rem;
+  border-radius: clamp(8px, 2vw, 12px);
+  padding: clamp(0.5rem, 3vw, 1.2rem) clamp(0.3rem, 2vw, 0.7rem);
   box-shadow: 0 1px 8px rgba(52, 73, 94, 0.04);
 }
 .calendar-header-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.2rem;
-  margin-bottom: 0.5rem;
+  gap: clamp(0.1rem, 1vw, 0.2rem);
+  margin-bottom: clamp(0.3rem, 1vw, 0.5rem);
 }
 .calendar-header-day {
   text-align: center;
   font-weight: 600;
   color: #7d3c98;
-  font-size: 1.1rem;
-  letter-spacing: 0.5px;
-  padding-bottom: 0.2rem;
+  font-size: clamp(0.8rem, 2.5vw, 1.1rem);
+  letter-spacing: 0.3px;
+  padding-bottom: clamp(0.1rem, 0.5vw, 0.2rem);
 }
 .calendar-week {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.2rem;
-  margin-bottom: 0.2rem;
+  gap: clamp(0.1rem, 1vw, 0.2rem);
+  margin-bottom: clamp(0.1rem, 0.5vw, 0.2rem);
 }
 .calendar-day {
-  min-height: 80px;
+  min-height: clamp(50px, 12vw, 80px);
   background: #fff;
-  border-radius: 8px;
+  border-radius: clamp(6px, 1.5vw, 8px);
   cursor: pointer;
   transition: box-shadow 0.2s, background 0.2s, transform 0.1s;
   position: relative;
@@ -85,6 +85,7 @@ const enhancedStyles = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: clamp(0.2rem, 1vw, 0.5rem);
 }
 .calendar-day:hover, .calendar-day:focus {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -159,41 +160,43 @@ const enhancedStyles = `
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: 0.2rem 0.1rem;
+  padding: clamp(0.1rem, 0.5vw, 0.2rem) clamp(0.05rem, 0.25vw, 0.1rem);
 }
   .day-number {
-    font-size: 1.3rem;
+    font-size: clamp(0.9rem, 3vw, 1.3rem);
     font-weight: 700;
     color: inherit;
-    letter-spacing: 0.5px;
+    letter-spacing: clamp(0.2px, 0.5vw, 0.5px);
     transition: color 0.2s;
   }
 .cycle-day {
-  font-size: 0.75rem;
+  font-size: clamp(0.6rem, 1.8vw, 0.75rem);
   color: inherit;
   opacity: 0.8;
-  margin-top: 2px;
+  margin-top: clamp(1px, 0.3vw, 2px);
 }
 .fertility-indicator {
-  font-size: 1.1rem;
-  margin-bottom: 0.1rem;
+  font-size: clamp(0.8rem, 2.5vw, 1.1rem);
+  margin-bottom: clamp(0.05rem, 0.25vw, 0.1rem);
 }
 .flow-intensity {
-  font-size: 1.1rem;
-  margin-bottom: 0.1rem;
+  font-size: clamp(0.8rem, 2.5vw, 1.1rem);
+  margin-bottom: clamp(0.05rem, 0.25vw, 0.1rem);
 }
 .mood-indicator {
-  font-size: 1.1rem;
-  margin-bottom: 0.1rem;
+  font-size: clamp(0.8rem, 2.5vw, 1.1rem);
+  margin-bottom: clamp(0.05rem, 0.25vw, 0.1rem);
 }
 .symptoms {
   display: flex;
-  gap: 0.1rem;
-  margin-top: 0.1rem;
+  gap: clamp(0.05rem, 0.25vw, 0.1rem);
+  margin-top: clamp(0.05rem, 0.25vw, 0.1rem);
+  flex-wrap: wrap;
+  justify-content: center;
 }
 .symptom-icon {
-  font-size: 1.1rem;
-  margin-right: 0.1rem;
+  font-size: clamp(0.7rem, 2vw, 1.1rem);
+  margin-right: clamp(0.05rem, 0.25vw, 0.1rem);
 }
 .more-symptoms {
   font-size: 0.9rem;
@@ -574,6 +577,87 @@ const enhancedStyles = `
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* Enhanced Mobile Responsiveness for Calendar Grid */
+@media (max-width: 480px) {
+  .cycle-calendar {
+    padding: 1rem 0.5rem !important;
+    margin: 1rem auto !important;
+  }
+  
+  .calendar-grid {
+    padding: 0.5rem 0.3rem !important;
+    border-radius: 8px !important;
+  }
+  
+  .calendar-header-day {
+    font-size: 0.7rem !important;
+    padding-bottom: 0.1rem !important;
+  }
+  
+  .calendar-day {
+    min-height: 45px !important;
+    border-radius: 4px !important;
+    padding: 0.1rem !important;
+  }
+  
+  .day-number {
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+  }
+  
+  .fertility-indicator,
+  .flow-intensity,
+  .mood-indicator {
+    font-size: 0.7rem !important;
+  }
+  
+  .symptom-icon {
+    font-size: 0.6rem !important;
+  }
+  
+  .symptoms {
+    gap: 0.05rem !important;
+    margin-top: 0.05rem !important;
+  }
+  
+  .calendar-week {
+    gap: 0.08rem !important;
+    margin-bottom: 0.08rem !important;
+  }
+  
+  .calendar-header-row {
+    gap: 0.08rem !important;
+    margin-bottom: 0.3rem !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .calendar-day {
+    min-height: 40px !important;
+  }
+  
+  .day-number {
+    font-size: 0.8rem !important;
+  }
+  
+  .fertility-indicator,
+  .flow-intensity,
+  .mood-indicator,
+  .symptom-icon {
+    font-size: 0.65rem !important;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  .calendar-day {
+    min-height: 60px !important;
+  }
+  
+  .day-number {
+    font-size: 1rem !important;
+  }
 }
 `;
 

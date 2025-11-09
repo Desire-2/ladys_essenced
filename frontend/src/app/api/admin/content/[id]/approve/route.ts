@@ -2,13 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
 
-type RouteParams = {
-  params: Promise<{ id: string }>;
-};
-
 export async function PATCH(
   request: NextRequest,
-  context: RouteParams
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = request.headers.get('authorization');
@@ -17,7 +13,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'No authorization token' }, { status: 401 });
     }
 
-    const { id } = await context.params;
+    const { id } = await params;
 
     const response = await fetch(`${BACKEND_URL}/api/admin/content/${id}/approve`, {
       method: 'PATCH',
