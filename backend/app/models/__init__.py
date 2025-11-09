@@ -487,3 +487,18 @@ class Chapter(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+
+class LoginAttempt(db.Model):
+    """Model to track login attempts for rate limiting and audit logging"""
+    __tablename__ = 'login_attempts'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    phone_number = db.Column(db.String(20), nullable=False, index=True)
+    success = db.Column(db.Boolean, default=False, index=True)
+    ip_address = db.Column(db.String(50), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    def __repr__(self):
+        return f'<LoginAttempt {self.phone_number} - {self.success}>'

@@ -159,10 +159,13 @@ export const AuthProvider = ({ children }) => {
         throw new Error(errorData.message || `Login failed: ${response.status}`);
       }
       
-      const { token, refresh_token, user_id, user_type } = await response.json();
-
+      const { token, access_token, refresh_token, user_id, user_type } = await response.json();
+      
+      // Use access_token if available, otherwise fall back to token (for backward compatibility)
+      const actualToken = access_token || token;
+      
       // Store tokens in localStorage with consistent naming
-      localStorage.setItem('access_token', token);
+      localStorage.setItem('access_token', actualToken);
       localStorage.setItem('refresh_token', refresh_token);
       localStorage.setItem('user_id', user_id);
       localStorage.setItem('user_type', user_type);
@@ -192,7 +195,7 @@ export const AuthProvider = ({ children }) => {
         const profileResponse = await fetch(`${API_BASE_URL}${profileEndpoint}`, {
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
+            'Authorization': `Bearer ${actualToken}`,
           },
           signal: profileController.signal
         });
