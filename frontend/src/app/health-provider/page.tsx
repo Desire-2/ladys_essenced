@@ -1,14 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { buildHealthProviderApiUrl } from '../../utils/apiConfig';
 import { toast } from 'react-hot-toast';
+import api from '../../lib/api/client';
 import StatCard from './components/StatCard';
 import AvailabilityWidget from './components/AvailabilityWidget';
 import AnalyticsWidget from './components/AnalyticsWidget';
 import NotificationCenter from './components/NotificationCenter';
+import NotificationBell from '../../components/notifications/NotificationBell';
+import NotificationSender from '../../components/notifications/NotificationSender';
 import AvailabilityManagement from './components/AvailabilityManagement';
 
 // Helper function to handle API responses safely
@@ -137,7 +140,7 @@ export interface ProviderProfile {
   created_at: string;
 }
 
-export default function HealthProviderDashboard() {
+function HealthProviderDashboardContent() {
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState<ProviderStats | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -154,6 +157,9 @@ export default function HealthProviderDashboard() {
   const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [providerId, setProviderId] = useState<number>(0);
+  const isInitializedRef = useRef(false);
+  const hasRedirectedRef = useRef(false);
+  const isLoadingDataRef = useRef(false);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -161,94 +167,72 @@ export default function HealthProviderDashboard() {
   const [dateFilter, setDateFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
+  const [totalAppointments, setTotalAppointments] = useState<number>(0);
+
+  // Date range filters
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+
   const router = useRouter();
   const { user, loading: authLoading, hasRole, getDashboardRoute } = useAuth();
 
-  // Role-based access control and real-time updates
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login');
+  // Dashboard data loading function
+  const loadDashboardData = useCallback(async () => {
+    // Prevent multiple simultaneous loads
+    if (isLoadingDataRef.current) {
+      console.log('Dashboard data already loading, skipping...');
       return;
     }
-    
-    if (!authLoading && user && !hasRole('health_provider')) {
-      // Redirect to appropriate dashboard based on user type
-      const correctRoute = getDashboardRoute();
-      router.push(correctRoute);
-      return;
-    }
-    
-    if (!authLoading && user && hasRole('health_provider')) {
-      loadDashboardData();
-      
-      // Set up real-time updates every 30 seconds
-      const interval = setInterval(() => {
-        loadDashboardData();
-        if (activeTab === 'appointments') {
-          loadAppointments();
-        } else if (activeTab === 'unassigned') {
-          loadUnassignedAppointments();
-        }
-      }, 30000);
-      
-      setRefreshInterval(interval);
-      
-      // Cleanup interval on unmount
-      return () => {
-        if (interval) {
-          clearInterval(interval);
-        }
-      };
-    }
-  }, [user, authLoading, router, hasRole, getDashboardRoute, activeTab]);
 
-  // Cleanup interval on component unmount
-  useEffect(() => {
-    return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
-    };
-  }, [refreshInterval]);
-
-  const loadDashboardData = async () => {
     try {
+      isLoadingDataRef.current = true;
+      console.log('Loading dashboard data...');
       setLoading(true);
+      
+      // Check if user has health provider role
+      if (!hasRole('health_provider')) {
+        console.error('User does not have health provider access');
+        setError('Access denied: Health provider role required');
+        router.push('/dashboard');
+        return;
+      }
+      
       const token = localStorage.getItem('access_token');
       
       if (!token) {
-        router.push('/login');
+        console.warn('No access token found - user not authenticated');
         return;
       }
 
-      // Load multiple data sources in parallel
-      // TEMPORARY: Using test endpoints for demo without authentication
-      const [statsResponse, profileResponse, notificationsResponse] = await Promise.all([
-        fetch(buildHealthProviderApiUrl('/test/dashboard/stats?provider_id=1'), {
-          headers: {
-            'Content-Type': 'application/json'
-          }
+      // Load multiple data sources in parallel using authenticated endpoints
+      const [statsData, profileData, notificationsData] = await Promise.all([
+        api.healthProvider.getDashboardStats().catch((err) => {
+          console.warn('Failed to load dashboard stats:', err);
+          return null;
         }),
-        fetch(buildHealthProviderApiUrl('/profile'), {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }).catch(() => null), // May fail without auth
+        api.healthProvider.getProfile().catch((err) => {
+          console.warn('Failed to load profile:', err);
+          return null;
+        }),
         fetch(buildHealthProviderApiUrl('/notifications'), {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
-        }).catch(() => null) // Notifications might not be implemented yet
+        }).catch((err) => {
+          console.log('Notifications fetch failed:', err.message);
+          return null;
+        }) // Load notifications for the provider
       ]);
 
-      // Handle stats response - it should always succeed now
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
+      // Handle stats data
+      if (statsData) {
         setStats(statsData);
       } else {
-        console.warn('Stats API returned non-200 status:', statsResponse.status);
+        console.warn('Failed to load dashboard stats');
         // Provide default stats if API fails
         setStats({
           appointment_stats: {
@@ -266,36 +250,40 @@ export default function HealthProviderDashboard() {
         });
       }
 
-      // Handle profile response gracefully - may fail without auth
+      // Handle profile data
       let currentProviderId = 0;
-      if (profileResponse && profileResponse.ok) {
-        try {
-          const profileData = await profileResponse.json();
-          setProfile(profileData.profile);
-          currentProviderId = profileData.profile?.id || 0;
-        } catch (profileError) {
-          console.log('Profile API failed (expected without auth):', profileError);
-        }
+      if (profileData && profileData.profile) {
+        setProfile(profileData.profile);
+        currentProviderId = profileData.profile.id || 0;
+        console.log('Profile loaded successfully, Provider ID:', currentProviderId);
+      } else {
+        console.error('Failed to load profile data or profile is missing');
+        setError('Failed to load health provider profile');
+        return;
       }
       
-      // Set provider ID for components - make sure it's set immediately
+      // Set provider ID for components
       setProviderId(currentProviderId);
-      console.log('Provider ID set to:', currentProviderId);
 
-      // TEMPORARY: For testing without authentication, use provider ID 1
+      // If no provider ID found, show error
       if (currentProviderId === 0) {
-        console.log('No authenticated provider, using test provider ID 1 for demo');
-        setProviderId(1);
+        console.error('No provider ID in profile - health provider account may be incomplete');
+        setError('Provider profile incomplete. Please contact administrator.');
+        toast.error('Provider profile incomplete. Please contact administrator.');
+        return;
       }
 
-      // Load notifications if available
-      if (notificationsResponse && notificationsResponse.ok) {
-        const notificationsData = await notificationsResponse.json();
-        setNotifications(notificationsData.notifications || []);
+      // Handle notifications data
+      if (notificationsData && notificationsData.ok) {
+        const notificationsJson = await notificationsData.json();
+        setNotifications(notificationsJson.notifications || []);
       }
 
       setError('');
-      toast.success('Dashboard data loaded successfully');
+      // Only show success toast if we actually loaded data, not every time
+      if (statsData) {
+        console.log('Dashboard data loaded successfully');
+      }
     } catch (err: unknown) {
       console.error('Failed to load health provider dashboard:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
@@ -310,9 +298,90 @@ export default function HealthProviderDashboard() {
         toast.error(errorMessage);
       }
     } finally {
+      console.log('Dashboard data loading completed');
       setLoading(false);
+      isLoadingDataRef.current = false;
     }
-  };
+  }, []); // Empty dependencies since this function should be stable
+
+  // Role-based access control and initial data loading
+  useEffect(() => {
+    if (authLoading) return; // Don't do anything while auth is loading
+
+    if (!user) {
+      if (!hasRedirectedRef.current) {
+        hasRedirectedRef.current = true;
+        router.push('/login');
+      }
+      return;
+    }
+    
+    // Check user role safely
+    const userType = user.user_type || localStorage.getItem('user_type');
+    if (user && userType !== 'health_provider') {
+      // Redirect to appropriate dashboard based on user type
+      if (!hasRedirectedRef.current) {
+        hasRedirectedRef.current = true;
+        const dashboardRoutes: Record<string, string> = {
+          'admin': '/admin',
+          'content_writer': '/content-writer', 
+          'parent': '/dashboard',
+          'adolescent': '/dashboard'
+        };
+        const route = dashboardRoutes[userType] || '/dashboard';
+        router.push(route);
+      }
+      return;
+    }
+    
+    // Mark as ready for data loading and load data once
+    if (!isInitializedRef.current && user && userType === 'health_provider') {
+      isInitializedRef.current = true;
+      // Load dashboard data immediately when auth is ready
+      loadDashboardData();
+    }
+  }, [user, authLoading, router]); // Removed function dependencies
+
+  // Set up real-time updates separately
+  useEffect(() => {
+    // Only set up interval if user is authenticated and is health provider
+    const userType = user?.user_type || localStorage.getItem('user_type');
+    if (!user || userType !== 'health_provider') return;
+
+    // Clear existing interval first
+    if (refreshInterval) {
+      clearInterval(refreshInterval);
+    }
+
+    // Set up real-time updates every 30 seconds
+    const interval = setInterval(() => {
+      // Double check we're still authenticated
+      const currentUser = localStorage.getItem('access_token');
+      const currentUserType = localStorage.getItem('user_type');
+      if (currentUser && currentUserType === 'health_provider') {
+        console.log('Real-time update: refreshing dashboard data');
+        loadDashboardData();
+      }
+    }, 30000);
+    
+    setRefreshInterval(interval);
+    
+    // Cleanup interval on unmount
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [user]); // Only depend on user to prevent excessive re-creation
+
+  // Cleanup interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [refreshInterval]);
 
   const loadAppointments = useCallback(async () => {
     try {
@@ -331,15 +400,20 @@ export default function HealthProviderDashboard() {
         params.append('date_filter', dateFilter);
       }
 
-      // TEMPORARY: Use test endpoint for demo
-      const response = await fetch(buildHealthProviderApiUrl(`/test/appointments?provider_id=1&${params}`), {
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      // Use proper authenticated endpoint
+      const data = await api.healthProvider.getAppointments({
+        page: currentPage,
+        per_page: itemsPerPage,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        date_from: dateFrom,
+        date_to: dateTo
       });
+      let appointmentsData = data.appointments || [];
 
-      const data = await handleApiResponse(response, 'Failed to load appointments');
-      let appointmentsData = data.appointments;
+      // Update total count for pagination
+      if (data.total !== undefined) {
+        setTotalAppointments(data.total);
+      }
 
       // Apply client-side search if search term is provided
       if (searchTerm.trim()) {
@@ -368,16 +442,10 @@ export default function HealthProviderDashboard() {
 
     try {
       console.log('Loading unassigned appointments for provider:', providerId);
-      // TEMPORARY: Use test endpoint for demo
-      const response = await fetch(buildHealthProviderApiUrl('/test/appointments/unassigned'), {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await handleApiResponse(response, 'Failed to load unassigned appointments');
-      console.log('Loaded unassigned appointments:', data.appointments.length);
-      setUnassignedAppointments(data.appointments);
+      // Use proper authenticated endpoint
+      const data = await api.healthProvider.getUnassignedAppointments();
+      console.log('Loaded unassigned appointments:', data.appointments?.length || 0);
+      setUnassignedAppointments(data.appointments || []);
     } catch (err) {
       console.error('Failed to load unassigned appointments:', err);
       toast.error('Failed to load available appointments');
@@ -438,17 +506,10 @@ export default function HealthProviderDashboard() {
     }
   }, [providerId]);
 
-  const claimAppointment = async (appointmentId: number) => {
+  const claimAppointment = useCallback(async (appointmentId: number) => {
     try {
-      // TEMPORARY: Use test endpoint for demo
-      const response = await fetch(buildHealthProviderApiUrl(`/test/appointments/${appointmentId}/claim?provider_id=1`), {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      await handleApiResponse(response, 'Failed to claim appointment');
+      // Use proper authenticated endpoint
+      await api.healthProvider.claimAppointment(appointmentId);
       toast.success('Appointment claimed successfully');
       loadUnassignedAppointments();
       loadAppointments();
@@ -457,9 +518,9 @@ export default function HealthProviderDashboard() {
       console.error('Failed to claim appointment:', err);
       toast.error('Failed to claim appointment');
     }
-  };
+  }, [loadUnassignedAppointments, loadAppointments, loadDashboardData]);
 
-  const updateAppointment = async (appointmentId: number, updates: Record<string, unknown>) => {
+  const updateAppointment = useCallback(async (appointmentId: number, updates: Record<string, unknown>) => {
     try {
       // TEMPORARY: Use test endpoint for demo
       const response = await fetch(buildHealthProviderApiUrl(`/test/appointments/${appointmentId}/update`), {
@@ -478,7 +539,7 @@ export default function HealthProviderDashboard() {
       console.error('Failed to update appointment:', err);
       toast.error('Failed to update appointment');
     }
-  };
+  }, [loadAppointments, loadDashboardData]);
 
   const updateProfile = async (profileUpdates: Partial<ProviderProfile>) => {
     try {
@@ -527,31 +588,54 @@ export default function HealthProviderDashboard() {
     }
   };
 
+  // Load tab-specific data when tab changes
   useEffect(() => {
     console.log('Tab changed to:', activeTab, 'Provider ID:', providerId);
-    // Only make API calls if we have a valid provider ID
-    if (providerId > 0) {
-      if (activeTab === 'appointments') {
-        loadAppointments();
-      } else if (activeTab === 'unassigned') {
-        loadUnassignedAppointments();
-      } else if (activeTab === 'patients') {
-        loadPatients();
-      } else if (activeTab === 'schedule') {
-        loadSchedule();
-      }
+    // Only make API calls if we have a valid provider ID and user is authenticated
+    const userType = user?.user_type || localStorage.getItem('user_type');
+    if (providerId > 0 && user && userType === 'health_provider') {
+      // Use setTimeout to debounce rapid tab changes
+      const timeoutId = setTimeout(() => {
+        if (activeTab === 'appointments') {
+          loadAppointments();
+        } else if (activeTab === 'unassigned') {
+          loadUnassignedAppointments();
+        } else if (activeTab === 'patients') {
+          loadPatients();
+        } else if (activeTab === 'schedule') {
+          loadSchedule();
+        }
+      }, 100); // 100ms debounce
+      
+      return () => clearTimeout(timeoutId);
     } else {
-      console.log('Skipping tab data load - provider ID not set yet');
+      console.log('Skipping tab data load - not authenticated or provider ID not set');
     }
-  }, [activeTab, providerId, statusFilter, priorityFilter, dateFilter, searchTerm]);
+  }, [activeTab, providerId, user]); // Keep minimal dependencies
 
-  if (loading) {
+  // Handle filter changes separately to prevent excessive re-renders
+  useEffect(() => {
+    // Only run if we're on appointments tab, have a provider ID, and user is authenticated
+    const userType = user?.user_type || localStorage.getItem('user_type');
+    if (activeTab === 'appointments' && providerId > 0 && user && userType === 'health_provider') {
+      const debounceTimeout = setTimeout(() => {
+        console.log('Filter changed, reloading appointments with:', { statusFilter, priorityFilter, dateFilter, searchTerm });
+        loadAppointments();
+      }, 500); // Increased debounce to 500ms to prevent rapid calls
+
+      return () => clearTimeout(debounceTimeout);
+    }
+  }, [statusFilter, priorityFilter, dateFilter, searchTerm, activeTab, providerId, user]); // Added necessary dependencies
+
+  // Show loading only during initial load, not for refreshes
+  if (loading && !stats) {
     return (
       <div className="container py-4">
         <div className="text-center">
           <div className="spinner-border" role="status">
             <span className="visually-hidden">Loading...</span>
           </div>
+          <p className="mt-2">Loading health provider dashboard...</p>
         </div>
       </div>
     );
@@ -579,11 +663,8 @@ export default function HealthProviderDashboard() {
           )}
         </div>
         <div className="d-flex gap-2">
-          {/* Notifications */}
-          <NotificationCenter 
-            providerId={providerId}
-            onNotificationUpdate={setUnreadNotificationCount}
-          />
+          {/* Enhanced Notifications */}
+          <NotificationBell />
           
           {/* Profile Button */}
           <button 
@@ -620,28 +701,44 @@ export default function HealthProviderDashboard() {
       {/* Navigation */}
       <div className="card mb-4">
         <div className="card-body">
+          <style jsx>{`
+            .nav-link {
+              border: none;
+              background: none;
+              padding: 0.5rem 1rem;
+              color: #6c757d;
+              text-decoration: none;
+              display: block;
+              border: 1px solid transparent;
+              border-top-left-radius: 0.375rem;
+              border-top-right-radius: 0.375rem;
+            }
+            .nav-link:hover {
+              border-color: #e9ecef #e9ecef #dee2e6;
+              color: #495057;
+            }
+            .nav-link.active {
+              color: #495057;
+              background-color: #fff;
+              border-color: #dee2e6 #dee2e6 #fff;
+            }
+          `}</style>
           <ul className="nav nav-tabs">
             <li className="nav-item">
-              <a 
+              <button 
+                type="button"
                 className={`nav-link ${activeTab === 'overview' ? 'active' : ''}`} 
-                href="#" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveTab('overview');
-                }}
+                onClick={() => setActiveTab('overview')}
               >
                 <i className="fas fa-tachometer-alt me-1"></i>
                 Overview
-              </a>
+              </button>
             </li>
             <li className="nav-item">
-              <a 
+              <button 
+                type="button"
                 className={`nav-link ${activeTab === 'appointments' ? 'active' : ''}`} 
-                href="#" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveTab('appointments');
-                }}
+                onClick={() => setActiveTab('appointments')}
               >
                 <i className="fas fa-calendar-check me-1"></i>
                 My Appointments
@@ -650,78 +747,73 @@ export default function HealthProviderDashboard() {
                     {stats.appointment_stats.pending}
                   </span>
                 )}
-              </a>
+              </button>
             </li>
             <li className="nav-item">
-              <a 
+              <button 
+                type="button"
                 className={`nav-link ${activeTab === 'unassigned' ? 'active' : ''}`} 
-                href="#" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveTab('unassigned');
-                }}
+                onClick={() => setActiveTab('unassigned')}
               >
                 <i className="fas fa-clipboard-list me-1"></i>
                 Available Appointments
                 {unassignedAppointments.length > 0 && (
                   <span className="badge bg-danger ms-2">{unassignedAppointments.length}</span>
                 )}
-              </a>
+              </button>
             </li>
             <li className="nav-item">
-              <a 
+              <button 
+                type="button"
                 className={`nav-link ${activeTab === 'schedule' ? 'active' : ''}`} 
-                href="#" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveTab('schedule');
-                }}
+                onClick={() => setActiveTab('schedule')}
               >
                 <i className="fas fa-calendar-week me-1"></i>
                 Schedule
-              </a>
+              </button>
             </li>
             <li className="nav-item">
-              <a 
+              <button 
+                type="button"
                 className={`nav-link ${activeTab === 'availability' ? 'active' : ''}`} 
-                href="#" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveTab('availability');
-                }}
+                onClick={() => setActiveTab('availability')}
               >
                 <i className="fas fa-calendar-cog me-1"></i>
                 Availability
-              </a>
+              </button>
             </li>
             <li className="nav-item">
-              <a 
+              <button 
+                type="button"
                 className={`nav-link ${activeTab === 'patients' ? 'active' : ''}`} 
-                href="#" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveTab('patients');
-                }}
+                onClick={() => setActiveTab('patients')}
               >
                 <i className="fas fa-users me-1"></i>
                 Patients
                 {patients.length > 0 && (
                   <span className="badge bg-info ms-2">{patients.length}</span>
                 )}
-              </a>
+              </button>
             </li>
             <li className="nav-item">
-              <a 
+              <button 
+                type="button"
                 className={`nav-link ${activeTab === 'analytics' ? 'active' : ''}`} 
-                href="#" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveTab('analytics');
-                }}
+                onClick={() => setActiveTab('analytics')}
               >
                 <i className="fas fa-chart-line me-1"></i>
                 Analytics
-              </a>
+              </button>
+            </li>
+            <li className="nav-item">
+              <button 
+                type="button"
+                className={`nav-link ${activeTab === 'notifications' ? 'active' : ''}`} 
+                onClick={() => setActiveTab('notifications')}
+              >
+                <i className="fas fa-envelope me-1"></i>
+                Send Notifications
+              </button>
             </li>
           </ul>
         </div>
@@ -792,7 +884,6 @@ export default function HealthProviderDashboard() {
               <AvailabilityWidget providerId={providerId} />
             </div>
           </div>
-
           {/* Recent Appointments and Monthly Trends */}
           <div className="row">
             <div className="col-md-6">
@@ -1336,6 +1427,19 @@ export default function HealthProviderDashboard() {
         </div>
       )}
 
+      {/* Notifications Tab */}
+      {activeTab === 'notifications' && (
+        <div className="card">
+          <div className="card-header">
+            <h5><i className="fas fa-envelope me-2"></i>Send Notifications to Patients</h5>
+            <small className="text-muted">Send real-time notifications to your patients and their families</small>
+          </div>
+          <div className="card-body">
+            <NotificationSender />
+          </div>
+        </div>
+      )}
+
       {/* Appointment Details Modal */}
       {selectedAppointment && (
         <div className={`modal fade ${showAppointmentModal ? 'show' : ''}`} 
@@ -1581,4 +1685,8 @@ export default function HealthProviderDashboard() {
       )}
     </div>
   );
+}
+
+export default function HealthProviderDashboard() {
+  return <HealthProviderDashboardContent />;
 }

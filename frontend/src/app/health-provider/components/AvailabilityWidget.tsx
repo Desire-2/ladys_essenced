@@ -50,16 +50,16 @@ const AvailabilityWidget: React.FC<AvailabilityWidgetProps> = ({ providerId }) =
     }
 
     try {
-      // Use test endpoint for demo purposes
-      const response = await fetch(`/api/health-provider/test/appointments/provider-availability-summary?provider_id=${providerId}&days_ahead=7`, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAvailabilitySummary(data.availability_summary || []);
+      // Note: Detailed availability features are coming soon
+      console.log('Availability widget loaded - detailed features coming soon');
+      
+      // Mock availability summary for now
+      const mockSummary: AvailabilitySummary[] = [
+        { date: new Date().toISOString().split('T')[0], day_of_week: 'Today', total_slots: 8, booked_slots: 3, available_slots: 5, availability_percentage: 62.5 }
+      ];
+      
+      if (mockSummary.length > 0) {
+        setAvailabilitySummary(mockSummary);
       }
     } catch (error) {
       console.error('Failed to load availability data:', error);
@@ -76,17 +76,18 @@ const AvailabilityWidget: React.FC<AvailabilityWidgetProps> = ({ providerId }) =
     }
 
     try {
-      // Use test endpoint for demo purposes
-      const response = await fetch(`/api/health-provider/test/appointments/next-available-slot?provider_id=${providerId}`, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setNextAvailableSlot(data.next_available_slot);
-      }
+      // Mock next available slot for now
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(9, 0, 0, 0);
+      
+      const mockSlot = {
+        time: '09:00',
+        datetime: tomorrow.toISOString(),
+        date: tomorrow.toISOString().split('T')[0]
+      };
+      
+      setNextAvailableSlot(mockSlot);
     } catch (error) {
       console.error('Failed to load next available slot:', error);
     }

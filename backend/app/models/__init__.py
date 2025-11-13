@@ -4,6 +4,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Float
 from sqlalchemy.orm import relationship
 
+# Import enhanced notification models
+from .notification import Notification, NotificationTemplate, NotificationSubscription
+from .insight_cache import InsightCache
+
 class User(db.Model):
     __tablename__ = 'users'
     
@@ -35,7 +39,7 @@ class User(db.Model):
     cycle_logs = db.relationship('CycleLog', backref='user', lazy=True)
     meal_logs = db.relationship('MealLog', backref='user', lazy=True)
     appointments = db.relationship('Appointment', backref='user', lazy=True)
-    notifications = db.relationship('Notification', backref='user', lazy=True)
+    # Notifications relationship is defined in the Notification model
     
     def __repr__(self):
         return f'<User {self.name}>'
@@ -221,19 +225,6 @@ class Appointment(db.Model):
     def __repr__(self):
         return f'<Appointment {self.id}>'
 
-
-class Notification(db.Model):
-    __tablename__ = 'notifications'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    message = db.Column(db.Text, nullable=False)
-    notification_type = db.Column(db.String(50), nullable=False)  # e.g., 'cycle', 'appointment', 'education'
-    read = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    def __repr__(self):
-        return f'<Notification {self.id}>'
 
 
 class ContentCategory(db.Model):

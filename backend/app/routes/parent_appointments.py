@@ -331,7 +331,7 @@ def book_appointment_for_child():
                 user_id=provider.user_id,
                 message=f"New appointment request for {child_user.name}: {appointment_datetime.strftime('%Y-%m-%d %H:%M')}",
                 notification_type='appointment',
-                read=False,
+                is_read=False,
                 created_at=datetime.utcnow()
             )
             
@@ -340,7 +340,7 @@ def book_appointment_for_child():
                 user_id=current_user_id,
                 message=f"Appointment booked for {child_user.name} with {provider.user.name} on {appointment_datetime.strftime('%Y-%m-%d %H:%M')}",
                 notification_type='appointment',
-                read=False,
+                is_read=False,
                 created_at=datetime.utcnow()
             )
             
@@ -536,10 +536,10 @@ def cancel_child_appointment(appointment_id):
         try:
             if appointment.health_provider:
                 provider_notification = Notification(
-                    user_id=appointment.health_provider.user_id,
+                    user_id=appointment.provider_id,
                     message=f"Appointment cancelled by parent for {appointment.for_user_id}",
                     notification_type='appointment',
-                    read=False
+                    is_read=False
                 )
                 db.session.add(provider_notification)
             
@@ -547,7 +547,7 @@ def cancel_child_appointment(appointment_id):
                 user_id=current_user_id,
                 message=f"Appointment cancelled for {appointment.appointment_for}",
                 notification_type='appointment',
-                read=False
+                is_read=False
             )
             db.session.add(parent_notification)
         except Exception as e:
@@ -636,7 +636,7 @@ def reschedule_child_appointment(appointment_id):
                     user_id=appointment.health_provider.user_id,
                     message=f"Appointment rescheduled from {old_date.strftime('%Y-%m-%d %H:%M')} to {new_datetime.strftime('%Y-%m-%d %H:%M')}",
                     notification_type='appointment',
-                    read=False
+                    is_read=False
                 )
                 db.session.add(provider_notification)
             
@@ -644,7 +644,7 @@ def reschedule_child_appointment(appointment_id):
                 user_id=current_user_id,
                 message=f"Appointment rescheduled to {new_datetime.strftime('%Y-%m-%d %H:%M')}",
                 notification_type='appointment',
-                read=False
+                is_read=False
             )
             db.session.add(parent_notification)
         except Exception as e:

@@ -1521,7 +1521,7 @@ def handle_notifications(user, input_list):
         return backflow_result
     
     if steps == 1:
-        unread_count = Notification.query.filter_by(user_id=user.id, read=False).count()
+        unread_count = Notification.query.filter_by(user_id=user.id, is_read=False).count()
         return (f"CON 🔔 Notifications ({unread_count} unread):\n"
                 "1. View Unread\n2. View All\n3. Mark All Read\n4. Clear Old\n\n"
                 "0. Back\n00. Main Menu")
@@ -1549,7 +1549,7 @@ def handle_notifications(user, input_list):
 def get_unread_notifications(user):
     """Get unread notifications"""
     notifications = Notification.query.filter_by(
-        user_id=user.id, read=False
+        user_id=user.id, is_read=False
     ).order_by(Notification.created_at.desc()).limit(10).all()
     
     if not notifications:

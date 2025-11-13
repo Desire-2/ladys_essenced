@@ -170,12 +170,12 @@ export const appointmentAPI = {
     return api.get(url);
   },
   getAppointment: (id) => api.get(`/api/appointments/${id}`),
-  create: (appointmentData) => api.post('/api/appointments/test/create', appointmentData),
-  createAppointment: (appointmentData) => api.post('/api/appointments/test/create', appointmentData),
+  create: (appointmentData) => api.post('/api/appointments', appointmentData),
+  createAppointment: (appointmentData) => api.post('/api/appointments', appointmentData),
   updateAppointment: (id, appointmentData) => api.put(`/api/appointments/${id}`, appointmentData),
   deleteAppointment: (id) => api.delete(`/api/appointments/${id}`),
   getUpcoming: (userId = null) => {
-    let url = '/api/appointments/test/upcoming';
+    let url = '/api/appointments/upcoming';
     if (userId) url += `?user_id=${userId}`;
     return api.get(url);
   },
@@ -272,9 +272,11 @@ export const healthProviderAPI = {
     return api.get(`/api/health-provider/patients?${queryString}`);
   },
   
-  // Test endpoints for demo (no authentication required)
-  getTestProviders: () => api.get('/api/health-provider/test/providers'),
-  getTestProviderAvailability: (providerId) => api.get(`/api/health-provider/test/availability?provider_id=${providerId}`),
+  // Public endpoints for appointment booking (no authentication required)
+  getPublicProviders: () => api.get('/api/health-provider/public/providers'),
+  getPublicProviderAvailability: (providerId) => api.get(`/api/health-provider/public/providers/${providerId}/availability`),
+  
+  // Note: Use the API client lib/api/client.ts for authenticated health provider endpoints
 };
 
 export default api;

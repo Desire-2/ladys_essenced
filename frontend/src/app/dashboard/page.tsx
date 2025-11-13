@@ -28,8 +28,9 @@ import {
   ChildrenTab 
 } from './components/tabs';
 import { ViewChildModal } from './components/modals/ViewChildModal';
+import { NotificationBell } from '../../components/notifications';
 
-export default function Dashboard() {
+function DashboardContent() {
   const { user, loading: authLoading, logout, hasRole, getDashboardRoute } = useAuth();
   const { addCycleLog, fetchCycleStats, error: cycleError, loading: cycleLoading } = useCycle();
   const { addMealLog, error: mealError, loading: mealLoading } = useMeal();
@@ -339,16 +340,19 @@ export default function Dashboard() {
     <div className="container py-3 py-md-4 px-2 px-md-3">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 mb-md-4 gap-2">
         <h1 className="h4 h3-md mb-0">Dashboard - Welcome, {user?.name}</h1>
-        <button 
-          className="btn btn-outline-secondary btn-sm w-100 w-md-auto"
-          onClick={() => {
-            localStorage.removeItem('access_token');
-            router.push('/login');
-          }}
-        >
-          <i className="fas fa-sign-out-alt me-2"></i>
-          Logout
-        </button>
+        <div className="d-flex gap-2 align-items-center">
+          <NotificationBell />
+          <button 
+            className="btn btn-outline-secondary btn-sm"
+            onClick={() => {
+              localStorage.removeItem('access_token');
+              router.push('/login');
+            }}
+          >
+            <i className="fas fa-sign-out-alt me-2"></i>
+            Logout
+          </button>
+        </div>
       </div>
 
       {/* Parent-specific child selector */}
@@ -380,6 +384,7 @@ export default function Dashboard() {
           dataAvailability={dataAvailability}
           onRetryDataLoad={(dataType) => retryDataLoad(dataType, selectedChild)}
           setActiveTab={setActiveTab}
+          userType={user?.user_type}
         />
       )}
 
@@ -414,7 +419,10 @@ export default function Dashboard() {
           selectedChild={selectedChild}
           children={children}
           upcomingAppointments={upcomingAppointments}
-          onAppointmentBooked={() => loadAppointmentsData(selectedChild)}
+          onAppointmentBooked={() => {
+            console.log('Appointment booked callback triggered - refreshing with force flag');
+            loadAppointmentsData(selectedChild, true);
+          }}
         />
       )}
 
@@ -439,4 +447,8 @@ export default function Dashboard() {
       />
     </div>
   );
+}
+
+export default function Dashboard() {
+  return <DashboardContent />;
 }

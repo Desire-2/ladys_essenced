@@ -180,6 +180,7 @@ def create_app():
     from app.routes.meal_logs import meal_logs_bp
     from app.routes.appointments import appointments_bp
     from app.routes.notifications import notifications_bp
+    # Notification routes are now consolidated into main notifications_bp
     from app.routes.content import content_bp
     from app.routes.parents import parents_bp
     from app.routes.ussd import ussd_bp
@@ -187,6 +188,16 @@ def create_app():
     from app.routes.content_writer import content_writer_bp
     from app.routes.health_provider import health_provider_bp
     from app.routes.parent_appointments import parent_appointments_bp
+    
+    # Import insights blueprint with error handling
+    try:
+        from app.routes.insights import insights_bp
+        print("✅ Insights blueprint imported successfully")
+    except Exception as e:
+        print(f"❌ Failed to import insights blueprint: {e}")
+        import traceback
+        traceback.print_exc()
+        insights_bp = None
 
     
     with open('/tmp/blueprint_registration.log', 'a') as f:
@@ -201,6 +212,7 @@ def create_app():
     app.register_blueprint(meal_logs_bp, url_prefix='/api/meal-logs')
     app.register_blueprint(appointments_bp, url_prefix='/api/appointments')
     app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
+    # Realtime notifications are now part of the main notifications blueprint
     app.register_blueprint(content_bp, url_prefix='/api/content')
     app.register_blueprint(parents_bp, url_prefix='/api/parents')
     app.register_blueprint(ussd_bp, url_prefix='/api/ussd')
@@ -208,6 +220,16 @@ def create_app():
     app.register_blueprint(content_writer_bp, url_prefix='/api/content-writer')
     app.register_blueprint(health_provider_bp, url_prefix='/api/health-provider')
     app.register_blueprint(parent_appointments_bp, url_prefix='/api')
+    
+    # Register insights blueprint with error handling
+    if insights_bp:
+        try:
+            app.register_blueprint(insights_bp, url_prefix='/api/insights')
+            print("✅ Insights blueprint registered successfully")
+        except Exception as e:
+            print(f"❌ Failed to register insights blueprint: {e}")
+    else:
+        print("❌ Insights blueprint not available for registration")
     
     # Create database tables and ensure proper schema
     with app.app_context():

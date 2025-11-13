@@ -85,7 +85,7 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
 
   const loadProviders = async () => {
     try {
-      const response = await healthProviderAPI.getTestProviders();
+      const response = await healthProviderAPI.getPublicProviders();
       if (response.data) {
         setProviders(response.data.providers || []);
       }
@@ -99,7 +99,7 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
   const loadProviderAvailability = async (providerId: number) => {
     try {
       setLoading(true);
-      const response = await healthProviderAPI.getTestProviderAvailability(providerId);
+      const response = await healthProviderAPI.getPublicProviderAvailability(providerId);
       if (response.data) {
         setProviderAvailability(response.data);
       }
@@ -197,7 +197,10 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
   // Generate slots when date or provider changes
   useEffect(() => {
     if (selectedDate && providerAvailability) {
+      console.log('Generating slots for date:', selectedDate);
+      console.log('Provider availability:', providerAvailability);
       const slots = generateAvailableSlots(selectedDate);
+      console.log('Generated slots:', slots);
       setAvailableSlots(slots);
     }
   }, [selectedDate, providerAvailability, generateAvailableSlots]);

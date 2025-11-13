@@ -1,0 +1,103 @@
+/* Overview Tab Enhanced Animations */
+
+.overview-tab {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradientShift {
+  0%, 100% { 
+    background-position: 0% 50%; 
+  }
+  50% { 
+    background-position: 100% 50%; 
+  }
+}
+
+@keyframes float {
+  from { 
+    transform: translateY(0px); 
+  }
+  to { 
+    transform: translateY(-10px); 
+  }
+}
+
+@keyframes bounce {
+  0%, 100% { 
+    transform: translateY(0); 
+  }
+  50% { 
+    transform: translateY(-5px); 
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    transform: scale(1); 
+    opacity: 0.3;
+  }
+  50% { 
+    transform: scale(1.1); 
+    opacity: 0.5;
+  }
+}
+
+.ai-insights-card {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ai-insights-card:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(102, 126, 234, 0.3) !important;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  transition: all 0.3s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  transition: all 0.3s ease;
+}
+
+.bg-opacity-5 {
+  --bs-bg-opacity: 0.05;
+}
+
+.border-opacity-20 {
+  --bs-border-opacity: 0.2;
+}
+
+/* Particle Animation */
+.ai-insights-card .position-absolute.rounded-circle {
+  animation: float var(--animation-duration, 3s) ease-in-out infinite alternate;
+}
+
+/* Gradient Background Animation */
+.ai-insights-card .position-absolute.w-100.h-100:first-child {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #667eea 100%);
+  background-size: 200% 200%;
+  animation: gradientShift 10s ease infinite;
+}
+
+/* Brain Pulse Effect */
+.ai-insights-card .fa-brain {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Robot Bounce Effect */
+.ai-insights-card .fa-robot {
+  animation: bounce 2s ease-in-out infinite;
+}

@@ -43,7 +43,7 @@ def get_notifications():
         'total': notifications.total,
         'pages': notifications.pages,
         'current_page': page,
-        'unread_count': Notification.query.filter_by(user_id=current_user_id, read=False).count()
+        'unread_count': Notification.query.filter_by(user_id=current_user_id, is_read=False).count()
     }
     
     return jsonify(result), 200
@@ -100,9 +100,9 @@ def mark_all_read():
     
     try:
         # Update all unread notifications for the user
-        unread_count = Notification.query.filter_by(user_id=current_user_id, read=False).count()
+        unread_count = Notification.query.filter_by(user_id=current_user_id, is_read=False).count()
         
-        Notification.query.filter_by(user_id=current_user_id, read=False).update({'read': True})
+        Notification.query.filter_by(user_id=current_user_id, is_read=False).update({'is_read': True})
         db.session.commit()
         
         return jsonify({
@@ -143,7 +143,7 @@ def get_unread_count():
     current_user_id = get_jwt_identity()
     
     # Count unread notifications
-    unread_count = Notification.query.filter_by(user_id=current_user_id, read=False).count()
+    unread_count = Notification.query.filter_by(user_id=current_user_id, is_read=False).count()
     
     return jsonify({
         'unread_count': unread_count

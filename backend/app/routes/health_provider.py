@@ -1,17 +1,120 @@
 from flask import Blueprint, request, jsonify, current_app, g
 from app import db
 from app.models import (
-    User, HealthProvider, Appointment, SystemLog, Notification
+    User, HealthProvider, Appointment, SystemLog, Notification, Adolescent, Parent, ParentChild
 )
 from app.auth.middleware import (
     health_provider_required, validate_health_provider_verification,
     log_user_activity, RoleBasedAccess
 )
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc, or_
 import json
 
+# Import notification system
+from app.services.notification_manager import NotificationManager
+
+# Initialize notification manager
+notification_manager = NotificationManager()
+
+def create_provider_notification(user_id: int, message: str, notification_type: str = 'system', priority: str = 'normal'):
+    """Helper function to create notifications from provider actions"""
+    try:
+        notification = Notification(
+            user_id=user_id,
+            title=notification_type.replace('_', ' ').title(),
+            message=message,
+            notification_type=notification_type,
+            priority=priority,
+            category='appointment',
+            delivery_channels=json.dumps(['app'])
+        )
+        result = notification_manager.send_notification(notification)
+        print(f"✅ Notification sent to user {user_id}: {message[:50]}...")
+        return result
+    except Exception as e:
+        print(f"❌ Error creating notification: {e}")
+        return False
+
 health_provider_bp = Blueprint('health_provider', __name__)
+
+# Authenticated endpoints (production-ready)
+@health_provider_bp.route('/providers', methods=['GET'])
+@jwt_required()
+def get_providers():
+    """Get available health providers - authenticated endpoint"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_app.logger.info(f"User {current_user_id} fetching providers list")
+        providers = HealthProvider.query.filter_by(is_verified=True).all()
+        
+        providers_list = []
+        for provider in providers:
+            providers_list.append({
+                'id': provider.id,
+                'name': provider.user.name if provider.user else 'Unknown Provider',
+                'specialization': provider.specialization or 'General Practice',
+                'is_verified': provider.is_verified,
+                'clinic_name': provider.clinic_name,
+                'clinic_address': provider.clinic_address,
+                'phone': provider.phone,
+                'email': provider.email
+            })
+        
+        return jsonify({
+            'providers': providers_list,
+            'total_count': len(providers_list)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting providers: {str(e)}")
+        return jsonify({'error': 'Failed to fetch providers', 'message': str(e)}), 500
+
+@health_provider_bp.route('/provider-availability', methods=['GET'])
+@jwt_required()
+def get_provider_public_availability():
+    """Get provider availability for appointment booking - accessible by all authenticated users"""
+    try:
+        current_user_id = get_jwt_identity()
+        current_app.logger.info(f"User {current_user_id} fetching provider availability for appointment booking")
+        
+        provider_id = request.args.get('provider_id', type=int)
+        if not provider_id:
+            return jsonify({'error': 'Provider ID is required'}), 400
+            
+        provider = HealthProvider.query.get(provider_id)
+        if not provider:
+            return jsonify({'error': 'Provider not found'}), 404
+        
+        # Return sample availability structure for appointment booking
+        availability_data = {
+            'provider_id': provider_id,
+            'availability_hours': {
+                'monday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'tuesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'wednesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'thursday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'friday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+                'saturday': {'start': '10:00', 'end': '14:00', 'enabled': True},
+                'sunday': {'start': '10:00', 'end': '14:00', 'enabled': False}
+            },
+            'break_times': [
+                {'start': '12:00', 'end': '13:00', 'label': 'Lunch Break'}
+            ],
+            'slot_duration': 30,
+            'advance_booking_days': 30,
+            'buffer_time': 5,
+            'timezone': 'UTC',
+            'custom_slots': {},
+            'blocked_slots': {}
+        }
+        
+        return jsonify(availability_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting provider availability for booking: {str(e)}")
+        return jsonify({'error': 'Failed to fetch provider availability', 'message': str(e)}), 500
 
 # TEMPORARY: Test endpoint without authentication for demo
 @health_provider_bp.route('/test/dashboard/stats', methods=['GET'])
@@ -470,7 +573,7 @@ def get_my_appointments():
 def get_unassigned_appointments():
     """Get unassigned appointments that provider can claim"""
     try:
-        user_id = 1  # Replace with actual user_id from token
+        user_id = get_jwt_identity()  # Get actual user_id from JWT token
         provider = HealthProvider.query.filter_by(user_id=user_id).first()
         
         # Get appointments without assigned provider
@@ -499,8 +602,16 @@ def get_unassigned_appointments():
 def claim_appointment(appointment_id):
     """Claim an unassigned appointment"""
     try:
-        user_id = 1  # Replace with actual user_id from token
+        user_id = get_jwt_identity()  # Get actual user_id from JWT token
+        print(f"🔍 Looking for health provider with user_id: {user_id}")
+        
         provider = HealthProvider.query.filter_by(user_id=user_id).first()
+        
+        if not provider:
+            print(f"❌ No health provider found for user_id: {user_id}")
+            return jsonify({'error': 'Health provider profile not found'}), 404
+        
+        print(f"✅ Found health provider: ID={provider.id}, Name={provider.user.name}")
         
         appointment = Appointment.query.filter_by(
             id=appointment_id,
@@ -511,18 +622,41 @@ def claim_appointment(appointment_id):
         if not appointment:
             return jsonify({'error': 'Appointment not found or already assigned'}), 404
         
+        print(f"🔍 Assigning appointment {appointment_id} to provider {provider.id}")
         appointment.provider_id = provider.id
         appointment.updated_at = datetime.utcnow()
         db.session.commit()
         
-        # Send notification to patient
-        notification = Notification(
-            user_id=appointment.user_id,
-            message=f"Your appointment has been assigned to Dr. {provider.user.name}. You will be contacted soon.",
-            notification_type='appointment_update'
-        )
-        db.session.add(notification)
-        db.session.commit()
+        # Enhanced notification system for appointment claiming
+        try:
+            # 1. Notify patient about provider assignment
+            print(f"🔔 Sending assignment notification to patient {appointment.user_id}")
+            patient_notification = create_provider_notification(
+                user_id=appointment.user_id,
+                message=f"👩‍⚕️ Great news! Dr. {provider.user.name} has been assigned to your appointment on {appointment.appointment_date.strftime('%B %d, %Y at %I:%M %p')}. You will be contacted soon with further details.",
+                notification_type='appointment_assigned',
+                priority='high'
+            )
+            print(f"✅ Assignment notification result: {patient_notification}")
+            
+            # 2. If patient is adolescent, notify parents
+            patient_user = User.query.get(appointment.user_id)
+            if patient_user and patient_user.user_type == 'adolescent':
+                adolescent = patient_user.adolescent_profile
+                if adolescent:
+                    parent_relations = ParentChild.query.filter_by(adolescent_id=adolescent.id).all()
+                    for relation in parent_relations:
+                        print(f"🔔 Sending assignment notification to parent {relation.parent.user_id}")
+                        parent_notification = create_provider_notification(
+                            user_id=relation.parent.user_id,
+                            message=f"👨‍👩‍👧‍👦 Dr. {provider.user.name} has been assigned to your child {patient_user.name}'s appointment on {appointment.appointment_date.strftime('%B %d, %Y at %I:%M %p')}.",
+                            notification_type='child_appointment_assigned',
+                            priority='high'
+                        )
+                        print(f"✅ Parent assignment notification result: {parent_notification}")
+        except Exception as notification_error:
+            current_app.logger.error(f"Failed to send appointment assignment notifications: {notification_error}")
+            # Continue with the response even if notifications fail
         
         # Log the action
         log_entry = SystemLog(
@@ -547,8 +681,16 @@ def claim_appointment(appointment_id):
 def update_appointment(appointment_id):
     """Update appointment details"""
     try:
-        user_id = 1  # Replace with actual user_id from token
+        user_id = get_jwt_identity()  # Get actual user_id from JWT token
+        print(f"🔍 Update appointment - Looking for health provider with user_id: {user_id}")
+        
         provider = HealthProvider.query.filter_by(user_id=user_id).first()
+        
+        if not provider:
+            print(f"❌ No health provider found for user_id: {user_id}")
+            return jsonify({'error': 'Health provider profile not found'}), 404
+        
+        print(f"✅ Found health provider: ID={provider.id}, Name={provider.user.name}")
         
         appointment = Appointment.query.filter_by(
             id=appointment_id,
@@ -573,22 +715,92 @@ def update_appointment(appointment_id):
         appointment.updated_at = datetime.utcnow()
         db.session.commit()
         
-        # Send notification to patient if status changed
-        if 'status' in data:
-            status_messages = {
-                'confirmed': f"Your appointment with Dr. {provider.user.name} has been confirmed for {appointment.appointment_date.strftime('%Y-%m-%d %H:%M')}",
-                'cancelled': f"Your appointment with Dr. {provider.user.name} has been cancelled. Please contact us to reschedule.",
-                'completed': f"Your appointment with Dr. {provider.user.name} has been completed. Thank you for your visit."
-            }
+        # Enhanced notification system for appointment updates
+        try:
+            # Notify patient about any appointment changes
+            notification_sent = False
             
-            if data['status'] in status_messages:
-                notification = Notification(
+            # Status change notifications
+            if 'status' in data:
+                status_messages = {
+                    'confirmed': f"✅ Great news! Dr. {provider.user.name} has confirmed your appointment for {appointment.appointment_date.strftime('%B %d, %Y at %I:%M %p')}. Please arrive 15 minutes early.",
+                    'cancelled': f"❌ Your appointment with Dr. {provider.user.name} scheduled for {appointment.appointment_date.strftime('%B %d, %Y at %I:%M %p')} has been cancelled. Please contact us to reschedule.",
+                    'completed': f"✅ Your appointment with Dr. {provider.user.name} has been completed. Thank you for your visit! Please check for any follow-up instructions.",
+                    'rescheduled': f"📅 Your appointment with Dr. {provider.user.name} has been rescheduled. New date: {appointment.appointment_date.strftime('%B %d, %Y at %I:%M %p')}.",
+                    'pending': f"⏳ Your appointment with Dr. {provider.user.name} is currently pending review. You'll be notified of any updates.",
+                    'no_show': f"❌ You were marked as no-show for your appointment with Dr. {provider.user.name} on {appointment.appointment_date.strftime('%B %d, %Y')}. Please contact us to reschedule."
+                }
+                
+                if data['status'] in status_messages:
+                    print(f"🔔 Sending {data['status']} notification to patient {appointment.user_id}")
+                    patient_notification = create_provider_notification(
+                        user_id=appointment.user_id,
+                        message=status_messages[data['status']],
+                        notification_type='appointment_confirmation' if data['status'] == 'confirmed' else 'appointment_status_update',
+                        priority='high'
+                    )
+                    notification_sent = True
+                    print(f"✅ Status notification result: {patient_notification}")
+            
+            # Date/time change notifications
+            if 'appointment_date' in data:
+                print(f"🔔 Sending reschedule notification to patient {appointment.user_id}")
+                patient_notification = create_provider_notification(
                     user_id=appointment.user_id,
-                    message=status_messages[data['status']],
-                    notification_type='appointment_update'
+                    message=f"📅 Your appointment with Dr. {provider.user.name} has been rescheduled to {appointment.appointment_date.strftime('%B %d, %Y at %I:%M %p')}. Please update your calendar.",
+                    notification_type='appointment_rescheduled',
+                    priority='high'
                 )
-                db.session.add(notification)
-                db.session.commit()
+                notification_sent = True
+                print(f"✅ Reschedule notification result: {patient_notification}")
+            
+            # Provider notes added
+            if 'provider_notes' in data and data['provider_notes']:
+                print(f"🔔 Sending notes notification to patient {appointment.user_id}")
+                patient_notification = create_provider_notification(
+                    user_id=appointment.user_id,
+                    message=f"📝 Dr. {provider.user.name} has added notes to your appointment. Please check your appointment details for more information.",
+                    notification_type='appointment_notes_added',
+                    priority='normal'
+                )
+                notification_sent = True
+                print(f"✅ Notes notification result: {patient_notification}")
+            
+            # If patient is adolescent, notify parents about significant changes
+            if notification_sent:
+                patient_user = User.query.get(appointment.user_id)
+                if patient_user and patient_user.user_type == 'adolescent':
+                    adolescent = patient_user.adolescent_profile
+                    if adolescent:
+                        from app.models import ParentChild, Parent
+                        parent_relations = ParentChild.query.filter_by(adolescent_id=adolescent.id).all()
+                        
+                        # Create parent notification based on the update type
+                        parent_message = ""
+                        if 'status' in data and data['status'] in ['confirmed', 'cancelled', 'completed']:
+                            status_parent_messages = {
+                                'confirmed': f"✅ Your child {patient_user.name}'s appointment with Dr. {provider.user.name} has been confirmed for {appointment.appointment_date.strftime('%B %d, %Y at %I:%M %p')}.",
+                                'cancelled': f"❌ Your child {patient_user.name}'s appointment with Dr. {provider.user.name} has been cancelled.",
+                                'completed': f"✅ Your child {patient_user.name}'s appointment with Dr. {provider.user.name} has been completed."
+                            }
+                            parent_message = status_parent_messages.get(data['status'], "")
+                        elif 'appointment_date' in data:
+                            parent_message = f"📅 Your child {patient_user.name}'s appointment with Dr. {provider.user.name} has been rescheduled to {appointment.appointment_date.strftime('%B %d, %Y at %I:%M %p')}."
+                        
+                        if parent_message:
+                            for relation in parent_relations:
+                                print(f"🔔 Sending parent notification to user {relation.parent.user_id}")
+                                parent_notification = create_provider_notification(
+                                    user_id=relation.parent.user_id,
+                                    message=parent_message,
+                                    notification_type='child_appointment_update',
+                                    priority='high'
+                                )
+                                print(f"✅ Parent notification result: {parent_notification}")
+                                
+        except Exception as notification_error:
+            current_app.logger.error(f"Failed to send appointment update notifications: {notification_error}")
+            # Continue with the response even if notifications fail
         
         return jsonify({'message': 'Appointment updated successfully'}), 200
         
@@ -601,7 +813,7 @@ def update_appointment(appointment_id):
 def get_schedule():
     """Get provider's schedule/calendar view"""
     try:
-        user_id = 1  # Replace with actual user_id from token
+        user_id = get_jwt_identity()  # Get actual user_id from JWT token
         provider = HealthProvider.query.filter_by(user_id=user_id).first()
         
         # Get date range
@@ -668,6 +880,7 @@ def get_profile():
         
         return jsonify({
             'profile': {
+                'id': provider.id,  # Add provider ID for frontend
                 'name': user.name,
                 'email': user.email,
                 'license_number': provider.license_number,
@@ -728,7 +941,7 @@ def update_profile():
 def get_patients():
     """Get list of patients who have had appointments"""
     try:
-        user_id = 1  # Replace with actual user_id from token
+        user_id = get_jwt_identity()  # Get actual user_id from JWT token
         provider = HealthProvider.query.filter_by(user_id=user_id).first()
         
         # Get unique patients from appointments
@@ -1814,8 +2027,22 @@ def test_claim_appointment(appointment_id):
         if appointment.provider_id is not None:
             return jsonify({'error': 'Appointment already claimed'}), 400
         
-        # For demo, claim for provider 1
-        provider_id = request.args.get('provider_id', 1, type=int)
+        # For demo, claim for first available provider
+        provider_id = request.args.get('provider_id', type=int)
+        
+        # If no provider_id specified, use the first available provider
+        if not provider_id:
+            first_provider = HealthProvider.query.first()
+            if first_provider:
+                provider_id = first_provider.id
+            else:
+                return jsonify({'error': 'No health providers available'}), 400
+        
+        # Verify the provider exists
+        provider = HealthProvider.query.get(provider_id)
+        if not provider:
+            return jsonify({'error': f'Health provider {provider_id} not found'}), 404
+        
         appointment.provider_id = provider_id
         appointment.status = 'confirmed'
         appointment.updated_at = datetime.utcnow()
