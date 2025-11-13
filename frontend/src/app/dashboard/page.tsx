@@ -402,15 +402,17 @@ function DashboardContent() {
           onRetryDataLoad={(dataType) => retryDataLoad(dataType, selectedChild)}
           onCycleSubmit={handleCycleSubmit}
           cycleError={cycleError}
+          userType={user?.user_type}
         />
       )}
 
       {activeTab === 'meals' && (
-        <MealsTab
+        <MealsTab 
           selectedChild={selectedChild}
           children={children}
           onMealSubmit={handleMealSubmit}
           mealError={mealError}
+          userType={user?.user_type}
         />
       )}
 
@@ -423,6 +425,7 @@ function DashboardContent() {
             console.log('Appointment booked callback triggered - refreshing with force flag');
             loadAppointmentsData(selectedChild, true);
           }}
+          userType={user?.user_type}
         />
       )}
 

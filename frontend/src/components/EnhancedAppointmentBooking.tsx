@@ -50,8 +50,8 @@ interface TimeSlot {
 
 interface EnhancedAppointmentBookingProps {
   onAppointmentBooked?: () => void;
-  selectedChild?: number | null;
-  children?: Array<{ id: number; name: string; }>;
+  selectedChild?: number | null; // This is the user_id of selected child
+  children?: Array<{ id: number; name: string; user_id: number; }>;
 }
 
 const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({ 
@@ -73,7 +73,7 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
     issue: '',
     priority: 'normal',
     notes: '',
-    for_user_id: selectedChild || 1 // Default to user ID 1 for demo
+    for_user_id: selectedChild || null // Use selectedChild user_id
   });
 
   const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -82,6 +82,14 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
   useEffect(() => {
     loadProviders();
   }, []);
+
+  // Update appointment data when selectedChild changes
+  useEffect(() => {
+    setAppointmentData(prev => ({
+      ...prev,
+      for_user_id: selectedChild || null
+    }));
+  }, [selectedChild]);
 
   const loadProviders = async () => {
     try {
@@ -197,10 +205,7 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
   // Generate slots when date or provider changes
   useEffect(() => {
     if (selectedDate && providerAvailability) {
-      console.log('Generating slots for date:', selectedDate);
-      console.log('Provider availability:', providerAvailability);
       const slots = generateAvailableSlots(selectedDate);
-      console.log('Generated slots:', slots);
       setAvailableSlots(slots);
     }
   }, [selectedDate, providerAvailability, generateAvailableSlots]);
@@ -237,15 +242,28 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
   const handleBookAppointment = async () => {
     try {
       setLoading(true);
+      
+      // Validate required fields and handle 'self' option
+      let targetUserId = appointmentData.for_user_id;
+      if (appointmentData.for_user_id === 'self') {
+        // For 'self', don't pass for_user_id (backend will use current user)
+        targetUserId = null;
+      } else if (!appointmentData.for_user_id) {
+        toast.error('Please select who this appointment is for');
+        return;
+      }
+      
       const appointmentPayload = {
         provider_id: selectedProvider,
         appointment_date: `${selectedDate}T${selectedTime}`,
         issue: appointmentData.issue,
         priority: appointmentData.priority,
         notes: appointmentData.notes,
-        for_user_id: appointmentData.for_user_id,
+        ...(targetUserId && { for_user_id: targetUserId }), // Only include if not for self
         status: 'pending'
       };
+
+      console.log('🔍 Booking appointment with payload:', appointmentPayload);
 
       // Use the appointmentAPI for consistent error handling
       const response = await appointmentAPI.createAppointment(appointmentPayload);
@@ -259,7 +277,23 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
       }
     } catch (error: any) {
       console.error('Failed to book appointment:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to book appointment';
+      let errorMessage = 'Failed to book appointment';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+        
+        // Provide more helpful error messages for common issues
+        if (errorMessage.includes('Child record not found')) {
+          errorMessage = 'The selected child account is not properly set up. Please contact support or try creating the appointment for yourself first.';
+        } else if (errorMessage.includes('Parent record not found')) {
+          errorMessage = 'Your parent account is not properly set up. Please contact support.';
+        } else if (errorMessage.includes('No relationship found')) {
+          errorMessage = 'You do not have permission to create appointments for this child. Please contact support if this seems incorrect.';
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -276,7 +310,7 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
       issue: '',
       priority: 'normal',
       notes: '',
-      for_user_id: selectedChild || 1 // Default to user ID 1 for demo
+      for_user_id: selectedChild || null // Use selectedChild user_id
     });
     setBookingStep('provider');
   };
@@ -575,14 +609,22 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
                       value={appointmentData.for_user_id || ''}
                       onChange={(e) => setAppointmentData({ 
                         ...appointmentData, 
-                        for_user_id: e.target.value ? parseInt(e.target.value) : 1 // Default to user ID 1 for demo
+                        for_user_id: e.target.value ? parseInt(e.target.value) : null
                       })}
                     >
-                      <option value="">Myself</option>
+                      <option value="">Select who this appointment is for</option>
+                      <option value="self">Myself</option>
                       {children.map(child => (
-                        <option key={child.id} value={child.id}>{child.name}</option>
+                        <option key={child.id} value={child.user_id}>
+                          {child.name} {selectedChild === child.user_id ? '(Currently Selected)' : ''}
+                        </option>
                       ))}
                     </select>
+                    {selectedChild && (
+                      <small className="text-muted">
+                        Currently viewing data for: <strong>{children.find(c => c.user_id === selectedChild)?.name}</strong>
+                      </small>
+                    )}
                   </div>
                 )}
 

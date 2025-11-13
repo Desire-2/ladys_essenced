@@ -170,8 +170,8 @@ export const appointmentAPI = {
     return api.get(url);
   },
   getAppointment: (id) => api.get(`/api/appointments/${id}`),
-  create: (appointmentData) => api.post('/api/appointments', appointmentData),
-  createAppointment: (appointmentData) => api.post('/api/appointments', appointmentData),
+  create: (appointmentData) => api.post('/api/appointments/', appointmentData),
+  createAppointment: (appointmentData) => api.post('/api/appointments/', appointmentData),
   updateAppointment: (id, appointmentData) => api.put(`/api/appointments/${id}`, appointmentData),
   deleteAppointment: (id) => api.delete(`/api/appointments/${id}`),
   getUpcoming: (userId = null) => {
@@ -272,11 +272,23 @@ export const healthProviderAPI = {
     return api.get(`/api/health-provider/patients?${queryString}`);
   },
   
-  // Public endpoints for appointment booking (no authentication required)
-  getPublicProviders: () => api.get('/api/health-provider/public/providers'),
-  getPublicProviderAvailability: (providerId) => api.get(`/api/health-provider/public/providers/${providerId}/availability`),
+  // Public endpoints for appointment booking (authenticated)
+  getPublicProviders: () => api.get('/api/health-provider/providers'),
+  getPublicProviderAvailability: (providerId) => api.get(`/api/health-provider/provider-availability?provider_id=${providerId}`),
   
-  // Note: Use the API client lib/api/client.ts for authenticated health provider endpoints
+  // Time slot management
+  getProviderTimeSlots: (providerId, date) => api.get(`/api/health-provider/appointments/provider-time-slots?provider_id=${providerId}&date=${date}`),
+  getNextAvailableSlot: (providerId, daysAhead, duration) => {
+    let url = `/api/health-provider/appointments/next-available-slot?provider_id=${providerId}`;
+    if (daysAhead) url += `&days_ahead=${daysAhead}`;
+    if (duration) url += `&duration=${duration}`;
+    return api.get(url);
+  },
+  getProviderAvailabilitySummary: (providerId, daysAhead) => {
+    let url = `/api/health-provider/appointments/provider-availability-summary?provider_id=${providerId}`;
+    if (daysAhead) url += `&days_ahead=${daysAhead}`;
+    return api.get(url);
+  },
 };
 
 export default api;

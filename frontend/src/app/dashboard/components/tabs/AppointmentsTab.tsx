@@ -2,22 +2,60 @@ import React from 'react';
 import { Child, Appointment } from '../../types';
 import { formatDate, getAppointmentStatusBadgeClass } from '../../utils';
 import EnhancedAppointmentBooking from '../../../../components/EnhancedAppointmentBooking';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 interface AppointmentsTabProps {
   selectedChild: number | null;
   children: Child[];
   upcomingAppointments: Appointment[];
   onAppointmentBooked: () => void;
+  userType?: string;
 }
 
 export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
   selectedChild,
   children,
   upcomingAppointments,
-  onAppointmentBooked
+  onAppointmentBooked,
+  userType
 }) => {
+  const { hasRole } = useAuth();
+  
+  // Helper to get selected child info
+  const selectedChildInfo = selectedChild ? children.find(c => c.user_id === selectedChild) : null;
+  const isParentView = userType === 'parent' && selectedChild;
   return (
     <div>
+      {/* Child Context Banner - Only for Parent View */}
+      {isParentView && selectedChildInfo && (
+        <div className="alert alert-info border-0 shadow-sm mb-4" style={{ 
+          borderRadius: '15px',
+          background: 'linear-gradient(135deg, #6c5ce7 0%, #5f3dc4 100%)',
+          color: 'white'
+        }}>
+          <div className="d-flex align-items-center justify-content-between">
+            <div className="d-flex align-items-center">
+              <div className="rounded-circle bg-white bg-opacity-20 p-2 me-3">
+                <i className="fas fa-calendar-check"></i>
+              </div>
+              <div>
+                <strong>{selectedChildInfo.name}'s Health Appointments</strong>
+                <div className="small opacity-90">
+                  Managing medical appointments and health checkups
+                </div>
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="small opacity-75">Managing for</div>
+              <div className="badge bg-white bg-opacity-20">
+                <i className="fas fa-stethoscope me-1"></i>
+                Your Child
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="row mb-4">
         <div className="col-md-8">
           <EnhancedAppointmentBooking 
@@ -31,7 +69,7 @@ export const AppointmentsTab: React.FC<AppointmentsTabProps> = ({
             <div className="card-header">
               <h6 className="mb-0">
                 <i className="fas fa-calendar-check text-primary me-2"></i>
-                Your Upcoming Appointments
+                {isParentView ? `${selectedChildInfo?.name}'s` : 'Your'} Upcoming Appointments
               </h6>
             </div>
             <div className="card-body">

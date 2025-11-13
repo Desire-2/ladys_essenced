@@ -1,0 +1,214 @@
+/* Enhanced Meals Tab Styles */
+
+/* Hover effects for meal type buttons */
+.btn-outline-warning:hover,
+.btn-outline-success:hover,
+.btn-outline-info:hover,
+.btn-outline-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Checked state enhancements */
+.btn-check:checked + .btn-outline-warning {
+  background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+  border-color: #ffc107;
+  color: #000;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(255, 193, 7, 0.3);
+}
+
+.btn-check:checked + .btn-outline-success {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  border-color: #28a745;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
+}
+
+.btn-check:checked + .btn-outline-info {
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+  border-color: #17a2b8;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(23, 162, 184, 0.3);
+}
+
+.btn-check:checked + .btn-outline-secondary {
+  background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+  border-color: #6c757d;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(108, 117, 125, 0.3);
+}
+
+/* Form control enhancements */
+.form-control:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.15);
+  transform: translateY(-1px);
+}
+
+/* Nutrition card hover effects */
+.nutrition-card {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.nutrition-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+}
+
+/* Enhanced alert styling */
+.alert {
+  border: none;
+  border-radius: 16px;
+}
+
+/* Quick stats animation */
+.quick-stats-item {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.quick-stats-item:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Gradient button hover effect */
+.btn-gradient:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+}
+
+/* Pulse animation for submit button */
+.btn-pulse {
+  animation: pulse-shadow 2s infinite;
+}
+
+@keyframes pulse-shadow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(102, 126, 234, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
+  }
+}
+
+/* Meal type icon animations */
+.meal-icon {
+  transition: all 0.3s ease;
+}
+
+.meal-icon:hover {
+  animation: bounce 0.6s ease-in-out;
+}
+
+@keyframes bounce {
+  0%, 20%, 60%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  80% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Enhanced textarea styling */
+.form-control[rows] {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-control[rows]:focus {
+  min-height: 120px;
+}
+
+/* Nutrition tip card border animations */
+.nutrition-tip-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.nutrition-tip-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .nutrition-card {
+    margin-bottom: 1rem;
+  }
+  
+  .btn-outline-warning,
+  .btn-outline-success,
+  .btn-outline-info,
+  .btn-outline-secondary {
+    padding: 1rem 0.5rem;
+    font-size: 0.875rem;
+  }
+  
+  .meal-type-emoji {
+    font-size: 1.5rem !important;
+  }
+}
+
+/* Loading state for form */
+.form-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.form-loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+/* Enhanced border colors for validation */
+.form-control.is-valid {
+  border-color: #28a745;
+  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.15);
+}
+
+.form-control.is-invalid {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.15);
+}
+
+/* Smooth transitions for all interactive elements */
+* {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}

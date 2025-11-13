@@ -87,27 +87,73 @@ def get_provider_public_availability():
         if not provider:
             return jsonify({'error': 'Provider not found'}), 404
         
-        # Return sample availability structure for appointment booking
+        # Get provider's actual availability settings or use defaults
+        if provider.availability_hours:
+            try:
+                if isinstance(provider.availability_hours, str):
+                    availability_settings = json.loads(provider.availability_hours)
+                else:
+                    availability_settings = provider.availability_hours
+                    
+                availability_hours = availability_settings.get('availability_hours', {})
+                break_times = availability_settings.get('break_times', [])
+                custom_slots = availability_settings.get('custom_slots', {})
+                blocked_slots = availability_settings.get('blocked_slots', {})
+                slot_duration = availability_settings.get('slot_duration', 30)
+                advance_booking_days = availability_settings.get('advance_booking_days', 30)
+                buffer_time = availability_settings.get('buffer_time', 15)
+                timezone = availability_settings.get('timezone', 'UTC')
+            except (json.JSONDecodeError, AttributeError):
+                # Fall back to defaults if parsing fails
+                availability_hours = {}
+                break_times = []
+                custom_slots = {}
+                blocked_slots = {}
+                slot_duration = 30
+                advance_booking_days = 30
+                buffer_time = 15
+                timezone = 'UTC'
+        else:
+            # Default availability
+            availability_hours = {}
+            break_times = []
+            custom_slots = {}
+            blocked_slots = {}
+            slot_duration = 30
+            advance_booking_days = 30
+            buffer_time = 15
+            timezone = 'UTC'
+        
+        # Ensure all days are present with defaults
+        default_availability_hours = {
+            'monday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+            'tuesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+            'wednesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+            'thursday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+            'friday': {'start': '09:00', 'end': '17:00', 'enabled': True},
+            'saturday': {'start': '10:00', 'end': '14:00', 'enabled': False},
+            'sunday': {'start': '10:00', 'end': '14:00', 'enabled': False}
+        }
+        
+        # Merge with provider's settings
+        for day in default_availability_hours:
+            if day not in availability_hours:
+                availability_hours[day] = default_availability_hours[day]
+        
+        # Default break times if none set
+        if not break_times:
+            break_times = [{'start': '12:00', 'end': '13:00', 'label': 'Lunch Break'}]
+        
         availability_data = {
             'provider_id': provider_id,
-            'availability_hours': {
-                'monday': {'start': '09:00', 'end': '17:00', 'enabled': True},
-                'tuesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
-                'wednesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
-                'thursday': {'start': '09:00', 'end': '17:00', 'enabled': True},
-                'friday': {'start': '09:00', 'end': '17:00', 'enabled': True},
-                'saturday': {'start': '10:00', 'end': '14:00', 'enabled': True},
-                'sunday': {'start': '10:00', 'end': '14:00', 'enabled': False}
-            },
-            'break_times': [
-                {'start': '12:00', 'end': '13:00', 'label': 'Lunch Break'}
-            ],
-            'slot_duration': 30,
-            'advance_booking_days': 30,
-            'buffer_time': 5,
-            'timezone': 'UTC',
-            'custom_slots': {},
-            'blocked_slots': {}
+            'availability_hours': availability_hours,
+            'break_times': break_times,
+            'slot_duration': slot_duration,
+            'advance_booking_days': advance_booking_days,
+            'buffer_time': buffer_time,
+            'timezone': timezone,
+            'custom_slots': custom_slots,
+            'blocked_slots': blocked_slots
         }
         
         return jsonify(availability_data), 200

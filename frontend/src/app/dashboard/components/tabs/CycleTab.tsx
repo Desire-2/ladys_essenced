@@ -4,6 +4,7 @@ import { DataSection } from '../ui/DataSection';
 import { EmptyState } from '../ui/EmptyState';
 import CycleCalendar from '../../../../components/CycleCalendar';
 import { api } from '../../../../lib/api/client';
+import { useAuth } from '../../../../contexts/AuthContext';
 import '../../../../styles/enhanced-cycle-tab.css';
 
 interface CycleTabProps {
@@ -19,6 +20,7 @@ interface CycleTabProps {
   onRetryDataLoad: (dataType: string) => void;
   onCycleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   cycleError?: string;
+  userType?: string;
 }
 
 export const CycleTab: React.FC<CycleTabProps> = ({
@@ -33,8 +35,14 @@ export const CycleTab: React.FC<CycleTabProps> = ({
   onNavigateMonth,
   onRetryDataLoad,
   onCycleSubmit,
-  cycleError
+  cycleError,
+  userType
 }) => {
+  const { hasRole } = useAuth();
+  
+  // Helper to get selected child info
+  const selectedChildInfo = selectedChild ? children.find(c => c.user_id === selectedChild) : null;
+  const isParentView = userType === 'parent' && selectedChild;
   const [predictions, setPredictions] = useState<any[]>([]);
   const [insights, setInsights] = useState<any>(null);
   const [loadingPredictions, setLoadingPredictions] = useState(false);
@@ -104,6 +112,36 @@ export const CycleTab: React.FC<CycleTabProps> = ({
   };
   return (
     <div className="cycle-tab-container" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>
+      {/* Child Context Banner - Only for Parent View */}
+      {isParentView && selectedChildInfo && (
+        <div className="alert alert-info border-0 shadow-sm mb-4" style={{ 
+          borderRadius: '15px',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white'
+        }}>
+          <div className="d-flex align-items-center justify-content-between">
+            <div className="d-flex align-items-center">
+              <div className="rounded-circle bg-white bg-opacity-20 p-2 me-3">
+                <i className="fas fa-heart"></i>
+              </div>
+              <div>
+                <strong>{selectedChildInfo.name}'s Cycle Tracking</strong>
+                <div className="small opacity-90">
+                  Monitoring menstrual health and cycle patterns
+                </div>
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="small opacity-75">Data Source</div>
+              <div className="badge bg-white bg-opacity-20">
+                <i className="fas fa-database me-1"></i>
+                Child Account
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Enhanced Current Phase Banner */}
       {currentPhase && (
         <div 

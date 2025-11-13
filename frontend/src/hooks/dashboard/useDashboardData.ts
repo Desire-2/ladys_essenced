@@ -1,5 +1,8 @@
 import { useState, useCallback } from 'react';
-import { cycleAPI, mealAPI, appointmentAPI, notificationAPI } from '../../api';
+import { cycleAPI, mealAPI, appointmentAPI } from '../../api';
+import { useNotification } from '../../contexts/NotificationContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useParentChildData } from './useParentChildData';
 import { 
   CycleData, 
   MealLog, 
@@ -11,19 +14,17 @@ import {
 } from '../../app/dashboard/types';
 import { formatDate } from '../../app/dashboard/utils';
 
-export const useDashboardData = () => {
-  // Data states
-  const [cycleData, setCycleData] = useState<CycleData>({
-    nextPeriod: null,
-    lastPeriod: null,
-    cycleLength: null,
-    periodLength: null,
-    totalLogs: 0,
-  });
-  const [recentMeals, setRecentMeals] = useState<MealLog[]>([]);
-  const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [calendarData, setCalendarData] = useState<any>(null);
+export function useDashboardData() {
+  // Get enhanced notifications from context
+  const { notifications: enhancedNotifications, fetchNotifications: refreshNotifications } = useNotification();
+  const { hasRole } = useAuth();
+  const { getAppointmentsForChild, getMealsForChild, getCycleDataForChild } = useParentChildData();
+  
+  // State for different data types
+  const [cycleData, setCycleData] = useState<any>({});
+  const [recentMeals, setRecentMeals] = useState<any[]>([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
+  const [calendarData, setCalendarData] = useState<any>({});
 
   // Loading and error states
   const [dataLoadingStates, setDataLoadingStates] = useState<DataLoadingStates>({
@@ -77,8 +78,17 @@ export const useDashboardData = () => {
 
     try {
       console.log('Loading cycle data for user:', selectedChild || 'current user');
-      // @ts-ignore - cycleAPI.getStats accepts number | null
-      const cycleResponse = await cycleAPI.getStats(selectedChild);
+      
+      let cycleResponse;
+      
+      if (selectedChild && hasRole('parent')) {
+        // Use parent-child aware method for parent viewing child data
+        const cycleData = await getCycleDataForChild(selectedChild);
+        cycleResponse = { data: cycleData };
+      } else {
+        // Use regular API for self or when no child selected
+        cycleResponse = await (cycleAPI.getStats as any)(selectedChild);
+      }
 
       const transformedCycleData = {
         nextPeriod: cycleResponse.data.next_period_prediction 
@@ -101,12 +111,12 @@ export const useDashboardData = () => {
       console.log('Cycle data loaded:', transformedCycleData);
     } catch (err: any) {
       console.error('Failed to load cycle data:', err);
-      setDataError('cycle', err.response?.data?.message || 'Failed to load cycle tracking data');
+      setDataError('cycle', err.response?.data?.message || err.message || 'Failed to load cycle tracking data');
       setDataAvailable('cycle', false);
     } finally {
       setDataLoading('cycle', false);
     }
-  }, [setDataLoading, clearDataError, setDataError, setDataAvailable]);
+  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, hasRole, getCycleDataForChild]);
 
   const loadMealsData = useCallback(async (selectedChild?: number | null) => {
     setDataLoading('meals', true);
@@ -114,58 +124,104 @@ export const useDashboardData = () => {
 
     try {
       console.log('Loading recent meals for user:', selectedChild || 'current user');
-      // @ts-ignore - mealAPI.getLogs accepts userId parameter
-      const mealsResponse = await mealAPI.getLogs(1, 5, {}, selectedChild);
-      setRecentMeals(mealsResponse.data.logs || []);
+      
+      let meals = [];
+      
+      if (selectedChild && hasRole('parent')) {
+        // Use parent-child aware method for parent viewing child data
+        meals = await getMealsForChild(selectedChild);
+      } else {
+        // Use regular API for self or when no child selected
+        const mealsResponse = await (mealAPI.getLogs as any)(1, 5, {}, selectedChild);
+        meals = mealsResponse.data.logs || [];
+      }
+      
+      setRecentMeals(meals);
       setDataAvailable('meals', true);
-      console.log('Meals loaded:', mealsResponse.data.logs);
+      console.log('Meals loaded:', meals);
     } catch (err: any) {
       console.error('Failed to load meals:', err);
-      setDataError('meals', err.response?.data?.message || 'Failed to load meal logs');
+      setDataError('meals', err.response?.data?.message || err.message || 'Failed to load meal logs');
       setDataAvailable('meals', false);
     } finally {
       setDataLoading('meals', false);
     }
-  }, [setDataLoading, clearDataError, setDataError, setDataAvailable]);
+  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, hasRole, getMealsForChild]);
 
-  const loadAppointmentsData = useCallback(async (selectedChild?: number | null) => {
+  const loadAppointmentsData = useCallback(async (selectedChild?: number | null, forceRefresh = false) => {
     setDataLoading('appointments', true);
     clearDataError('appointments');
 
     try {
-      console.log('Loading appointments for user:', selectedChild || 'current user');
-      // @ts-ignore - appointmentAPI.getUpcoming accepts userId parameter
-      const appointmentsResponse = await appointmentAPI.getUpcoming(selectedChild);
-      setUpcomingAppointments(appointmentsResponse.data || []);
+      console.log('Loading appointments for user:', selectedChild || 'current user', forceRefresh ? '(forced refresh)' : '');
+      
+      // Add a small delay to ensure backend has processed any recent changes
+      if (forceRefresh) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      let appointments = [];
+      
+      console.log('🔍 useDashboardData: selectedChild:', selectedChild);
+      console.log('🔍 useDashboardData: hasRole("parent"):', hasRole('parent'));
+      
+      if (selectedChild && hasRole('parent')) {
+        // Use parent-child aware method for parent viewing child data
+        console.log('🔍 useDashboardData: Using parent-child method for selectedChild:', selectedChild);
+        appointments = await getAppointmentsForChild(selectedChild);
+      } else {
+        // Use regular API for self or when no child selected
+        console.log('🔍 useDashboardData: Using regular API with selectedChild:', selectedChild);
+        const appointmentsResponse = await (appointmentAPI.getUpcoming as any)(selectedChild);
+        appointments = appointmentsResponse.data || [];
+      }
+      
+      setUpcomingAppointments(appointments);
       setDataAvailable('appointments', true);
-      console.log('Appointments loaded:', appointmentsResponse.data);
+      
+      console.log('Appointments loaded successfully:', appointments.length, 'appointments found');
+      
+      if (forceRefresh && appointments.length > 0) {
+        console.log('Refresh successful - appointments updated in UI');
+      }
+      
     } catch (err: any) {
       console.error('Failed to load appointments:', err);
-      setDataError('appointments', err.response?.data?.message || 'Failed to load appointments');
+      
+      // More detailed error logging
+      if (err.response) {
+        console.error('Response error:', err.response.status, err.response.data);
+      } else if (err.request) {
+        console.error('Network error:', err.request);
+      } else {
+        console.error('Request setup error:', err.message);
+      }
+      
+      setDataError('appointments', err.response?.data?.message || err.message || 'Failed to load appointments');
       setDataAvailable('appointments', false);
     } finally {
       setDataLoading('appointments', false);
     }
-  }, [setDataLoading, clearDataError, setDataError, setDataAvailable]);
+  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, hasRole, getAppointmentsForChild]);
 
   const loadNotificationsData = useCallback(async () => {
     setDataLoading('notifications', true);
     clearDataError('notifications');
 
     try {
-      console.log('Loading notifications...');
-      const notificationsResponse = await notificationAPI.getRecent();
-      setNotifications(notificationsResponse.data || []);
+      console.log('Loading enhanced notifications...');
+      // Use enhanced notification context to refresh data
+      await refreshNotifications();
       setDataAvailable('notifications', true);
-      console.log('Notifications loaded:', notificationsResponse.data);
+      console.log('Enhanced notifications refreshed');
     } catch (err: any) {
       console.error('Failed to load notifications:', err);
-      setDataError('notifications', err.response?.data?.message || 'Failed to load notifications');
+      setDataError('notifications', err.message || 'Failed to load notifications');
       setDataAvailable('notifications', false);
     } finally {
       setDataLoading('notifications', false);
     }
-  }, [setDataLoading, clearDataError, setDataError, setDataAvailable]);
+  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, refreshNotifications]);
 
   const loadCalendarData = useCallback(async (year?: number, month?: number, selectedChild?: number | null) => {
     setDataLoading('calendar', true);
@@ -201,7 +257,7 @@ export const useDashboardData = () => {
         await loadMealsData(selectedChild);
         break;
       case 'appointments':
-        await loadAppointmentsData(selectedChild);
+        await loadAppointmentsData(selectedChild, false);
         break;
       case 'notifications':
         await loadNotificationsData();
@@ -227,7 +283,7 @@ export const useDashboardData = () => {
     cycleData,
     recentMeals,
     upcomingAppointments,
-    notifications,
+    notifications: enhancedNotifications, // Use enhanced notifications from context
     calendarData,
     
     // States
