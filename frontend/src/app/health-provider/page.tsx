@@ -172,9 +172,7 @@ function HealthProviderDashboardContent() {
   const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [totalAppointments, setTotalAppointments] = useState<number>(0);
 
-  // Date range filters
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
+  // Date range filters (using dateFilter instead of dateFrom/dateTo)
 
   const router = useRouter();
   const { user, loading: authLoading, hasRole, getDashboardRoute } = useAuth();
@@ -405,8 +403,8 @@ function HealthProviderDashboardContent() {
         page: currentPage,
         per_page: itemsPerPage,
         status: statusFilter === 'all' ? undefined : statusFilter,
-        date_from: dateFrom,
-        date_to: dateTo
+        priority: priorityFilter === 'all' ? undefined : priorityFilter,
+        date_filter: dateFilter === 'all' ? undefined : dateFilter
       });
       let appointmentsData = data.appointments || [];
 

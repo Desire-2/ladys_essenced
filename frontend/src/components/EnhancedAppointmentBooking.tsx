@@ -69,7 +69,12 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
   const [bookingStep, setBookingStep] = useState<'provider' | 'datetime' | 'details' | 'confirmation'>('provider');
   
   // Form data
-  const [appointmentData, setAppointmentData] = useState({
+  const [appointmentData, setAppointmentData] = useState<{
+    issue: string;
+    priority: string;
+    notes: string;
+    for_user_id: number | 'self' | null;
+  }>({
     issue: '',
     priority: 'normal',
     notes: '',
@@ -607,10 +612,13 @@ const EnhancedAppointmentBooking: React.FC<EnhancedAppointmentBookingProps> = ({
                     <select
                       className="form-select"
                       value={appointmentData.for_user_id || ''}
-                      onChange={(e) => setAppointmentData({ 
-                        ...appointmentData, 
-                        for_user_id: e.target.value ? parseInt(e.target.value) : null
-                      })}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setAppointmentData({ 
+                          ...appointmentData, 
+                          for_user_id: value === 'self' ? 'self' : (value ? parseInt(value) : null)
+                        });
+                      }}
                     >
                       <option value="">Select who this appointment is for</option>
                       <option value="self">Myself</option>

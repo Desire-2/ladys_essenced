@@ -9,7 +9,7 @@ export interface Child {
   id: number;
   name: string;
   date_of_birth?: string;
-  user_id?: number;
+  user_id: number; // Required for proper parent-child relationships
   relationship?: string;
   phone_number?: string;
 }
