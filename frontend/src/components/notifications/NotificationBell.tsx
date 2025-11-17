@@ -1,8 +1,35 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { notificationAPI } from '../../api/index';
+
+// Helper function to format time in a user-friendly way
+const formatTimeAgo = (dateString: string) => {
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+  
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+  
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) return `${diffInDays}d ago`;
+  
+  const diffInWeeks = Math.floor(diffInDays / 7);
+  if (diffInWeeks < 4) return `${diffInWeeks}w ago`;
+  
+  // For older notifications, show the actual date
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(date.getFullYear() !== now.getFullYear() && { year: 'numeric' })
+  });
+};
 
 interface Notification {
   id: number;
@@ -15,6 +42,7 @@ interface Notification {
 
 export default function NotificationBell() {
   const { user } = useAuth();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -180,14 +208,18 @@ export default function NotificationBell() {
                       <p className="mb-1 small text-muted">
                         {notification.message}
                       </p>
-                      <small className="text-muted">
-                        <i className="fas fa-clock me-1"></i>
-                        {new Date(notification.created_at).toLocaleDateString('en-US', {
+                      <small className="text-muted d-flex align-items-center">
+                        <i className="fas fa-clock me-1" style={{ fontSize: '0.75rem' }}></i>
+                        <span title={new Date(notification.created_at).toLocaleString('en-US', {
+                          weekday: 'short',
                           month: 'short',
                           day: 'numeric',
+                          year: 'numeric',
                           hour: '2-digit',
                           minute: '2-digit'
-                        })}
+                        })}>
+                          {formatTimeAgo(notification.created_at)}
+                        </span>
                       </small>
                     </div>
                     {!notification.is_read && (
@@ -207,8 +239,25 @@ export default function NotificationBell() {
           {notifications.length > 0 && (
             <>
               <div className="dropdown-divider"></div>
-              <div className="dropdown-item text-center">
-                <button className="btn btn-sm btn-link text-decoration-none">
+              <div className="dropdown-item text-center p-0">
+                <button 
+                  className="btn btn-sm btn-link text-decoration-none w-100 py-2"
+                  onClick={() => {
+                    setShowDropdown(false);
+                    router.push('/notifications');
+                  }}
+                  style={{
+                    borderRadius: '0 0 0.375rem 0.375rem',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f8f9fa';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <i className="fas fa-external-link-alt me-1" style={{ fontSize: '0.8rem' }}></i>
                   View all notifications
                 </button>
               </div>
