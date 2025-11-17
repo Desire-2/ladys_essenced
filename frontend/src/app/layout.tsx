@@ -2,9 +2,11 @@
 
 import { ReactNode, useEffect } from 'react';
 import Image from 'next/image';
+import { Toaster } from 'react-hot-toast';
 import { AppProviders } from '../contexts';
 import { useAuth } from '../contexts/AuthContext';
 import ClientWrapper from '../components/ClientWrapper';
+import NotificationBell from '../components/notifications/NotificationBell';
 import '../styles/globals.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -39,11 +41,14 @@ function NavigationMenu() {
   return (
     <>
       {user && (
-        <ul className="navbar-nav ms-auto mb-2 mb-lg-0">
+        <ul className="navbar-nav ms-auto mb-2 mb-lg-0 d-flex align-items-center">
           <li className="nav-item mx-2">
             <a className="nav-link text-black position-relative hover-underline" href={getDashboardLink()}>
               Dashboard
             </a>
+          </li>
+          <li className="nav-item mx-2 d-flex align-items-center">
+            <NotificationBell />
           </li>
         </ul>
       )}
@@ -88,6 +93,12 @@ function NavigationMenu() {
                   <a className="dropdown-item" href="/profile">
                     <i className="fas fa-user-edit me-2"></i>
                     Profile
+                  </a>
+                </li>
+                <li>
+                  <a className="dropdown-item" href="/settings">
+                    <i className="fas fa-cog me-2"></i>
+                    Settings
                   </a>
                 </li>
                 <li><hr className="dropdown-divider" /></li>
@@ -396,6 +407,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
               {children}
             </LayoutContent>
           </ClientWrapper>
+          <Toaster position="top-right" />
         </AppProviders>
       </body>
     </html>
