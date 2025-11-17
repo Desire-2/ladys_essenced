@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCycle } from '../../contexts/CycleContext';
 import { useMeal } from '../../contexts/MealContext';
 import { useAppointment } from '../../contexts/AppointmentContext';
-import { useChildren } from '../../hooks/dashboard/useChildren';
+import { useChildAccess } from '../../contexts/ChildAccessContext';
 import { useDashboardData } from '../../hooks/dashboard/useDashboardData';
 import { 
   User, 
@@ -25,7 +25,8 @@ import {
   CycleTab, 
   MealsTab, 
   AppointmentsTab, 
-  ChildrenTab 
+  ChildrenTab,
+  SettingsTab 
 } from './components/tabs';
 import { ViewChildModal } from './components/modals/ViewChildModal';
 import { NotificationBell } from '../../components/notifications';
@@ -38,15 +39,18 @@ function DashboardContent() {
   
   // Custom hooks
   const {
-    children,
+    parentChildren: children,
+    accessedChild,
     loading: childrenLoading,
     error: childrenError,
-    setError: setChildrenError,
-    loadChildren,
+    fetchParentChildren: loadChildren,
     addChild,
     updateChild,
-    deleteChild
-  } = useChildren();
+    deleteChild,
+    switchToChild,
+    clearAccessedChild,
+    setError: setChildrenError
+  } = useChildAccess();
 
   const {
     cycleData,
@@ -62,93 +66,82 @@ function DashboardContent() {
     loadAppointmentsData,
     loadNotificationsData,
     loadCalendarData,
-    loadAllData,
-    retryDataLoad
+    retryDataLoad,
+    loadAllData: initializeDashboard
   } = useDashboardData();
 
-  // Local state
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
-  const [selectedChild, setSelectedChild] = useState<number | null>(null);
-  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // Use accessedChild from context for selectedChild
+  const selectedChild = accessedChild?.user_id || null;
+  
+  const setSelectedChild = (userId: number | null) => {
+    if (userId) {
+      // Find child by user_id and switch to them using child.id
+      const child = children.find((c: Child) => c.user_id === userId);
+      if (child) {
+        console.log('Switching to child:', child.name, 'with user_id:', userId, 'and child.id:', child.id);
+        switchToChild(child.id); // Use child.id for switchToChild
+      }
+    } else {
+      // Clear accessed child
+      console.log('Clearing accessed child');
+      clearAccessedChild();
+    }
+  };
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewingChild, setViewingChild] = useState<Child | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
-
-  // Child form state
+  const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // Form states
   const [childFormError, setChildFormError] = useState('');
   const [childFormSuccess, setChildFormSuccess] = useState('');
 
-  // View child modal state
-  const [viewingChild, setViewingChild] = useState<Child | null>(null);
-  const [showViewModal, setShowViewModal] = useState(false);
+  // Initialize dashboard once when user is available
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  const router = useRouter();
-
-  // Auth check and data loading
+  // Auth checks
   useEffect(() => {
-    if (authLoading) return;
-
     if (!user) {
-      console.log('Dashboard: No user found, redirecting to login.');
-      router.push('/login');
       return;
     }
 
     if (!hasRole('parent') && !hasRole('adolescent')) {
-      console.log('Dashboard: User redirected to correct dashboard.');
-      const correctRoute = getDashboardRoute();
-      router.push(correctRoute);
+      setError('Unauthorized access. Please contact support.');
       return;
     }
 
-    console.log('Dashboard: User authenticated, loading data...');
-    initializeDashboard();
-  }, [user, authLoading, router, hasRole, getDashboardRoute]);
-
-  // Reload data when selectedChild changes
-  useEffect(() => {
-    if (user) {
-      console.log('Dashboard: Selected child changed, reloading data for:', selectedChild || user.id);
-      loadCycleData(selectedChild);
-      loadMealsData(selectedChild);
-      loadAppointmentsData(selectedChild);
+    // Initialize dashboard only once
+    if (!isInitialized) {
+      const initialize = async () => {
+        try {
+          // Load dashboard data (children are loaded automatically by ChildAccessProvider)
+          await initializeDashboard();
+          setIsInitialized(true);
+          console.log('Dashboard initialized. Children available:', children.length);
+        } catch (err) {
+          console.error('Dashboard initialization failed:', err);
+          setError('Failed to initialize dashboard');
+        } finally {
+          setLoading(false);
+        }
+      };
       
-      if (activeTab === 'cycle') {
-        loadCalendarData(undefined, undefined, selectedChild);
-      }
+      initialize();
     }
-  }, [selectedChild, user]);
+  }, [user, hasRole, isInitialized]); // Removed loadChildren dependency since ChildAccessProvider handles it
 
-  // Load calendar data when switching to cycle tab
   useEffect(() => {
-    if (user && activeTab === 'cycle') {
-      loadCalendarData(undefined, undefined, selectedChild);
+    if (user && activeTab === 'cycle' && isInitialized) {
+      loadCycleData(selectedChild);
     }
-  }, [user, activeTab, selectedChild]);
+  }, [user, activeTab, selectedChild, isInitialized]); // Added isInitialized dependency
 
-  const initializeDashboard = async () => {
-    if (!user) return;
-
-    setLoading(true);
-    setError('');
-
-    try {
-      // Load children data if user is a parent
-      if (user.user_type === 'parent') {
-        await loadChildren();
-      }
-
-      // Load all dashboard data
-      await loadAllData(selectedChild);
-    } catch (err: any) {
-      console.error('Failed to initialize dashboard:', err);
-      setError('Failed to load dashboard data. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Navigate calendar months
+  // Navigation function for calendar
   const navigateMonth = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
     if (direction === 'prev') {
@@ -160,91 +153,108 @@ function DashboardContent() {
     loadCalendarData(newDate.getFullYear(), newDate.getMonth() + 1, selectedChild);
   };
 
-  // Handle form submissions
+  // Child management functions
+  const handleChildFormSubmit = async (childData: any) => {
+    try {
+      setChildFormError('');
+      setChildFormSuccess('');
+      
+      if (user.user_type === 'parent') {
+        const result = await addChild(childData);
+        
+        if (result.success) {
+          setChildFormSuccess('Child added successfully');
+          await loadChildren();
+        } else {
+          setChildFormError(result.error || 'Failed to add child');
+        }
+      }
+    } catch (err) {
+      setChildFormError('An unexpected error occurred');
+      console.error('Child form submission error:', err);
+    }
+  };
+
+
+
+  // Form submission handlers
   const handleCycleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    setError('');
+    
+    try {
+      const formData = new FormData(e.currentTarget);
+      const data: any = {
+        start_date: formData.get('start_date'),
+        notes: formData.get('notes'),
+      };
 
-    const symptoms: string[] = [];
-    const symptomCheckboxes = e.currentTarget.querySelectorAll('input[name="symptoms"]:checked') as NodeListOf<HTMLInputElement>;
-    symptomCheckboxes.forEach(cb => symptoms.push(cb.value));
+      if (user?.user_type === 'parent' && selectedChild) {
+        data.user_id = selectedChild;
+      }
 
-    const cycleLogData: CycleLogData = {
-      start_date: formData.get('startDate') as string,
-      end_date: formData.get('endDate') as string || undefined,
-      flow_intensity: formData.get('flowIntensity') as string || undefined,
-      symptoms: symptoms.length > 0 ? symptoms : undefined,
-      notes: formData.get('notes') as string,
-      user_id: selectedChild || user?.id
-    };
+      const result = await addCycleLog(data);
+      
+      if (!result.success) {
+        console.error('Cycle submission failed:', result.error);
+        return result;
+      }
 
-    const result = await addCycleLog(cycleLogData);
-    if (!result.success) {
-      setError(result.error || 'Failed to save cycle log');
-      return;
+      // Reload cycle data after successful submission
+      loadCycleData(selectedChild);
+      return result;
+    } catch (error) {
+      console.error('Cycle submission error:', error);
+      return { success: false, error: 'Failed to add cycle log' };
     }
-
-    // Refresh stats and calendar
-    await fetchCycleStats();
-    loadCalendarData(undefined, undefined, selectedChild);
-    e.currentTarget.reset();
-    console.log('Cycle log saved successfully!');
   };
 
   const handleMealSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    setError('');
+    
+    try {
+      const formData = new FormData(e.currentTarget);
+      const data: any = {
+        meal_type: formData.get('meal_type'),
+        meal_time: formData.get('meal_time'),
+        description: formData.get('description'),
+      };
 
-    const formData = new FormData(form);
-    const mealLogData: MealLogData = {
-      meal_type: formData.get('mealType') as string,
-      meal_time: formData.get('mealDate') as string,
-      description: formData.get('mealDetails') as string,
-      user_id: selectedChild || user?.id
-    };
+      if (user?.user_type === 'parent' && selectedChild) {
+        data.user_id = selectedChild;
+      }
 
-    const result = await addMealLog(mealLogData);
-    if (!result.success) {
-      setError(result.error || 'Failed to save meal log');
-      return;
+      const result = await addMealLog(data);
+      
+      if (!result.success) {
+        console.error('Meal submission failed:', result.error);
+        return result;
+      }
+
+      // Reload meals data after successful submission
+      loadMealsData(selectedChild);
+      return result;
+    } catch (error) {
+      console.error('Meal submission error:', error);
+      return { success: false, error: 'Failed to add meal log' };
     }
-
-    loadMealsData(selectedChild);
-    form.reset();
   };
 
-  const handleAppointmentSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError('');
-
-    const formData = new FormData(e.currentTarget);
-    const appointmentData: AppointmentData = {
-      issue: formData.get('issue') as string,
-      preferred_date: formData.get('preferredDate') as string,
-      appointment_date: formData.get('appointmentDate') as string || undefined,
-      for_user_id: selectedChild || user?.id
-    };
-
-    const result = await createAppointment(appointmentData);
-    if (!result.success) {
-      setError(result.error || 'Failed to save appointment');
-      return;
+  const handleDeleteChild = async (childId: number) => {
+    try {
+      const result = await deleteChild(childId);
+      if (result.success) {
+        if (selectedChild === childId) {
+          setSelectedChild(null);
+        }
+        await loadChildren();
+      }
+      return result;
+    } catch (error) {
+      console.error('Delete child error:', error);
+      return { success: false, error: 'Failed to delete child' };
     }
-
-    loadAppointmentsData(selectedChild);
-    e.currentTarget.reset();
   };
 
-  // Handle child form submission (placeholder - implement based on your existing logic)
-  const handleChildFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    // Implementation would go here based on your existing child form logic
-    console.log('Child form submitted');
-  };
-
-  // Child modal handlers
   const viewChild = (child: Child) => {
     setViewingChild(child);
     setShowViewModal(true);
@@ -256,30 +266,20 @@ function DashboardContent() {
   };
 
   const startEditingChild = (child: Child) => {
-    // Implementation would go here based on your existing editing logic
-    console.log('Start editing child:', child);
+    // Implementation for editing child
+    closeViewModal();
   };
 
-  const handleDeleteChild = async (id: number) => {
-    const result = await deleteChild(id);
-    if (result.success) {
-      setChildFormSuccess('Child removed successfully!');
-      setTimeout(() => setChildFormSuccess(''), 3000);
-    } else {
-      setChildFormError(result.error || 'Failed to delete child');
-    }
-  };
-
-  // Loading state
-  if (loading) {
+  // Loading state - only show if not initialized and still loading
+  if (loading && !isInitialized) {
     return (
-      <div className="container py-4">
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
         <div className="text-center">
           <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
             <span className="visually-hidden">Loading...</span>
           </div>
           <h4 className="text-muted">Loading Dashboard</h4>
-          <p className="text-muted">Fetching your data...</p>
+          <p className="text-muted">Initializing your dashboard...</p>
         </div>
       </div>
     );
@@ -303,7 +303,8 @@ function DashboardContent() {
                 if (retryCount < 5) {
                   setError('');
                   setRetryCount(prev => prev + 1);
-                  await initializeDashboard();
+                  setIsInitialized(false); // Reset initialization flag
+                  setLoading(true); // Reset loading state
                 } else {
                   alert('Maximum retry attempts reached. Please check your connection and try logging in again.');
                 }
@@ -437,6 +438,12 @@ function DashboardContent() {
           childFormSuccess={childFormSuccess}
           onDeleteChild={handleDeleteChild}
           onViewChild={viewChild}
+        />
+      )}
+
+      {user?.user_type === 'adolescent' && activeTab === 'settings' && (
+        <SettingsTab
+          userType={user?.user_type}
         />
       )}
 

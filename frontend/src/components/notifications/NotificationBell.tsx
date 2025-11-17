@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { notificationAPI } from '../../api/index';
 
 interface Notification {
   id: number;
@@ -28,23 +29,14 @@ export default function NotificationBell() {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('access_token');
-      if (!token) return;
-
-      const response = await fetch('/api/notifications/recent', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount(data.unread_count || 0);
-      }
+      const response = await notificationAPI.getRecent();
+      setNotifications(response.data.notifications || []);
+      setUnreadCount(response.data.unread_count || 0);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
+      // Set empty state on error
+      setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }
@@ -52,17 +44,8 @@ export default function NotificationBell() {
 
   const markAsRead = async (notificationId: number) => {
     try {
-      const token = localStorage.getItem('access_token');
-      if (!token) return;
-
-      await fetch(`/api/notifications/${notificationId}/read`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
+      await notificationAPI.markAsRead(notificationId);
+      
       // Update local state
       setNotifications(prev => 
         prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
@@ -75,17 +58,8 @@ export default function NotificationBell() {
 
   const markAllAsRead = async () => {
     try {
-      const token = localStorage.getItem('access_token');
-      if (!token) return;
-
-      await fetch('/api/notifications/read-all', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
+      await notificationAPI.markAllAsRead();
+      
       // Update local state
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
