@@ -5,6 +5,7 @@ import { EmptyState } from '../ui/EmptyState';
 import CycleCalendar from '../../../../components/CycleCalendar';
 import { api } from '../../../../lib/api/client';
 import { useAuth } from '../../../../contexts/AuthContext';
+import { navigateToPeriodLogs, getPeriodLogStats, formatPeriodStats } from '../../utils';
 import '../../../../styles/enhanced-cycle-tab.css';
 
 interface CycleTabProps {
@@ -20,6 +21,7 @@ interface CycleTabProps {
   onRetryDataLoad: (dataType: string) => void;
   onCycleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   cycleError?: string;
+  isLoading?: boolean;
   userType?: string;
 }
 
@@ -36,6 +38,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({
   onRetryDataLoad,
   onCycleSubmit,
   cycleError,
+  isLoading = false,
   userType
 }) => {
   const { hasRole } = useAuth();
@@ -48,34 +51,102 @@ export const CycleTab: React.FC<CycleTabProps> = ({
   const [loadingPredictions, setLoadingPredictions] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<string | null>(null);
   const [phaseGuidance, setPhaseGuidance] = useState<string>('');
+  const [periodStats, setPeriodStats] = useState(getPeriodLogStats());
+  const [isTabActive, setIsTabActive] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date>(new Date());
+
+  // Tab activation detection
+  useEffect(() => {
+    console.log('CycleTab mounted - setting as active');
+    setIsTabActive(true);
+    setLastRefreshTime(new Date());
+    
+    // Check for valid token before loading data
+    const hasToken = typeof window !== 'undefined' && localStorage.getItem('access_token');
+    if (!hasToken) {
+      console.error('❌ No access token found - user may need to log in');
+      return;
+    }
+    
+    // Reload calendar and cycle data when tab becomes active
+    const handleTabActivation = () => {
+      console.log('CycleTab activated - reloading data');
+      loadIntelligentData();
+      onRetryDataLoad('calendar');
+      onRetryDataLoad('cycle');
+    };
+    
+    // Immediate load
+    handleTabActivation();
+    
+    return () => {
+      console.log('CycleTab unmounted - setting as inactive');
+      setIsTabActive(false);
+    };
+  }, []);
 
   // Load intelligent cycle data
   useEffect(() => {
-    loadIntelligentData();
-  }, [selectedChild]);
+    if (isTabActive) {
+      console.log('Loading intelligent data for selectedChild:', selectedChild);
+      loadIntelligentData();
+    }
+  }, [selectedChild, isTabActive]);
+
+  // Auto-refresh calendar data every 30 seconds when tab is active
+  useEffect(() => {
+    if (!isTabActive) return;
+    
+    const refreshInterval = setInterval(() => {
+      console.log('Auto-refreshing cycle calendar data');
+      onRetryDataLoad('calendar');
+      setLastRefreshTime(new Date());
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(refreshInterval);
+  }, [isTabActive, onRetryDataLoad]);
 
   const loadIntelligentData = async () => {
-    if (!dataAvailability.cycle) return;
+    if (!dataAvailability.cycle) {
+      console.log('⚠️ Cycle data not available, skipping intelligent data load');
+      return;
+    }
     
     try {
       setLoadingPredictions(true);
+      console.log('🤖 Loading intelligent cycle data (predictions & insights)');
       
       // Load predictions and insights
       const [predictionsData, insightsData, statsData] = await Promise.all([
-        api.cycle.getPredictions(3, selectedChild),
-        api.cycle.getInsights(selectedChild),
-        api.cycle.getStats(selectedChild)
+        api.cycle.getPredictions(3, selectedChild).catch(err => {
+          console.error('❌ Failed to load predictions:', err);
+          return { data: [] };
+        }),
+        api.cycle.getInsights(selectedChild).catch(err => {
+          console.error('❌ Failed to load insights:', err);
+          return { data: null };
+        }),
+        api.cycle.getStats(selectedChild).catch(err => {
+          console.error('❌ Failed to load stats:', err);
+          return { data: { basic_stats: {} } };
+        })
       ]);
       
-      setPredictions(predictionsData);
-      setInsights(insightsData);
-      setCurrentPhase(statsData.basic_stats?.current_cycle_phase);
+      console.log('✅ Intelligent data loaded:', {
+        predictions: predictionsData.data,
+        insights: insightsData.data,
+        stats: statsData.data
+      });
+      
+      setPredictions(predictionsData.data || []);
+      setInsights(insightsData.data);
+      setCurrentPhase(statsData.data.basic_stats?.current_cycle_phase);
       
       // Set phase-specific guidance
-      setPhaseGuidance(getPhaseGuidance(statsData.basic_stats?.current_cycle_phase));
+      setPhaseGuidance(getPhaseGuidance(statsData.data.basic_stats?.current_cycle_phase));
       
     } catch (error) {
-      console.error('Failed to load intelligent cycle data:', error);
+      console.error('❌ Failed to load intelligent cycle data:', error);
     } finally {
       setLoadingPredictions(false);
     }
@@ -230,6 +301,206 @@ export const CycleTab: React.FC<CycleTabProps> = ({
         </div>
       )}
 
+      {/* Enhanced Creative Period Management Button */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div 
+            className="card border-0 overflow-hidden position-relative"
+            style={{
+              background: 'linear-gradient(135deg, #ff6b6b 0%, #ffa500 50%, #ff69b4 100%)',
+              boxShadow: '0 10px 30px rgba(255,107,107,0.3)',
+              borderRadius: '20px'
+            }}
+          >
+            {/* Animated background elements */}
+            <div 
+              className="position-absolute floating"
+              style={{
+                top: '10px',
+                right: '20px',
+                width: '60px',
+                height: '60px',
+                background: 'rgba(255,255,255,0.1)',
+                borderRadius: '50%',
+                filter: 'blur(20px)',
+                animation: 'float 3s ease-in-out infinite'
+              }}
+            ></div>
+            <div 
+              className="position-absolute floating"
+              style={{
+                bottom: '15px',
+                left: '30px',
+                width: '40px',
+                height: '40px',
+                background: 'rgba(255,255,255,0.08)',
+                borderRadius: '50%',
+                filter: 'blur(15px)',
+                animation: 'float 2s ease-in-out infinite reverse'
+              }}
+            ></div>
+            
+            <div className="card-body text-white position-relative" style={{ padding: '1.5rem 2rem' }}>
+              <div className="row align-items-center">
+                <div className="col-md-8">
+                  <div className="d-flex align-items-center mb-2">
+                    <div 
+                      className="me-3 d-flex align-items-center justify-content-center"
+                      style={{
+                        width: '50px',
+                        height: '50px',
+                        background: 'rgba(255,255,255,0.2)',
+                        borderRadius: '15px',
+                        backdropFilter: 'blur(10px)',
+                        border: '1px solid rgba(255,255,255,0.3)'
+                      }}
+                    >
+                      <i className="fas fa-tint" style={{ fontSize: '1.5rem' }}></i>
+                    </div>
+                    <div>
+                      <h4 className="mb-1 fw-bold">Detailed Period Management</h4>
+                      <p className="mb-0 opacity-90">Track daily flow, symptoms, and wellness patterns with advanced analytics</p>
+                    </div>
+                  </div>
+                  <div className="d-flex flex-wrap gap-2 mt-3">
+                    <span className="badge bg-white bg-opacity-20 px-3 py-2">
+                      <i className="fas fa-calendar-day me-1"></i>
+                      Daily Tracking
+                    </span>
+                    <span className="badge bg-white bg-opacity-20 px-3 py-2">
+                      <i className="fas fa-chart-pie me-1"></i>
+                      AI Insights
+                    </span>
+                    <span className="badge bg-white bg-opacity-20 px-3 py-2">
+                      <i className="fas fa-heart me-1"></i>
+                      Wellness Focus
+                    </span>
+                    <span className="badge bg-white bg-opacity-20 px-3 py-2">
+                      <i className="fas fa-edit me-1"></i>
+                      Edit & Delete
+                    </span>
+                  </div>
+                </div>
+                <div className="col-md-4 text-center text-md-end">
+                  <button
+                    className="btn btn-light btn-lg fw-bold position-relative overflow-hidden"
+                    style={{
+                      borderRadius: '15px',
+                      padding: '1rem 2rem',
+                      color: '#ff6b6b',
+                      background: 'rgba(255,255,255,0.95)',
+                      backdropFilter: 'blur(10px)',
+                      boxShadow: '0 5px 20px rgba(255,255,255,0.3)',
+                      border: '1px solid rgba(255,255,255,0.5)',
+                      transition: 'all 0.3s ease',
+                      textDecoration: 'none',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => {
+                      console.log('Period Management Button Clicked!');
+                      
+                      // Navigate to cycle history management
+                      const event = new CustomEvent('openCycleHistory', { 
+                        detail: { 
+                          source: 'cycle-tab',
+                          timestamp: new Date().toISOString(),
+                          userAction: true
+                        }
+                      });
+                      
+                      console.log('Dispatching openCycleHistory event:', event);
+                      window.dispatchEvent(event);
+                      
+                      // Update stats on click
+                      try {
+                        const newStats = getPeriodLogStats();
+                        console.log('New stats:', newStats);
+                        setPeriodStats(newStats);
+                      } catch (error) {
+                        console.error('Error updating stats:', error);
+                      }
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-3px) scale(1.05)';
+                      e.currentTarget.style.boxShadow = '0 8px 30px rgba(255,255,255,0.5)';
+                      e.currentTarget.style.background = 'rgba(255,255,255,1)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                      e.currentTarget.style.boxShadow = '0 5px 20px rgba(255,255,255,0.3)';
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.95)';
+                    }}
+                  >
+                    {/* Button shimmer effect */}
+                    <div 
+                      className="position-absolute top-0 start-0 w-100 h-100"
+                      style={{
+                        background: 'linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.4) 50%, transparent 70%)',
+                        transform: 'translateX(-100%)',
+                        transition: 'transform 0.6s',
+                        pointerEvents: 'none'
+                      }}
+                      onAnimationIteration={(e) => {
+                        e.currentTarget.style.transform = 'translateX(-100%)';
+                        setTimeout(() => {
+                          e.currentTarget.style.transform = 'translateX(100%)';
+                        }, 100);
+                      }}
+                    ></div>
+                    
+                    <div className="d-flex flex-column align-items-center position-relative">
+                      <div className="d-flex align-items-center mb-2">
+                        <i className="fas fa-calendar-plus me-2" style={{ fontSize: '1.5rem' }}></i>
+                        <i className="fas fa-chart-line ms-1" style={{ fontSize: '1rem', opacity: 0.7 }}></i>
+                      </div>
+                      <span style={{ fontSize: '1rem', lineHeight: '1.2' }}>Manage Period Logs</span>
+                      <small className="text-muted mt-1" style={{ fontSize: '0.8rem' }}>
+                        Advanced tracking & analytics
+                      </small>
+                    </div>
+                    
+                    {/* Pulse animation ring */}
+                    <div 
+                      className="position-absolute top-50 start-50 translate-middle"
+                      style={{
+                        width: 'calc(100% + 4px)',
+                        height: 'calc(100% + 4px)',
+                        border: '2px solid rgba(255,107,107,0.4)',
+                        borderRadius: '17px',
+                        animation: 'pulse-ring 2s infinite',
+                        pointerEvents: 'none'
+                      }}
+                    ></div>
+                  </button>
+                  
+                  {/* Quick stats */}
+                  <div className="row mt-3 g-1 text-center">
+                    <div className="col-4">
+                      <div className="small opacity-75" style={{ fontSize: '0.7rem' }}>This Month</div>
+                      <div className="fw-bold stat-counter" style={{ fontSize: '0.9rem' }}>
+                        {formatPeriodStats(periodStats).thisMonth}
+                      </div>
+                    </div>
+                    <div className="col-4">
+                      <div className="small opacity-75" style={{ fontSize: '0.7rem' }}>Accuracy</div>
+                      <div className="fw-bold stat-counter" style={{ fontSize: '0.9rem' }}>
+                        {formatPeriodStats(periodStats).accuracy}
+                      </div>
+                    </div>
+                    <div className="col-4">
+                      <div className="small opacity-75" style={{ fontSize: '0.7rem' }}>Streak</div>
+                      <div className="fw-bold stat-counter" style={{ fontSize: '0.9rem' }}>
+                        {formatPeriodStats(periodStats).streak}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="row g-3 g-md-4">
         {/* Left Column: Calendar and Intelligent Insights */}
         <div className="col-12 col-xl-8 col-lg-7">
@@ -317,15 +588,78 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                   </div>
                 </div>
               ) : dataErrors.calendar ? (
-                <div className="alert alert-danger d-flex align-items-center">
-                  <i className="fas fa-exclamation-triangle me-2"></i>
-                  <div>
-                    <strong>Unable to load calendar data</strong>
-                    <div className="small mt-1">{dataErrors.calendar}</div>
+                <div className="alert alert-danger d-flex align-items-start border-0 rounded-3" style={{ background: 'linear-gradient(135deg, #fff5f5, #ffe0e0)' }}>
+                  <div 
+                    className="me-3 d-flex align-items-center justify-content-center" 
+                    style={{ 
+                      width: '40px', 
+                      height: '40px', 
+                      background: '#dc3545', 
+                      borderRadius: '10px',
+                      color: 'white'
+                    }}
+                  >
+                    <i className="fas fa-exclamation-triangle"></i>
+                  </div>
+                  <div className="flex-grow-1">
+                    <strong style={{ color: '#c62828' }}>Unable to load calendar data</strong>
+                    <div className="small mt-1" style={{ color: '#d32f2f' }}>
+                      {dataErrors.calendar}
+                    </div>
+                    {dataErrors.calendar.includes('token') || dataErrors.calendar.includes('Authentication') ? (
+                      <div className="mt-2">
+                        <button 
+                          className="btn btn-sm btn-danger"
+                          onClick={() => {
+                            // Attempt to refresh page to get new token
+                            window.location.reload();
+                          }}
+                        >
+                          <i className="fas fa-sync-alt me-1"></i>
+                          Refresh Page
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="mt-2">
+                        <button 
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => onRetryDataLoad('calendar')}
+                        >
+                          <i className="fas fa-redo me-1"></i>
+                          Try Again
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : dataAvailability.calendar && calendarData ? (
                 <>
+                  {/* Calendar Header with Refresh Controls */}
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h5 className="mb-0">
+                      <i className="fas fa-calendar-alt me-2 text-primary"></i>
+                      Intelligent Cycle Calendar
+                    </h5>
+                    <div className="d-flex align-items-center gap-2">
+                      <small className="text-muted">
+                        Last updated: {lastRefreshTime.toLocaleTimeString()}
+                      </small>
+                      <button 
+                        className="btn btn-outline-primary btn-sm"
+                        onClick={() => {
+                          console.log('Manual calendar refresh triggered');
+                          onRetryDataLoad('calendar');
+                          loadIntelligentData();
+                          setLastRefreshTime(new Date());
+                        }}
+                        disabled={dataLoadingStates.calendar}
+                        title="Refresh Calendar Data"
+                      >
+                        <i className={`fas fa-sync-alt ${dataLoadingStates.calendar ? 'fa-spin' : ''}`}></i>
+                      </button>
+                    </div>
+                  </div>
+                  
                   <CycleCalendar 
                     calendarData={calendarData}
                     currentDate={currentDate}
@@ -562,15 +896,19 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                     type="date" 
                     className="form-control border-0 enhanced-input enhanced-focus"
                     style={{
-                      background: 'linear-gradient(135deg, #f8f9fa, #ffffff)',
+                      background: isLoading 
+                        ? 'linear-gradient(135deg, #e9ecef, #f8f9fa)' 
+                        : 'linear-gradient(135deg, #f8f9fa, #ffffff)',
                       borderRadius: '12px',
                       padding: '0.75rem 1rem',
                       boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-                      fontSize: '0.95rem'
+                      fontSize: '0.95rem',
+                      opacity: isLoading ? 0.7 : 1
                     }}
                     id="startDate" 
                     name="startDate"
                     required 
+                    disabled={isLoading}
                   />
                 </div>
                 
@@ -589,14 +927,18 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                     type="date" 
                     className="form-control border-0 enhanced-input enhanced-focus"
                     style={{
-                      background: 'linear-gradient(135deg, #f8f9fa, #ffffff)',
+                      background: isLoading 
+                        ? 'linear-gradient(135deg, #e9ecef, #f8f9fa)' 
+                        : 'linear-gradient(135deg, #f8f9fa, #ffffff)',
                       borderRadius: '12px',
                       padding: '0.75rem 1rem',
                       boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-                      fontSize: '0.95rem'
+                      fontSize: '0.95rem',
+                      opacity: isLoading ? 0.7 : 1
                     }}
                     id="endDate" 
                     name="endDate"
+                    disabled={isLoading}
                   />
                 </div>
                 
@@ -606,7 +948,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                     Flow Intensity
                   </label>
                   <div className="btn-group d-flex flex-column flex-sm-row" role="group">
-                    <input type="radio" className="btn-check" name="flowIntensity" id="light" value="light" />
+                    <input type="radio" className="btn-check" name="flowIntensity" id="light" value="light" disabled={isLoading} />
                     <label 
                       className="btn btn-outline-info border-0 fw-semibold flow-btn mb-2 mb-sm-0"
                       style={{
@@ -623,7 +965,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                       💧 Light
                     </label>
                     
-                    <input type="radio" className="btn-check" name="flowIntensity" id="medium" value="medium" />
+                    <input type="radio" className="btn-check" name="flowIntensity" id="medium" value="medium" disabled={isLoading} />
                     <label 
                       className="btn btn-outline-warning border-0 fw-semibold mx-0 mx-sm-2 mb-2 mb-sm-0 flow-btn"
                       style={{
@@ -640,7 +982,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                       💧💧 Medium
                     </label>
                     
-                    <input type="radio" className="btn-check" name="flowIntensity" id="heavy" value="heavy" />
+                    <input type="radio" className="btn-check" name="flowIntensity" id="heavy" value="heavy" disabled={isLoading} />
                     <label 
                       className="btn btn-outline-danger border-0 fw-semibold flow-btn"
                       style={{
@@ -681,6 +1023,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                             value="cramps" 
                             id="cramps"
                             style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
                           />
                           <label className="form-check-label fw-medium" htmlFor="cramps" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
                             🩸 Cramps
@@ -694,6 +1037,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                             value="bloating" 
                             id="bloating"
                             style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
                           />
                           <label className="form-check-label fw-medium" htmlFor="bloating" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
                             🎈 Bloating
@@ -707,6 +1051,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                             value="headache" 
                             id="headache"
                             style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
                           />
                           <label className="form-check-label fw-medium" htmlFor="headache" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
                             🤕 Headache
@@ -722,6 +1067,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                             value="mood_swings" 
                             id="mood_swings"
                             style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
                           />
                           <label className="form-check-label fw-medium" htmlFor="mood_swings" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
                             😭 Mood Swings
@@ -735,6 +1081,7 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                             value="fatigue" 
                             id="fatigue"
                             style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
                           />
                           <label className="form-check-label fw-medium" htmlFor="fatigue" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
                             😴 Fatigue
@@ -748,9 +1095,229 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                             value="acne" 
                             id="acne"
                             style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
                           />
                           <label className="form-check-label fw-medium" htmlFor="acne" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
                             🔴 Acne
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Mood Tracking */}
+                <div className="form-group mb-4">
+                  <label className="form-label fw-semibold mb-3">
+                    <i className="fas fa-smile me-2" style={{ color: '#ff69b4' }}></i>
+                    Mood & Energy Level
+                  </label>
+                  <div className="row g-2">
+                    <div className="col-6">
+                      <label htmlFor="mood" className="form-label text-muted mb-1">Overall Mood</label>
+                      <select 
+                        className="form-select border-0 enhanced-input"
+                        style={{
+                          background: isLoading 
+                            ? 'linear-gradient(135deg, #e9ecef, #f8f9fa)' 
+                            : 'linear-gradient(135deg, #f8f9fa, #ffffff)',
+                          borderRadius: '8px',
+                          padding: '0.5rem 0.75rem',
+                          fontSize: '0.9rem',
+                          opacity: isLoading ? 0.7 : 1
+                        }}
+                        name="mood"
+                        disabled={isLoading}
+                      >
+                        <option value="">Select mood</option>
+                        <option value="very_good">😊 Very Good</option>
+                        <option value="good">🙂 Good</option>
+                        <option value="neutral">😐 Neutral</option>
+                        <option value="low">😔 Low</option>
+                        <option value="very_low">😢 Very Low</option>
+                      </select>
+                    </div>
+                    <div className="col-6">
+                      <label htmlFor="energy" className="form-label text-muted mb-1">Energy Level</label>
+                      <select 
+                        className="form-select border-0 enhanced-input"
+                        style={{
+                          background: isLoading 
+                            ? 'linear-gradient(135deg, #e9ecef, #f8f9fa)' 
+                            : 'linear-gradient(135deg, #f8f9fa, #ffffff)',
+                          borderRadius: '8px',
+                          padding: '0.5rem 0.75rem',
+                          fontSize: '0.9rem',
+                          opacity: isLoading ? 0.7 : 1
+                        }}
+                        name="energy"
+                        disabled={isLoading}
+                      >
+                        <option value="">Select energy</option>
+                        <option value="high">⚡ High Energy</option>
+                        <option value="moderate">🔋 Moderate</option>
+                        <option value="low">🪫 Low Energy</option>
+                        <option value="very_low">😴 Very Low</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sleep & Lifestyle Tracking */}
+                <div className="form-group mb-4">
+                  <label className="form-label fw-semibold mb-3">
+                    <i className="fas fa-bed me-2" style={{ color: '#6f42c1' }}></i>
+                    Sleep & Lifestyle
+                  </label>
+                  <div className="row g-2">
+                    <div className="col-6">
+                      <label htmlFor="sleep_quality" className="form-label text-muted mb-1">Sleep Quality</label>
+                      <select 
+                        className="form-select border-0 enhanced-input"
+                        style={{
+                          background: isLoading 
+                            ? 'linear-gradient(135deg, #e9ecef, #f8f9fa)' 
+                            : 'linear-gradient(135deg, #f8f9fa, #ffffff)',
+                          borderRadius: '8px',
+                          padding: '0.5rem 0.75rem',
+                          fontSize: '0.9rem',
+                          opacity: isLoading ? 0.7 : 1
+                        }}
+                        name="sleep_quality"
+                        disabled={isLoading}
+                      >
+                        <option value="">Rate sleep</option>
+                        <option value="excellent">🌟 Excellent</option>
+                        <option value="good">✨ Good</option>
+                        <option value="fair">⭐ Fair</option>
+                        <option value="poor">😴 Poor</option>
+                      </select>
+                    </div>
+                    <div className="col-6">
+                      <label htmlFor="stress_level" className="form-label text-muted mb-1">Stress Level</label>
+                      <select 
+                        className="form-select border-0 enhanced-input"
+                        style={{
+                          background: isLoading 
+                            ? 'linear-gradient(135deg, #e9ecef, #f8f9fa)' 
+                            : 'linear-gradient(135deg, #f8f9fa, #ffffff)',
+                          borderRadius: '8px',
+                          padding: '0.5rem 0.75rem',
+                          fontSize: '0.9rem',
+                          opacity: isLoading ? 0.7 : 1
+                        }}
+                        name="stress_level"
+                        disabled={isLoading}
+                      >
+                        <option value="">Rate stress</option>
+                        <option value="low">😌 Low</option>
+                        <option value="moderate">😐 Moderate</option>
+                        <option value="high">😰 High</option>
+                        <option value="very_high">😫 Very High</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Physical Activity */}
+                <div className="form-group mb-4">
+                  <label className="form-label fw-semibold mb-3">
+                    <i className="fas fa-dumbbell me-2" style={{ color: '#20c997' }}></i>
+                    Physical Activity & Exercise
+                  </label>
+                  <div 
+                    className="p-3 rounded-3"
+                    style={{
+                      background: 'linear-gradient(135deg, #e8f5e8, #d4edda)',
+                      border: '1px solid rgba(32,201,151,0.2)'
+                    }}
+                  >
+                    <div className="row g-1 g-md-2">
+                      <div className="col-12 col-sm-6">
+                        <div className="form-check mb-2">
+                          <input 
+                            className="form-check-input enhanced-checkbox" 
+                            type="checkbox" 
+                            name="exercise" 
+                            value="cardio" 
+                            id="cardio"
+                            style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
+                          />
+                          <label className="form-check-label fw-medium" htmlFor="cardio" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
+                            🏃‍♀️ Cardio/Running
+                          </label>
+                        </div>
+                        <div className="form-check mb-2">
+                          <input 
+                            className="form-check-input enhanced-checkbox" 
+                            type="checkbox" 
+                            name="exercise" 
+                            value="strength" 
+                            id="strength"
+                            style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
+                          />
+                          <label className="form-check-label fw-medium" htmlFor="strength" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
+                            💪 Strength Training
+                          </label>
+                        </div>
+                        <div className="form-check mb-2">
+                          <input 
+                            className="form-check-input enhanced-checkbox" 
+                            type="checkbox" 
+                            name="exercise" 
+                            value="yoga" 
+                            id="yoga"
+                            style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
+                          />
+                          <label className="form-check-label fw-medium" htmlFor="yoga" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
+                            🧘‍♀️ Yoga/Stretching
+                          </label>
+                        </div>
+                      </div>
+                      <div className="col-12 col-sm-6">
+                        <div className="form-check mb-2">
+                          <input 
+                            className="form-check-input enhanced-checkbox" 
+                            type="checkbox" 
+                            name="exercise" 
+                            value="walking" 
+                            id="walking"
+                            style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
+                          />
+                          <label className="form-check-label fw-medium" htmlFor="walking" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
+                            🚶‍♀️ Walking/Light Activity
+                          </label>
+                        </div>
+                        <div className="form-check mb-2">
+                          <input 
+                            className="form-check-input enhanced-checkbox" 
+                            type="checkbox" 
+                            name="exercise" 
+                            value="swimming" 
+                            id="swimming"
+                            style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
+                          />
+                          <label className="form-check-label fw-medium" htmlFor="swimming" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
+                            🏊‍♀️ Swimming
+                          </label>
+                        </div>
+                        <div className="form-check mb-2">
+                          <input 
+                            className="form-check-input enhanced-checkbox" 
+                            type="checkbox" 
+                            name="exercise" 
+                            value="none" 
+                            id="no_exercise"
+                            style={{ borderRadius: '6px' }}
+                            disabled={isLoading}
+                          />
+                          <label className="form-check-label fw-medium" htmlFor="no_exercise" style={{ fontSize: 'clamp(0.85rem, 2vw, 0.9rem)' }}>
+                            💤 No Exercise Today
                           </label>
                         </div>
                       </div>
@@ -766,43 +1333,68 @@ export const CycleTab: React.FC<CycleTabProps> = ({
                   <textarea 
                     className="form-control border-0 enhanced-input enhanced-focus custom-scrollbar"
                     style={{
-                      background: 'linear-gradient(135deg, #f8f9fa, #ffffff)',
+                      background: isLoading 
+                        ? 'linear-gradient(135deg, #e9ecef, #f8f9fa)' 
+                        : 'linear-gradient(135deg, #f8f9fa, #ffffff)',
                       borderRadius: 'clamp(8px, 2vw, 12px)',
                       padding: 'clamp(0.75rem, 3vw, 1rem)',
                       boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
                       fontSize: 'clamp(0.85rem, 2.5vw, 0.95rem)',
                       resize: 'vertical',
-                      minHeight: 'clamp(80px, 15vw, 120px)'
+                      minHeight: 'clamp(80px, 15vw, 120px)',
+                      opacity: isLoading ? 0.7 : 1
                     }}
                     id="notes" 
                     name="notes"
                     rows={3}
                     placeholder="Any additional notes about your cycle, mood, or how you're feeling..."
+                    disabled={isLoading}
                   ></textarea>
                 </div>
                 
                 <button 
                   type="submit" 
-                  className="btn w-100 text-white fw-bold border-0 submit-btn"
+                  disabled={isLoading}
+                  className={`btn w-100 text-white fw-bold border-0 submit-btn ${isLoading ? 'disabled' : ''}`}
                   style={{
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: isLoading 
+                      ? 'linear-gradient(135deg, #6c757d 0%, #adb5bd 100%)' 
+                      : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                     borderRadius: 'clamp(10px, 3vw, 15px)',
                     padding: 'clamp(0.7rem, 3vw, 0.85rem) clamp(0.8rem, 4vw, 1rem)',
                     fontSize: 'clamp(0.9rem, 3vw, 1rem)',
-                    boxShadow: '0 4px 15px rgba(102,126,234,0.4)',
-                    transition: 'all 0.3s ease'
+                    boxShadow: isLoading 
+                      ? '0 2px 8px rgba(108,117,125,0.3)' 
+                      : '0 4px 15px rgba(102,126,234,0.4)',
+                    transition: 'all 0.3s ease',
+                    cursor: isLoading ? 'not-allowed' : 'pointer'
                   }}
                   onMouseOver={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 6px 25px rgba(102,126,234,0.5)';
+                    if (!isLoading) {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 6px 25px rgba(102,126,234,0.5)';
+                    }
                   }}
                   onMouseOut={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 4px 15px rgba(102,126,234,0.4)';
+                    if (!isLoading) {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 15px rgba(102,126,234,0.4)';
+                    }
                   }}
                 >
-                  <i className="fas fa-save me-2 animated-icon"></i>
-                  Save Period Log
+                  {isLoading ? (
+                    <>
+                      <div className="spinner-border spinner-border-sm me-2" role="status">
+                        <span className="visually-hidden">Saving...</span>
+                      </div>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-save me-2 animated-icon"></i>
+                      Save Period Log
+                    </>
+                  )}
                 </button>
               </form>
             </div>

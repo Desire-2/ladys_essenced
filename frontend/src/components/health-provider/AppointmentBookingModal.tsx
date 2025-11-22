@@ -96,27 +96,19 @@ export default function AppointmentBookingModal({
     try {
       const appointmentDateTime = `${selectedDate} ${selectedTimeSlot.time}`;
       
-      const response = await fetch(buildHealthProviderApiUrl('/appointments/book'), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          provider_id: provider.id,
-          appointment_date: appointmentDateTime,
-          issue: appointmentDetails.issue,
-          priority: appointmentDetails.priority,
-          notes: appointmentDetails.notes
-        })
+      const response = await appointmentAPI.createAppointment({
+        provider_id: provider.id,
+        appointment_date: appointmentDateTime,
+        issue: appointmentDetails.issue,
+        priority: appointmentDetails.priority,
+        notes: appointmentDetails.notes
       });
 
-      await handleApiResponse(response, 'Failed to book appointment');
       onBookingSuccess(`Appointment successfully booked with ${provider.name} on ${selectedDate} at ${selectedTimeSlot.time}`);
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error booking appointment:', error);
-      onError('Failed to book appointment. Please try again.');
+      onError(error.response?.data?.message || error.message || 'Failed to book appointment. Please try again.');
     } finally {
       setBooking(false);
     }

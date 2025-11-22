@@ -117,6 +117,9 @@ def create_app():
     @jwt.unauthorized_loader
     def missing_token_callback(error):
         print(f"JWT missing token error: {error}")
+        print(f"Request path: {request.path}")
+        print(f"Request method: {request.method}")
+        print(f"Authorization header: {request.headers.get('Authorization', 'NOT PRESENT')}")
         return jsonify({'message': 'Authorization token is required'}), 401
     
     # Enable CORS with environment-specific origins
@@ -138,9 +141,10 @@ def create_app():
     @app.before_request
     def before_request():
         """Handle CORS preflight requests"""
-        # Log every request
+        # Log every request with auth header
         with open('/tmp/flask_before_request.log', 'a') as f:
-            f.write(f"BEFORE REQUEST: {request.method} {request.path}\n")
+            auth_header = request.headers.get('Authorization', 'NO AUTH HEADER')
+            f.write(f"BEFORE REQUEST: {request.method} {request.path} | Auth: {auth_header[:50] if auth_header != 'NO AUTH HEADER' else auth_header}\n")
             f.flush()
         
         if request.method == 'OPTIONS':
@@ -177,9 +181,10 @@ def create_app():
         f.flush()
     
     from app.routes.cycle_logs import cycle_logs_bp
+    from app.routes.period_logs import period_logs_bp
     from app.routes.meal_logs import meal_logs_bp
     from app.routes.appointments import appointments_bp
-    from app.routes.notifications import notifications_bp
+    from app.routes.notifications_api import notifications_bp
     # Notification routes are now consolidated into main notifications_bp
     from app.routes.content import content_bp
     from app.routes.parents import parents_bp
@@ -209,6 +214,7 @@ def create_app():
         f.write(f"App url_map: {list(app.url_map.iter_rules())}\n")
         f.flush()
     app.register_blueprint(cycle_logs_bp, url_prefix='/api/cycle-logs')
+    app.register_blueprint(period_logs_bp, url_prefix='/api/period-logs')
     app.register_blueprint(meal_logs_bp, url_prefix='/api/meal-logs')
     app.register_blueprint(appointments_bp, url_prefix='/api/appointments')
     app.register_blueprint(notifications_bp, url_prefix='/api/notifications')
@@ -220,6 +226,16 @@ def create_app():
     app.register_blueprint(content_writer_bp, url_prefix='/api/content-writer')
     app.register_blueprint(health_provider_bp, url_prefix='/api/health-provider')
     app.register_blueprint(parent_appointments_bp, url_prefix='/api')
+    
+    # Register settings blueprint
+    try:
+        from app.routes.settings import settings_bp
+        app.register_blueprint(settings_bp, url_prefix='/api/settings')
+        print("✅ Settings blueprint registered successfully")
+    except ImportError as e:
+        print(f"❌ Failed to import settings blueprint: {e}")
+    except Exception as e:
+        print(f"❌ Failed to register settings blueprint: {e}")
     
     # Register insights blueprint with error handling
     if insights_bp:

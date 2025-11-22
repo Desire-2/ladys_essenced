@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getApiBaseUrl } from '../../utils/apiBase';
 
 interface CycleLog {
   id: number;
@@ -41,8 +42,9 @@ export const CycleCalendar: React.FC<CycleCalendarProps> = ({ childId, childName
     setIsLoading(true);
     try {
       const token = localStorage.getItem('access_token');
+      const API_BASE_URL = getApiBaseUrl();
       const response = await fetch(
-        `http://localhost:5001/api/parents/children/${childId}/cycle-logs`,
+            `${API_BASE_URL}/api/parents/children/${childId}/cycle-logs`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }

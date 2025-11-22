@@ -160,8 +160,9 @@ class USSDCreativeFeatures:
                     
                     notification = Notification(
                         user_id=user.id,
+                        title='Period Reminder',
                         message=message,
-                        notification_type='cycle'
+                        type='cycle'
                     )
                     db.session.add(notification)
                     db.session.commit()
@@ -172,8 +173,9 @@ class USSDCreativeFeatures:
             
             notification = Notification(
                 user_id=user.id,
+                title='Daily Health Tip',
                 message=f"🌟 Daily Health Tip: {tip}",
-                notification_type='education'
+                type='education'
             )
             db.session.add(notification)
             db.session.commit()
@@ -181,8 +183,9 @@ class USSDCreativeFeatures:
         elif notification_type == 'custom' and custom_message:
             notification = Notification(
                 user_id=user.id,
+                title='Notification',
                 message=custom_message,
-                notification_type='general'
+                type='general'
             )
             db.session.add(notification)
             db.session.commit()

@@ -28,21 +28,15 @@ export default function RealTimeNotifications({ onNotificationCount }: RealTimeN
 
   // Load notifications
   const loadNotifications = async () => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     setLoading(true);
     try {
-      const response = await fetch(buildHealthProviderApiUrl('/notifications'), {
-        headers: { 'Authorization': `Bearer ${user.access_token}` }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications || []);
-        const unread = (data.notifications || []).filter((n: Notification) => !n.is_read).length;
-        setUnreadCount(unread);
-        onNotificationCount(unread);
-      }
+      const response = await healthProviderAPI.getNotifications(user.user_id);
+      setNotifications(response.data.notifications || []);
+      const unread = (response.data.notifications || []).filter((n: Notification) => !n.is_read).length;
+      setUnreadCount(unread);
+      onNotificationCount(unread);
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
@@ -52,13 +46,10 @@ export default function RealTimeNotifications({ onNotificationCount }: RealTimeN
 
   // Mark notification as read
   const markAsRead = async (notificationId: number) => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     try {
-      await fetch(buildHealthProviderApiUrl(`/notifications/${notificationId}/read`), {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${user.access_token}` }
-      });
+      await healthProviderAPI.markNotificationRead(notificationId);
       
       setNotifications(prev => 
         prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
@@ -72,13 +63,15 @@ export default function RealTimeNotifications({ onNotificationCount }: RealTimeN
 
   // Mark all as read
   const markAllAsRead = async () => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     try {
-      await fetch(buildHealthProviderApiUrl('/notifications/mark-all-read'), {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${user.access_token}` }
-      });
+      // Mark all notifications as read individually since there's no bulk endpoint
+      await Promise.all(
+        notifications
+          .filter(n => !n.is_read)
+          .map(n => healthProviderAPI.markNotificationRead(n.id))
+      );
       
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
@@ -96,7 +89,7 @@ export default function RealTimeNotifications({ onNotificationCount }: RealTimeN
     const interval = setInterval(loadNotifications, 30000); // Every 30 seconds
     
     return () => clearInterval(interval);
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {

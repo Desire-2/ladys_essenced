@@ -7,6 +7,7 @@ from app import db
 from app.models import User, CycleLog, MealLog, Appointment, Parent, Adolescent, ParentChild
 from app.models.insight_cache import InsightCache
 import logging
+import statistics
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,9 @@ class KinyarwandaInsightService:
                 CycleLog.created_at >= three_months_ago
             ).order_by(CycleLog.start_date.desc()).limit(10).all()
             
+            # Get advanced cycle analysis from cycle_logs engine
+            cycle_analysis = self._get_advanced_cycle_analysis(user_id, cycle_logs)
+            
             # Get recent meal logs (last 30 days)
             thirty_days_ago = datetime.utcnow() - timedelta(days=30)
             meal_logs = MealLog.query.filter(
@@ -118,6 +122,7 @@ class KinyarwandaInsightService:
                         'age_context': user_context['age_context'],
                         'relationship_context': user_context['relationship_context']
                     },
+                    'cycle_analysis': cycle_analysis,
                     'cycle_logs': [{
                         'start_date': log.start_date.isoformat() if log.start_date else None,
                         'end_date': log.end_date.isoformat() if log.end_date else None,
@@ -183,6 +188,76 @@ class KinyarwandaInsightService:
             
         return context
     
+    def _get_advanced_cycle_analysis(self, user_id: int, cycle_logs: List[CycleLog]) -> Dict[str, Any]:
+        """Get advanced cycle analysis using CyclePredictionEngine from cycle_logs route"""
+        try:
+            # Import here to avoid circular dependency
+            from app.routes.cycle_logs import CyclePredictionEngine
+            
+            if not cycle_logs or len(cycle_logs) < 2:
+                return {
+                    'has_data': False,
+                    'message': 'Insufficient cycle data for analysis'
+                }
+            
+            # Extract cycle data using robust method
+            cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(cycle_logs)
+            
+            # Detect outliers
+            filtered_cycle_data = CyclePredictionEngine.detect_outliers(cycle_data) if cycle_data else []
+            
+            # Analyze trends
+            trend_analysis = CyclePredictionEngine.analyze_trend(filtered_cycle_data) if filtered_cycle_data else {}
+            
+            # ML Pattern Recognition
+            ml_patterns = CyclePredictionEngine.ml_pattern_recognition(filtered_cycle_data, str(user_id))
+            
+            # Anomaly Detection
+            anomaly_analysis = CyclePredictionEngine.anomaly_detection(filtered_cycle_data)
+            
+            # Generate predictions
+            predictions = CyclePredictionEngine.predict_next_cycles(cycle_logs, num_predictions=3, user_id=str(user_id))
+            
+            # Calculate statistics
+            cycle_lengths = [c['length'] for c in cycle_data] if cycle_data else []
+            avg_cycle_length = statistics.mean(cycle_lengths) if cycle_lengths else None
+            
+            # Calculate weighted average using enhanced method
+            weighted_avg = CyclePredictionEngine.calculate_adaptive_weighted_average(filtered_cycle_data) if filtered_cycle_data else None
+            
+            # Calculate confidence
+            confidence_level = CyclePredictionEngine.calculate_enhanced_confidence(filtered_cycle_data, trend_analysis) if filtered_cycle_data else 'no_data'
+            
+            # Analyze symptoms patterns
+            symptom_analysis = CyclePredictionEngine.analyze_symptoms_patterns(cycle_logs)
+            
+            # Generate health insights
+            health_insights = CyclePredictionEngine.calculate_health_insights(cycle_logs)
+            
+            return {
+                'has_data': True,
+                'total_cycles': len(cycle_logs),
+                'cycle_lengths': cycle_lengths,
+                'average_cycle_length': round(avg_cycle_length, 1) if avg_cycle_length else None,
+                'weighted_cycle_length': round(weighted_avg, 1) if weighted_avg else None,
+                'confidence_level': confidence_level,
+                'trend_analysis': trend_analysis,
+                'ml_patterns': ml_patterns,
+                'anomaly_analysis': anomaly_analysis,
+                'predictions': predictions[:1] if predictions else [],  # Only include next prediction
+                'symptom_patterns': symptom_analysis,
+                'health_insights': health_insights,
+                'outliers_detected': sum(1 for c in filtered_cycle_data if c.get('is_outlier', False)),
+                'regularity_score': CyclePredictionEngine.calculate_cycle_variability(cycle_lengths) if len(cycle_lengths) >= 2 else None
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting advanced cycle analysis for user {user_id}: {str(e)}")
+            return {
+                'has_data': False,
+                'error': str(e)
+            }
+    
     def _build_prompt(self, user_data: Dict[str, Any], language: str) -> str:
         """Build the prompt for Gemini API based on user data and language preference"""
         
@@ -190,26 +265,72 @@ class KinyarwandaInsightService:
         cycle_logs = user_data['cycle_logs']
         meal_logs = user_data['meal_logs']
         appointments = user_data['appointments']
+        cycle_analysis = user_data.get('cycle_analysis', {})
         
-        # Build data summary
+        # Build data summary with enhanced cycle analysis
         data_summary = []
         
-        if cycle_logs:
-            cycle_summary = f"Cycle Data: {len(cycle_logs)} entries recorded. "
-            recent_cycles = cycle_logs[:3]
-            if recent_cycles:
-                lengths = [c['cycle_length'] for c in recent_cycles if c['cycle_length']]
-                if lengths:
-                    avg_length = sum(lengths) / len(lengths)
-                    cycle_summary += f"Average cycle length: {avg_length:.1f} days. "
-                
-                symptoms = []
-                for c in recent_cycles:
-                    if c['symptoms']:
-                        symptoms.extend(c['symptoms'].split(',') if isinstance(c['symptoms'], str) else c['symptoms'])
-                if symptoms:
-                    unique_symptoms = list(set(symptoms))
-                    cycle_summary += f"Common symptoms: {', '.join(unique_symptoms[:5])}. "
+        if cycle_logs and cycle_analysis.get('has_data'):
+            # Enhanced cycle summary with ML insights
+            cycle_summary = f"Cycle Data: {cycle_analysis['total_cycles']} entries recorded with ML analysis. "
+            
+            # Add average and weighted cycle length
+            if cycle_analysis.get('weighted_cycle_length'):
+                cycle_summary += f"Average cycle length: {cycle_analysis['weighted_cycle_length']:.1f} days. "
+            
+            # Add confidence level
+            confidence_text = {
+                'very_high': 'very high prediction accuracy',
+                'high': 'high prediction accuracy',
+                'medium': 'moderate prediction accuracy',
+                'low': 'developing pattern understanding',
+                'very_low': 'needs more data for accuracy'
+            }.get(cycle_analysis.get('confidence_level', 'low'), 'unknown accuracy')
+            cycle_summary += f"Prediction confidence: {confidence_text}. "
+            
+            # Add trend information
+            trend = cycle_analysis.get('trend_analysis', {})
+            if trend.get('trend') == 'stable':
+                cycle_summary += "Cycles are stable and regular. "
+            elif trend.get('trend') == 'lengthening':
+                cycle_summary += f"Cycles are gradually lengthening (rate: {trend.get('rate', 0):.1f} days per cycle). "
+            elif trend.get('trend') == 'shortening':
+                cycle_summary += f"Cycles are gradually shortening (rate: {trend.get('rate', 0):.1f} days per cycle). "
+            
+            # Add regularity information
+            regularity = cycle_analysis.get('regularity_score', {})
+            if regularity and isinstance(regularity, dict):
+                variability_type = regularity.get('variability', 'unknown')
+                cycle_summary += f"Regularity: {variability_type.replace('_', ' ')}. "
+            
+            # Add ML pattern insights
+            ml_patterns = cycle_analysis.get('ml_patterns', {})
+            if ml_patterns.get('patterns') and isinstance(ml_patterns['patterns'], dict):
+                cycle_patterns = ml_patterns['patterns'].get('cycle_patterns', [])
+                if cycle_patterns:
+                    pattern_types = [p['type'] for p in cycle_patterns[:2]]
+                    cycle_summary += f"Detected patterns: {', '.join(pattern_types)}. "
+            
+            # Add prediction information
+            predictions = cycle_analysis.get('predictions', [])
+            if predictions:
+                next_pred = predictions[0]
+                pred_date = datetime.fromisoformat(next_pred['predicted_start']).strftime('%B %d, %Y')
+                cycle_summary += f"Next period predicted: {pred_date} (confidence: {next_pred['confidence']}). "
+            
+            # Add anomaly information (if any)
+            anomalies = cycle_analysis.get('anomaly_analysis', {})
+            if anomalies.get('anomalies_detected'):
+                risk_level = anomalies.get('risk_score', {}).get('level', 'none')
+                if risk_level in ['medium', 'high']:
+                    cycle_summary += f"Health alert: Some cycle irregularities detected (risk level: {risk_level}). "
+            
+            # Add symptom patterns
+            symptom_patterns = cycle_analysis.get('symptom_patterns', {})
+            common_symptoms = symptom_patterns.get('common_symptoms', {})
+            if common_symptoms:
+                top_symptoms = list(common_symptoms.keys())[:3]
+                cycle_summary += f"Common symptoms: {', '.join(top_symptoms)}. "
             
             data_summary.append(cycle_summary)
         
@@ -233,7 +354,7 @@ class KinyarwandaInsightService:
             data_summary.append(apt_summary)
         
         if language == 'kinyarwanda':
-            base_prompt = f"""Wowe uri umuganga w'abagore mu Rwanda ukunda gufasha abagore n'abakobwa gukurikirana ubuzima bwabo. Ugomba gutanga inyunganizi ku buzima mu Kinyarwanda ku buryo bworoshye, bushimishije kandi bwizewe.
+            base_prompt = f"""Wowe uri umuganga w'abagore mu Rwanda ukoresha tekinoroji igezweho (AI/ML) kugira ngo ufashe abagore n'abakobwa gukurikirana ubuzima bwabo. Ugomba gutanga inyunganizi ku buzima mu Kinyarwanda ku buryo bworoshye, bushimishije kandi bwizewe.
 
 Amakuru y'umukiriya:
 - Izina: {user_info['name']}
@@ -241,18 +362,18 @@ Amakuru y'umukiriya:
 - Imiterere y'imyaka: {user_info['age_context']}
 - Aho aherereye: {user_info['relationship_context']}
 
-Amakuru y'ubuzima:
+Amakuru y'ubuzima yashyizwe mu sisitemu y'ubwenge bwa machine learning:
 {' '.join(data_summary) if data_summary else 'Nta makuru menshi ahagije kugira ngo dutange inyunganizi nziza.'}
 
-Ugomba gutanga:
-1. **Inyunganizi ku buzima** - Sobanura uko ubuzima bwe bwifashe nk'uko amakuru agaragaza
-2. **Icyo wakora** - Tanga inama eshatu (3) zifatika ze ashobora gukurikiza
-3. **Amagambo y'ihumure** - Andika ubutumwa bushimishije no gushimangira
+Ugomba gutanga inyunganizi zishingiye ku makuru y'ubwenge bwa machine learning (ML):
+1. **Inyunganizi ku buzima** - Sobanura uko ubuzima bwe bwifashe nk'uko isesengura rya ML rigaragaza, mvuge ku regularity, trends, na patterns zabonwemo
+2. **Icyo wakora** - Tanga inama eshatu (3) zifatika zishingiye ku makuru ya ML (cycle predictions, anomaly detection, n'ibindi) ze ashobora gukurikiza
+3. **Amagambo y'ihumure** - Andika ubutumwa bushimishije no gushimangira, wishingire ku myumvire nziza ya ML ku buzima bwe
 
-Nyandiko ibikurikira mu Kinyarwanda rwiza, gukoresha amagambo yoroshye kandi ukaba ufite impuhwe. Ntukavuge izina ry'umukiriya mu gisubizo. Koresha imvugo nziza kandi ishimishije."""
+Nyandiko ibikurikira mu Kinyarwanda rwiza, gukoresha amagambo yoroshye kandi ukaba ufite impuhwe. Ntukavuge izina ry'umukiriya mu gisubizo. Koresha imvugo nziza kandi ishimishije. Shyira imbere amakuru ya ML kugira ngo inama zawe zibeho precision."""
 
         else:  # English
-            base_prompt = f"""You are a compassionate women's health advisor in Rwanda who helps women and girls track their health. Provide personalized health insights in clear, encouraging, and trustworthy English.
+            base_prompt = f"""You are a compassionate women's health advisor in Rwanda who uses advanced AI/ML technology to help women and girls track their health. Provide personalized health insights in clear, encouraging, and trustworthy English.
 
 User Information:
 - Name: {user_info['name']}
@@ -260,15 +381,15 @@ User Information:
 - Age Context: {user_info['age_context']}
 - Relationship Context: {user_info['relationship_context']}
 
-Health Data Summary:
+Health Data Summary with ML Analysis:
 {' '.join(data_summary) if data_summary else 'Limited health data available for comprehensive insights.'}
 
-Please provide:
-1. **Health Insight** - Explain what the health data shows about their wellbeing
-2. **What to do next** - Give three (3) practical recommendations they can follow
-3. **Words of encouragement** - Write an encouraging and affirming message
+Please provide ML-enhanced insights:
+1. **Health Insight** - Explain what the ML analysis shows about their wellbeing, including cycle regularity, trends, patterns, and predictions
+2. **What to do next** - Give three (3) practical recommendations based on ML insights (cycle predictions, anomaly detection, patterns detected)
+3. **Words of encouragement** - Write an encouraging and affirming message that acknowledges the ML insights about their health patterns
 
-Write in clear, simple English using compassionate language. Do not mention the user's name directly in the response. Use supportive and positive tone."""
+Write in clear, simple English using compassionate language. Do not mention the user's name directly in the response. Use supportive and positive tone. Emphasize the ML-powered insights for precision and accuracy."""
 
         return base_prompt
     

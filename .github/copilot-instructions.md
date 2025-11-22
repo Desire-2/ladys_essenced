@@ -8,7 +8,8 @@ Lady's Essence is a women's health application targeting rural/underserved areas
 ### Tech Stack
 - **Backend**: Flask 3.1.0 + SQLAlchemy 2.0 + PostgreSQL/SQLite + Flask-JWT-Extended + Flask-Migrate (Alembic)
 - **Frontend**: Next.js 15.2.4 (App Router) + React 19 + TypeScript 5 + Bootstrap 5.3.5
-- **Deployment**: Docker Compose (backend:5000, frontend:3000, postgres:5432)
+- **Deployment**: Docker Compose (backend:5000, frontend:3000, postgres:5432) 
+  - **Dev Environment**: Backend runs on port 5001, Frontend on port 3000
 
 ### Project Structure
 ```
@@ -16,7 +17,10 @@ backend/
   app/
     __init__.py          # Flask app factory, CORS config, blueprint registration
     models/__init__.py   # 20+ SQLAlchemy models (User, Parent, Adolescent, CycleLog, etc.)
+    models/notification.py # Enhanced notification system with templates & subscriptions
+    models/insight_cache.py # AI insights caching for cycle predictions
     routes/              # RESTful API blueprints (auth, parents, cycle_logs, appointments, etc.)
+    routes/parent_appointments.py # Child appointment booking (650 lines)
     auth/middleware.py   # JWT decorators (token_required, role_required)
   migrations/            # Alembic migration files - NEVER use db.drop_all()
   run.py                # Entry point (port 5001 for dev)
@@ -26,8 +30,12 @@ frontend/
     app/                 # Next.js App Router pages
       dashboard/         # Role-specific dashboards (parent/, admin/, health-provider/)
     contexts/            # React Context providers (AuthContext.js, ChildAccessContext.js, etc.)
-    config/api.ts        # Centralized API configuration
-    lib/api/client.ts    # API client with JWT token management
+      AuthContext.js     # JWT authentication & role management
+      ChildAccessContext.js # Parent-child access switching
+      NotificationContext.js # Real-time notifications
+    config/api.ts        # Centralized API configuration & helper functions
+    components/          # Reusable UI components
+      parent/ChildAppointmentBooking.tsx # 4-step appointment wizard (450 lines)
 ```
 
 ## Critical Development Patterns
@@ -110,8 +118,13 @@ def get_child_data(adolescent_id):
     if not relation:
         return jsonify({'message': 'Child not found'}), 404
     
-    # 4. Use child's user_id for data queries (NOT parent's)
+    # 4. Check if adolescent allows parent access (NEW PRIVACY CONTROL)
     adolescent = Adolescent.query.get(adolescent_id)
+    child_user = User.query.get(adolescent.user_id)
+    if not child_user.allow_parent_access:
+        return jsonify({'message': 'Access denied: Child has disabled parent access'}), 403
+    
+    # 5. Use child's user_id for data queries (NOT parent's)
     child_user_id = adolescent.user_id  # Use this for CycleLog/MealLog/Appointment
 ```
 
@@ -133,6 +146,23 @@ import { apiCall, apiPost } from './config/api';
 ```
 
 **CORS origins** (backend/app/__init__.py line 123): Whitelist includes localhost:3000-3005, Vercel domains.
+
+### 6. Enhanced Notification System
+**Real-time notifications with templates and subscriptions** (see `models/notification.py`):
+
+```python
+# Backend: Create notification with template
+notification = Notification.create_from_template(
+    'appointment_confirmed', 
+    user_id=user_id,
+    data={'appointment_date': '2025-11-15', 'provider_name': 'Dr. Smith'}
+)
+
+# Frontend: Subscribe to notifications
+const { notifications, markAsRead } = useNotification();
+```
+
+**Notification channels**: in-app, email, SMS (configurable per user)
 
 ## Common Tasks
 
@@ -213,6 +243,21 @@ The project has 100+ documentation files. Start with:
 - `BACKEND_RESTART_GUIDE.md` - Testing/debugging commands
 - `PARENT_CHILD_ACCESS_ENHANCEMENT.md` - Authorization patterns
 - `COMPREHENSIVE_CHILD_APPOINTMENT_SUMMARY.md` - Feature implementation example
+
+## Recent System Enhancements
+
+### Notification System (Nov 2025)
+**Advanced notification framework with templates and multi-channel delivery:**
+- **Templates**: Pre-defined notification templates with placeholder substitution
+- **Channels**: In-app, email, SMS support with user preferences
+- **Subscriptions**: Users can subscribe/unsubscribe from notification categories
+- **Models**: `Notification`, `NotificationTemplate`, `NotificationSubscription` (see `models/notification.py`)
+
+### AI Insights Caching
+**Performance optimization for cycle predictions:**
+- **Caching Layer**: `InsightCache` model stores computed insights to avoid re-calculation
+- **Algorithms**: Weighted moving average + exponential smoothing for cycle predictions
+- **Confidence Levels**: System returns high/medium/low confidence based on data quality
 
 ## Common Pitfalls
 

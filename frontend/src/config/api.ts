@@ -2,19 +2,9 @@
  * API Configuration
  * Centralized API URLs and configuration for the application
  */
+import { getApiBaseUrl as resolveApiBaseUrl } from '../utils/apiBase';
 
-// Determine the API base URL based on environment
-const getApiBaseUrl = () => {
-  // Check if there's an environment variable
-  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-
-  // Default to localhost:5001 for development
-  return 'http://localhost:5001';
-};
-
-export const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = resolveApiBaseUrl();
 
 /**
  * API Endpoints
@@ -55,6 +45,11 @@ export const API_ENDPOINTS = {
   // Content
   CONTENT: '/api/content',
   CONTENT_BY_CATEGORY: (category: string) => `/api/content/category/${category}`,
+
+  // Content Writer AI Assistant
+  CONTENT_WRITER_SUGGESTIONS: '/api/content-writer/suggestions',
+  CONTENT_WRITER_ANALYTICS: '/api/content-writer/analytics',
+  CONTENT_WRITER_STATS: '/api/content-writer/dashboard/stats',
 };
 
 /**
@@ -62,11 +57,11 @@ export const API_ENDPOINTS = {
  */
 
 /**
- * Make a fetch request with error handling
+ * Make a fetch request with error handling and automatic token refresh
  */
 export async function apiCall(
   endpoint: string,
-  options: RequestInit & { body?: any } = {}
+  options: RequestInit & { body?: any; _retry?: boolean } = {}
 ) {
   const url = `${API_BASE_URL}${endpoint}`;
   
@@ -75,13 +70,22 @@ export async function apiCall(
     ...(options.headers as Record<string, string> || {}),
   };
 
-  // Add Authorization token if available
+  // Add Authorization token if available and valid
   const token = typeof window !== 'undefined' 
     ? localStorage.getItem('access_token')
     : null;
   
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    // Validate token format before using
+    if (token.split('.').length === 3) {
+      headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      console.error('❌ Malformed token detected, clearing storage');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+      }
+    }
   }
 
   try {
@@ -93,6 +97,47 @@ export async function apiCall(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      
+      // Handle 401 authentication errors with token refresh
+      if (response.status === 401 && !options._retry && typeof window !== 'undefined') {
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken && refreshToken.split('.').length === 3) {
+          console.warn('⚠️ Token expired, attempting refresh...');
+          
+          try {
+            const refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${refreshToken}`
+              },
+              signal: AbortSignal.timeout(10000)
+            });
+            
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json();
+              if (refreshData.access_token && refreshData.access_token.split('.').length === 3) {
+                localStorage.setItem('access_token', refreshData.access_token);
+                console.log('✅ Token refreshed, retrying request...');
+                
+                // Retry the original request with new token
+                return apiCall(endpoint, { ...options, _retry: true });
+              }
+            }
+          } catch (refreshError) {
+            console.error('❌ Token refresh failed:', refreshError);
+          }
+          
+          // If refresh failed, clear tokens and redirect to login
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user_id');
+          localStorage.removeItem('user_type');
+          window.location.href = '/login';
+          return;
+        }
+      }
+      
       throw new Error(errorData.message || `HTTP ${response.status}`);
     }
 

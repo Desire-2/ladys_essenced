@@ -89,6 +89,22 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
                 </a>
               </li>
             )}
+            {userType === 'adolescent' && (
+              <li className="nav-item">
+                <a 
+                  className={`nav-link ${activeTab === 'settings' ? 'active' : ''}`} 
+                  href="#" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActiveTab('settings');
+                  }}
+                >
+                  <i className="fas fa-cog me-1 me-md-2"></i>
+                  <span className="d-none d-sm-inline">Settings</span>
+                  <span className="d-inline d-sm-none">Settings</span>
+                </a>
+              </li>
+            )}
           </ul>
         </div>
       </div>

@@ -15,7 +15,7 @@ export const useChildAccess = () => {
 };
 
 export const ChildAccessProvider = ({ children }) => {
-  const { user, hasRole } = useAuth();
+  const { user, accessToken } = useAuth();
   const [accessedChild, setAccessedChild] = useState(null);
   const [parentChildren, setParentChildren] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -23,10 +23,10 @@ export const ChildAccessProvider = ({ children }) => {
 
   // Load parent's children on mount
   useEffect(() => {
-    if (user && hasRole('parent')) {
+    if (user?.user_type === 'parent' && accessToken) {
       fetchParentChildren();
     }
-  }, [user, hasRole]);
+  }, [user, accessToken]);
 
   // Load accessed child from localStorage
   useEffect(() => {
@@ -40,6 +40,10 @@ export const ChildAccessProvider = ({ children }) => {
   }, [parentChildren]);
 
   const fetchParentChildren = async () => {
+    if (!accessToken) {
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);

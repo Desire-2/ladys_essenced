@@ -29,12 +29,16 @@ import {
   SettingsTab 
 } from './components/tabs';
 import { ViewChildModal } from './components/modals/ViewChildModal';
+import { CycleHistorySimple } from './components/CycleHistorySimple';
 
 function DashboardContent() {
-  const { user, loading: authLoading, logout, hasRole, getDashboardRoute } = useAuth();
+  const { user, loading: authLoading, logout, hasRole, getDashboardRoute, accessToken } = useAuth();
   const { addCycleLog, fetchCycleStats, error: cycleError, loading: cycleLoading } = useCycle();
   const { addMealLog, error: mealError, loading: mealLoading } = useMeal();
   const { createAppointment, error: appointmentError, loading: appointmentLoading } = useAppointment();
+  
+  // Local state for form errors
+  const [cycleFormError, setCycleFormError] = useState<string | null>(null);
   
   // Custom hooks
   const {
@@ -95,6 +99,7 @@ function DashboardContent() {
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [showCycleHistory, setShowCycleHistory] = useState(false);
   
   // Form states
   const [childFormError, setChildFormError] = useState('');
@@ -103,9 +108,35 @@ function DashboardContent() {
   // Initialize dashboard once when user is available
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Auth checks
+  // Event listener for cycle history management
   useEffect(() => {
-    if (!user) {
+    const handleOpenCycleHistory = (event: any) => {
+      console.log('Dashboard received openCycleHistory event:', event);
+      console.log('Event detail:', event.detail);
+      console.log('Setting showCycleHistory to true');
+      setShowCycleHistory(true);
+    };
+
+    console.log('Dashboard: Setting up openCycleHistory event listener');
+    window.addEventListener('openCycleHistory', handleOpenCycleHistory);
+    
+    return () => {
+      console.log('Dashboard: Cleaning up openCycleHistory event listener');
+      window.removeEventListener('openCycleHistory', handleOpenCycleHistory);
+    };
+  }, []);
+
+  // Auth checks and redirect
+  useEffect(() => {
+    // Wait for auth to finish loading
+    if (authLoading) {
+      return;
+    }
+
+    // If auth finished loading and no user, redirect to login
+    if (!user || !accessToken) {
+      console.log('⚠️ Dashboard: No user or token after auth loaded, redirecting to login');
+      router.push('/login');
       return;
     }
 
@@ -132,13 +163,26 @@ function DashboardContent() {
       
       initialize();
     }
-  }, [user, hasRole, isInitialized]); // Removed loadChildren dependency since ChildAccessProvider handles it
+  }, [user, hasRole, isInitialized, authLoading, accessToken]); // Removed loadChildren dependency since ChildAccessProvider handles it
 
   useEffect(() => {
-    if (user && activeTab === 'cycle' && isInitialized) {
-      loadCycleData(selectedChild);
+    // Wait for auth and initialization
+    if (authLoading || !isInitialized) {
+      return;
     }
-  }, [user, activeTab, selectedChild, isInitialized]); // Added isInitialized dependency
+
+    // Skip if no user after auth loaded
+    if (!user || !accessToken) {
+      return;
+    }
+
+    if (activeTab === 'cycle' && isInitialized) {
+      console.log('Dashboard: Loading cycle tab data for child:', selectedChild);
+      // Load both cycle data and calendar data when switching to cycle tab
+      loadCycleData(selectedChild);
+      loadCalendarData(currentDate.getFullYear(), currentDate.getMonth() + 1, selectedChild);
+    }
+  }, [user, activeTab, selectedChild, isInitialized, currentDate, authLoading, accessToken]); // Added currentDate dependency
 
   // Navigation function for calendar
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -182,28 +226,77 @@ function DashboardContent() {
     
     try {
       const formData = new FormData(e.currentTarget);
+      
+      // Extract all form fields properly
+      const startDate = formData.get('startDate') as string;
+      const endDate = formData.get('endDate') as string;
+      const flowIntensity = formData.get('flowIntensity') as string;
+      const notes = formData.get('notes') as string;
+      
+      // Collect symptoms from checkboxes  
+      const symptoms = formData.getAll('symptoms') as string[];
+      
+      // Extract new wellness tracking fields
+      const mood = formData.get('mood') as string;
+      const energy = formData.get('energy') as string;
+      const sleepQuality = formData.get('sleep_quality') as string;
+      const stressLevel = formData.get('stress_level') as string;
+      const exercise = formData.getAll('exercise') as string[];
+
+      // Validate required field - check for empty string, null, or undefined
+      if (!startDate || startDate.trim() === '') {
+        setCycleFormError('Start date is required and cannot be null');
+        return;  // Exit early on validation failure
+      }
+
       const data: any = {
-        start_date: formData.get('start_date'),
-        notes: formData.get('notes'),
+        start_date: startDate.trim(),
+        end_date: endDate && endDate.trim() !== '' ? endDate.trim() : null,
+        flow_intensity: flowIntensity || 'medium',
+        symptoms: symptoms,
+        notes: notes && notes.trim() !== '' ? notes.trim() : null,
+        // Enhanced tracking data for better predictions
+        mood: mood || null,
+        energy_level: energy || null,
+        sleep_quality: sleepQuality || null,
+        stress_level: stressLevel || null,
+        exercise_activities: exercise.length > 0 ? exercise : null,
       };
 
       if (user?.user_type === 'parent' && selectedChild) {
         data.user_id = selectedChild;
       }
 
+      console.log('Submitting cycle data:', data);
       const result = await addCycleLog(data);
       
       if (!result.success) {
         console.error('Cycle submission failed:', result.error);
-        return result;
+        setCycleFormError(result.error || 'Failed to add cycle log');
+        return;
       }
 
+      // Clear any previous errors and reset form
+      setCycleFormError(null);
+      
+      // Reset form fields safely
+      if (e.currentTarget && typeof e.currentTarget.reset === 'function') {
+        e.currentTarget.reset();
+      } else {
+        console.warn('Form reset not available, clearing manually');
+        // Manual field clearing as fallback
+        const form = e.target as HTMLFormElement;
+        if (form && form.reset) {
+          form.reset();
+        }
+      }
+      
       // Reload cycle data after successful submission
       loadCycleData(selectedChild);
-      return result;
     } catch (error) {
       console.error('Cycle submission error:', error);
-      return { success: false, error: 'Failed to add cycle log' };
+      const errorMsg = 'Failed to add cycle log';
+      setCycleFormError(errorMsg);
     }
   };
 
@@ -269,8 +362,8 @@ function DashboardContent() {
     closeViewModal();
   };
 
-  // Loading state - only show if not initialized and still loading
-  if (loading && !isInitialized) {
+  // Loading state - show while auth is loading or dashboard is initializing
+  if (authLoading || (loading && !isInitialized)) {
     return (
       <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
         <div className="text-center">
@@ -278,7 +371,7 @@ function DashboardContent() {
             <span className="visually-hidden">Loading...</span>
           </div>
           <h4 className="text-muted">Loading Dashboard</h4>
-          <p className="text-muted">Initializing your dashboard...</p>
+          <p className="text-muted">{authLoading ? 'Authenticating...' : 'Initializing your dashboard...'}</p>
         </div>
       </div>
     );
@@ -388,7 +481,8 @@ function DashboardContent() {
           onNavigateMonth={navigateMonth}
           onRetryDataLoad={(dataType) => retryDataLoad(dataType, selectedChild)}
           onCycleSubmit={handleCycleSubmit}
-          cycleError={cycleError}
+          cycleError={cycleFormError || undefined}
+          isLoading={cycleLoading}
           userType={user?.user_type}
         />
       )}
@@ -441,6 +535,40 @@ function DashboardContent() {
         onEdit={startEditingChild}
         onSelectChild={setSelectedChild}
       />
+
+      {/* Cycle History Management Modal */}
+      {showCycleHistory && (
+        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-xl">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <i className="fas fa-history me-2 text-primary"></i>
+                  Cycle History & Management
+                </h5>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={() => {
+                    console.log('Closing modal via X button');
+                    setShowCycleHistory(false);
+                  }}
+                ></button>
+              </div>
+              <div className="modal-body p-0">
+                <CycleHistorySimple
+                  onClose={() => {
+                    console.log('Closing modal via component');
+                    setShowCycleHistory(false);
+                  }}
+                  selectedChild={selectedChild}
+                  children={children}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

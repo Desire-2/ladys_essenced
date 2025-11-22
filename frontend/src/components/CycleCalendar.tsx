@@ -242,6 +242,62 @@ const enhancedStyles = `
   justify-content: center;
   color: #666;
 }
+.calendar-day.ml-high-confidence {
+  box-shadow: 0 0 8px rgba(40, 167, 69, 0.6);
+  border: 2px solid #28a745 !important;
+}
+.calendar-day.ml-medium-confidence {
+  box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
+  border: 2px solid #ffc107 !important;
+}
+.calendar-day.ml-low-confidence {
+  box-shadow: 0 0 8px rgba(220, 53, 69, 0.6);
+  border: 2px solid #dc3545 !important;
+}
+.calendar-day.ml-pattern-match::before {
+  content: '🧠';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  font-size: 8px;
+  z-index: 10;
+}
+.calendar-day.anomaly-detected {
+  position: relative;
+  animation: anomalyPulse 2s ease-in-out infinite;
+}
+.calendar-day.anomaly-detected::before {
+  content: '⚠️';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  font-size: 10px;
+  z-index: 10;
+}
+@keyframes anomalyPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+  50% { box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.2); }
+}
+.ml-insights-banner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+.ml-confidence-indicator {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  z-index: 5;
+}
+.ml-confidence-high { background-color: #28a745; }
+.ml-confidence-medium { background-color: #ffc107; }
+.ml-confidence-low { background-color: #dc3545; }
 .calendar-legend.enhanced-legend {
   background: #f8fafc;
   border-radius: 12px;
@@ -678,6 +734,13 @@ interface CalendarDay {
   fertility_level?: 'high' | 'medium' | 'low';
   mood?: string;
   flow_intensity?: 'light' | 'medium' | 'heavy';
+  // ML Enhancement fields
+  ml_confidence?: 'very_high' | 'high' | 'medium' | 'low' | 'very_low';
+  ml_pattern_match?: boolean;
+  adaptive_learning_applied?: boolean;
+  anomaly_detected?: boolean;
+  seasonal_adjustment?: number;
+  prediction_source?: 'ml_ensemble' | 'pattern_recognition' | 'adaptive_learning' | 'fallback';
 }
 
 interface CalendarProps {
@@ -688,11 +751,20 @@ interface CalendarProps {
       average_cycle_length: number;
       next_predicted_period?: string;
     };
+    ml_insights?: {
+      adaptive_learning_status: 'active' | 'learning' | 'inactive';
+      pattern_confidence: string;
+      anomalies_detected: boolean;
+      total_patterns_found: number;
+      prediction_accuracy: number;
+      seasonal_patterns_active: boolean;
+    };
   } | null;
   currentDate: Date;
   onNavigateMonth: (direction: 'prev' | 'next') => void;
   onDayClick?: (day: CalendarDay) => void;
   showInsights?: boolean;
+  showMLInsights?: boolean;
 }
 
 interface DayDetailModal {
@@ -707,7 +779,8 @@ const CycleCalendar: React.FC<CalendarProps> = ({
   currentDate, 
   onNavigateMonth,
   onDayClick,
-  showInsights = true
+  showInsights = true,
+  showMLInsights = true
 }) => {
   const [selectedDay, setSelectedDay] = useState<DayDetailModal>({ day: null, isOpen: false });
   const [activeLegendFilter, setActiveLegendFilter] = useState<LegendFilter>('all');
@@ -829,6 +902,30 @@ const CycleCalendar: React.FC<CalendarProps> = ({
     // Add logged class if there's any data
     if (day.symptoms.length > 0 || day.notes || day.flow_intensity || day.mood) {
       classes += ' logged';
+    }
+    
+    // ML Enhancement classes
+    if (showMLInsights && day.predicted) {
+      classes += ' predicted';
+      
+      // ML Confidence levels
+      if (day.ml_confidence === 'very_high' || day.ml_confidence === 'high') {
+        classes += ' ml-high-confidence';
+      } else if (day.ml_confidence === 'medium') {
+        classes += ' ml-medium-confidence';
+      } else if (day.ml_confidence === 'low' || day.ml_confidence === 'very_low') {
+        classes += ' ml-low-confidence';
+      }
+      
+      // Pattern matching indicator
+      if (day.ml_pattern_match) {
+        classes += ' ml-pattern-match';
+      }
+      
+      // Anomaly detection
+      if (day.anomaly_detected) {
+        classes += ' anomaly-detected';
+      }
     }
     
     return classes;
@@ -993,6 +1090,50 @@ const CycleCalendar: React.FC<CalendarProps> = ({
         </div>
       </div>
 
+      {/* ML Insights Banner */}
+      {showMLInsights && calendarData?.ml_insights && (
+        <div className="ml-insights-banner">
+          <div className="row align-items-center">
+            <div className="col-auto">
+              <i className="fas fa-brain fa-2x"></i>
+            </div>
+            <div className="col">
+              <h6 className="mb-1">
+                <i className="fas fa-robot me-2"></i>
+                AI-Enhanced Calendar
+              </h6>
+              <div className="small">
+                {calendarData.ml_insights.total_patterns_found} patterns detected • 
+                {Math.round(calendarData.ml_insights.prediction_accuracy * 100)}% accuracy • 
+                {calendarData.ml_insights.adaptive_learning_status} learning
+                {calendarData.ml_insights.anomalies_detected && (
+                  <span className="ms-2">
+                    <i className="fas fa-exclamation-triangle text-warning me-1"></i>
+                    Anomalies detected
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="col-auto">
+              <div className="d-flex gap-2">
+                {calendarData.ml_insights.seasonal_patterns_active && (
+                  <span className="badge bg-light text-dark">
+                    <i className="fas fa-calendar-alt me-1"></i>
+                    Seasonal
+                  </span>
+                )}
+                <span className={`badge bg-${
+                  calendarData.ml_insights.adaptive_learning_status === 'active' ? 'success' :
+                  calendarData.ml_insights.adaptive_learning_status === 'learning' ? 'warning' : 'secondary'
+                }`}>
+                  {calendarData.ml_insights.adaptive_learning_status}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Calendar View */}
       <>
           {/* Calendar Grid */}
@@ -1046,6 +1187,17 @@ const CycleCalendar: React.FC<CalendarProps> = ({
                             <span className="more-symptoms">+{day.symptoms.length - 2}</span>
                           )}
                         </div>
+                      )}
+                      
+                      {/* ML Confidence Indicator */}
+                      {showMLInsights && day.predicted && day.ml_confidence && (
+                        <div 
+                          className={`ml-confidence-indicator ml-confidence-${
+                            day.ml_confidence === 'very_high' || day.ml_confidence === 'high' ? 'high' :
+                            day.ml_confidence === 'medium' ? 'medium' : 'low'
+                          }`}
+                          title={`ML Confidence: ${day.ml_confidence.replace('_', ' ')}`}
+                        ></div>
                       )}
                     </div>
                   </div>
@@ -1185,8 +1337,47 @@ const CycleCalendar: React.FC<CalendarProps> = ({
             <div className="modal-body">
               {selectedDay.day.predicted && (
                 <div className="alert alert-info mb-3" style={{ fontSize: '0.9rem', padding: '0.5rem 0.75rem' }}>
-                  <i className="fas fa-info-circle me-2"></i>
-                  <strong>Predicted Data:</strong> This information is based on your cycle patterns
+                  <i className="fas fa-brain me-2"></i>
+                  <strong>AI Prediction:</strong> This information is based on machine learning analysis
+                  {selectedDay.day.ml_confidence && (
+                    <div className="mt-2">
+                      <span className={`badge bg-${
+                        selectedDay.day.ml_confidence === 'very_high' || selectedDay.day.ml_confidence === 'high' ? 'success' :
+                        selectedDay.day.ml_confidence === 'medium' ? 'warning' : 'danger'
+                      }`}>
+                        {selectedDay.day.ml_confidence.replace('_', ' ')} confidence
+                      </span>
+                      {selectedDay.day.prediction_source && (
+                        <span className="badge bg-info ms-2">
+                          {selectedDay.day.prediction_source.replace('_', ' ')}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ML Pattern Matching */}
+              {showMLInsights && selectedDay.day.ml_pattern_match && (
+                <div className="alert alert-success mb-3" style={{ fontSize: '0.9rem', padding: '0.5rem 0.75rem' }}>
+                  <i className="fas fa-check-circle me-2"></i>
+                  <strong>Pattern Match:</strong> AI detected this matches your historical patterns
+                </div>
+              )}
+
+              {/* Anomaly Detection */}
+              {showMLInsights && selectedDay.day.anomaly_detected && (
+                <div className="alert alert-warning mb-3" style={{ fontSize: '0.9rem', padding: '0.5rem 0.75rem' }}>
+                  <i className="fas fa-exclamation-triangle me-2"></i>
+                  <strong>Anomaly Detected:</strong> This day shows irregular patterns compared to your cycle history
+                </div>
+              )}
+
+              {/* Seasonal Adjustment */}
+              {showMLInsights && selectedDay.day.seasonal_adjustment && Math.abs(selectedDay.day.seasonal_adjustment) > 0.5 && (
+                <div className="alert alert-info mb-3" style={{ fontSize: '0.9rem', padding: '0.5rem 0.75rem' }}>
+                  <i className="fas fa-calendar-alt me-2"></i>
+                  <strong>Seasonal Adjustment:</strong> AI applied {selectedDay.day.seasonal_adjustment > 0 ? '+' : ''}{selectedDay.day.seasonal_adjustment.toFixed(1)} day adjustment for this month
                 </div>
               )}
               

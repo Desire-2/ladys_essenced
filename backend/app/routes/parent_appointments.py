@@ -329,19 +329,19 @@ def book_appointment_for_child():
             # Notification to provider
             provider_notification = Notification(
                 user_id=provider.user_id,
+                title=f"New Appointment Request",
                 message=f"New appointment request for {child_user.name}: {appointment_datetime.strftime('%Y-%m-%d %H:%M')}",
-                notification_type='appointment',
-                is_read=False,
-                created_at=datetime.utcnow()
+                type='info',
+                notification_type='appointment'
             )
             
             # Notification to parent
             parent_notification = Notification(
                 user_id=current_user_id,
+                title=f"Appointment Confirmed",
                 message=f"Appointment booked for {child_user.name} with {provider.user.name} on {appointment_datetime.strftime('%Y-%m-%d %H:%M')}",
-                notification_type='appointment',
-                is_read=False,
-                created_at=datetime.utcnow()
+                type='success',
+                notification_type='appointment'
             )
             
             db.session.add(provider_notification)
@@ -536,18 +536,20 @@ def cancel_child_appointment(appointment_id):
         try:
             if appointment.health_provider:
                 provider_notification = Notification(
-                    user_id=appointment.provider_id,
+                    user_id=appointment.health_provider.user_id,
+                    title=f"Appointment Cancelled",
                     message=f"Appointment cancelled by parent for {appointment.for_user_id}",
-                    notification_type='appointment',
-                    is_read=False
+                    type='warning',
+                    notification_type='appointment'
                 )
                 db.session.add(provider_notification)
             
             parent_notification = Notification(
                 user_id=current_user_id,
+                title=f"Appointment Cancelled",
                 message=f"Appointment cancelled for {appointment.appointment_for}",
-                notification_type='appointment',
-                is_read=False
+                type='warning',
+                notification_type='appointment'
             )
             db.session.add(parent_notification)
         except Exception as e:
@@ -634,17 +636,19 @@ def reschedule_child_appointment(appointment_id):
             if appointment.health_provider:
                 provider_notification = Notification(
                     user_id=appointment.health_provider.user_id,
+                    title=f"Appointment Rescheduled",
                     message=f"Appointment rescheduled from {old_date.strftime('%Y-%m-%d %H:%M')} to {new_datetime.strftime('%Y-%m-%d %H:%M')}",
-                    notification_type='appointment',
-                    is_read=False
+                    type='info',
+                    notification_type='appointment'
                 )
                 db.session.add(provider_notification)
             
             parent_notification = Notification(
                 user_id=current_user_id,
+                title=f"Appointment Rescheduled",
                 message=f"Appointment rescheduled to {new_datetime.strftime('%Y-%m-%d %H:%M')}",
-                notification_type='appointment',
-                is_read=False
+                type='info',
+                notification_type='appointment'
             )
             db.session.add(parent_notification)
         except Exception as e:

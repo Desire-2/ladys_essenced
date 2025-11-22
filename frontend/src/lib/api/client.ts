@@ -1,34 +1,158 @@
+import { getApiBaseUrl } from '../../utils/apiBase';
+
 // API utility functions for dashboard interactions
 
-// API Base URL - use environment variable in production, relative path in development
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
-  : '';
+// Extend RequestInit to include custom retry flag
+interface ExtendedRequestInit extends RequestInit {
+  _retry?: boolean;
+}
 
 class APIClient {
   private getHeaders() {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    
+    if (!token && typeof window !== 'undefined') {
+      console.warn('⚠️ ApiClient: No access_token found in localStorage');
+      console.log('Available localStorage keys:', Object.keys(localStorage));
+    } else if (token) {
+      // Validate token format before using it
+      if (token.split('.').length !== 3) {
+        console.error('❌ Malformed token detected, clearing tokens');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        return {
+          'Content-Type': 'application/json'
+        };
+      }
+      console.log('✅ ApiClient: Valid token available:', token.substring(0, 20) + '...');
+    }
+    
     return {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
+      ...(token && token.split('.').length === 3 && { 'Authorization': `Bearer ${token}` })
     };
   }
 
-  private async request(endpoint: string, options: RequestInit = {}) {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...this.getHeaders(),
-        ...options.headers
-      }
-    });
+  private async request(endpoint: string, options: ExtendedRequestInit = {}): Promise<any> {
+    const baseUrl = getApiBaseUrl();
+    const url = `${baseUrl}${endpoint}`;
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...this.getHeaders(),
+          ...options.headers
+        }
+      });
 
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle various 401 authentication errors
+        if (response.status === 401) {
+          const errorMessage = errorData.message || '';
+          const shouldRefresh = errorMessage.includes('expired') || 
+                               errorMessage.includes('Invalid token') ||
+                               errorMessage === 'Missing Authorization Header' ||
+                               errorMessage.includes('Not enough segments');
+                               
+          if (shouldRefresh) {
+            console.warn('⚠️ Authentication error detected, attempting refresh...', errorMessage);
+            
+            // Try to refresh the token
+            const refreshed = await this.attemptTokenRefresh();
+            if (refreshed) {
+              console.log('✅ Token refreshed successfully, retrying request...');
+              // Retry the request with new token (but only once to prevent infinite loops)
+              if (!options._retry) {
+                return this.request(endpoint, { ...options, _retry: true });
+              }
+            } else {
+              console.error('❌ Token refresh failed, redirecting to login...');
+              // Clear tokens and redirect to login
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('user_id');
+                localStorage.removeItem('user_type');
+                window.location.href = '/login';
+              }
+            }
+          }
+        }
+        
+        console.error('❌ API Error:', {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        throw new Error(errorData.message || `API Error: ${response.status} ${response.statusText}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('❌ API Request Failed:', { url, error });
+      throw error;
+    }
+  }
+
+  private async attemptTokenRefresh(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+      console.warn('⚠️ No refresh token available');
+      return false;
     }
 
-    return response.json();
+    // Check if refresh token is valid (not malformed)
+    if (refreshToken.split('.').length !== 3) {
+      console.error('❌ Malformed refresh token, clearing tokens');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      return false;
+    }
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${refreshToken}`
+        },
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.access_token) {
+          // Validate the new token before storing
+          if (data.access_token.split('.').length === 3) {
+            localStorage.setItem('access_token', data.access_token);
+            console.log('✅ New access token stored and validated');
+            return true;
+          } else {
+            console.error('❌ Received malformed access token from refresh');
+            return false;
+          }
+        }
+      }
+      
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error('❌ Token refresh response not ok:', response.status, errorText);
+      return false;
+    } catch (error) {
+      if (error.name === 'TimeoutError') {
+        console.error('❌ Token refresh timeout');
+      } else {
+        console.error('❌ Token refresh failed:', error);
+      }
+      return false;
+    }
   }
 
   // Admin API
@@ -162,33 +286,67 @@ class APIClient {
       if (per_page) params.push(`per_page=${per_page}`);
       if (userId) params.push(`user_id=${userId}`);
       const query = params.length > 0 ? `?${params.join('&')}` : '';
-      return this.request(`/api/cycle-logs${query}`);
+      console.log('🔍 API: Getting cycle logs with query:', query);
+      return this.request(`/api/cycle-logs/${query}`)
+;
     },
-    createLog: (data: any) => this.request('/api/cycle-logs', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
+    createLog: (data: any) => {
+      console.log('🔍 API: Creating cycle log:', data);
+      return this.request('/api/cycle-logs/', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+    },
     // Enhanced stats with predictions, variability, and health insights
     getStats: (userId?: number | null) => {
       const query = userId ? `?user_id=${userId}` : '';
+      console.log('🔍 API: Getting cycle stats for user:', userId || 'current');
       return this.request(`/api/cycle-logs/stats${query}`);
     },
     // NEW: Get personalized insights and recommendations
     getInsights: (userId?: number | null) => {
       const query = userId ? `?user_id=${userId}` : '';
+      console.log('🔍 API: Getting cycle insights for user:', userId || 'current');
       return this.request(`/api/cycle-logs/insights${query}`);
     },
     // NEW: Get future predictions for planning
     getPredictions: (months: number = 3, userId?: number | null) => {
       const params: string[] = [`months=${months}`];
       if (userId) params.push(`user_id=${userId}`);
+      console.log('🔍 API: Getting cycle predictions for', months, 'months, user:', userId || 'current');
       return this.request(`/api/cycle-logs/predictions?${params.join('&')}`);
     },
     // Enhanced calendar with phases, confidence, and cycle days
-    getCalendarData: (year: number, month: number, userId?: number | null) => {
+    getCalendarData: (year: number, month: number, userId?: number | null | undefined) => {
       const params: string[] = [`year=${year}`, `month=${month}`];
       if (userId) params.push(`user_id=${userId}`);
+      console.log('🔍 API: Getting calendar data for', year, month, 'user:', userId || 'current');
       return this.request(`/api/cycle-logs/calendar?${params.join('&')}`);
+    },
+    // ML-Enhanced API Endpoints
+    getMLInsights: (userId?: number | null) => {
+      const query = userId ? `?user_id=${userId}` : '';
+      return this.request(`/api/cycle-logs/ml-insights${query}`);
+    },
+    getPatternAnalysis: (userId?: number | null) => {
+      const query = userId ? `?user_id=${userId}` : '';
+      return this.request(`/api/cycle-logs/pattern-analysis${query}`);
+    },
+    getAdaptiveLearningStatus: (userId?: number | null) => {
+      const query = userId ? `?user_id=${userId}` : '';
+      return this.request(`/api/cycle-logs/adaptive-status${query}`);
+    },
+    getSeasonalPatterns: (userId?: number | null) => {
+      const query = userId ? `?user_id=${userId}` : '';
+      return this.request(`/api/cycle-logs/seasonal-patterns${query}`);
+    },
+    getAnomalyDetection: (userId?: number | null) => {
+      const query = userId ? `?user_id=${userId}` : '';
+      return this.request(`/api/cycle-logs/anomaly-detection${query}`);
+    },
+    getConfidenceMetrics: (userId?: number | null) => {
+      const query = userId ? `?user_id=${userId}` : '';
+      return this.request(`/api/cycle-logs/confidence-metrics${query}`);
     }
   };
 
@@ -196,9 +354,9 @@ class APIClient {
   meal = {
     getLogs: (page?: number, per_page?: number) => {
       const query = page || per_page ? `?page=${page || 1}&per_page=${per_page || 10}` : '';
-      return this.request(`/api/meal-logs${query}`);
+      return this.request(`/api/meal-logs/${query}`);
     },
-    createLog: (data: any) => this.request('/api/meal-logs', {
+    createLog: (data: any) => this.request('/api/meal-logs/', {
       method: 'POST',
       body: JSON.stringify(data)
     })
@@ -216,6 +374,11 @@ class APIClient {
   // Notification API
   notification = {
     getRecent: () => this.request('/api/notifications/recent'),
+    getAll: (page?: number, per_page?: number) => {
+      const query = page || per_page ? `?page=${page || 1}&per_page=${per_page || 10}` : '';
+      return this.request(`/api/notifications/${query}`);
+    },
+    getUnreadCount: () => this.request('/api/notifications/unread-count'),
     markAsRead: (id: number) => this.request(`/api/notifications/${id}/read`, { method: 'PATCH' })
   };
 }

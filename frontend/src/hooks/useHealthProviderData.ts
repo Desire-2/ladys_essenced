@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { buildHealthProviderApiUrl } from '../utils/apiConfig';
+import { healthProviderAPI } from '../api';
 import { handleApiResponse } from '../utils/health-provider';
 import type { 
   ProviderStats, 
@@ -44,83 +44,55 @@ export const useHealthProviderData = () => {
 
   // Load dashboard stats
   const loadStats = useCallback(async () => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     try {
-      const response = await fetch(buildHealthProviderApiUrl('/dashboard/stats'), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await handleApiResponse(response, 'Failed to load dashboard stats');
-      setStats(data);
-    } catch (error) {
+      const response = await healthProviderAPI.getDashboard(user.user_id);
+      setStats(response.data);
+    } catch (error: any) {
       console.error('Error loading stats:', error);
-      setError('Failed to load dashboard statistics');
+      setError(error.response?.data?.message || 'Failed to load dashboard statistics');
     }
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   // Load appointments
   const loadAppointments = useCallback(async () => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     try {
-      const response = await fetch(buildHealthProviderApiUrl('/appointments'), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await handleApiResponse(response, 'Failed to load appointments');
-      setAppointments(data.appointments || []);
-    } catch (error) {
+      const response = await healthProviderAPI.getAppointments({});
+      setAppointments(response.data.appointments || response.data || []);
+    } catch (error: any) {
       console.error('Error loading appointments:', error);
-      setError('Failed to load appointments');
+      setError(error.response?.data?.message || 'Failed to load appointments');
     }
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   // Load unassigned appointments
   const loadUnassignedAppointments = useCallback(async () => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     try {
-      const response = await fetch(buildHealthProviderApiUrl('/appointments/unassigned'), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await handleApiResponse(response, 'Failed to load unassigned appointments');
-      setUnassignedAppointments(data.appointments || []);
-    } catch (error) {
+      const response = await healthProviderAPI.getAppointments({ status: 'pending' });
+      setUnassignedAppointments(response.data.appointments || response.data || []);
+    } catch (error: any) {
       console.error('Error loading unassigned appointments:', error);
-      setError('Failed to load available appointments');
+      setError(error.response?.data?.message || 'Failed to load available appointments');
     }
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   // Load patients
   const loadPatients = useCallback(async () => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     try {
-      const response = await fetch(buildHealthProviderApiUrl('/patients'), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await handleApiResponse(response, 'Failed to load patients');
-      setPatients(data.patients || []);
-    } catch (error) {
+      const response = await healthProviderAPI.getPatients(user.user_id);
+      setPatients(response.data.patients || response.data || []);
+    } catch (error: any) {
       console.error('Error loading patients:', error);
-      setError('Failed to load patients');
+      setError(error.response?.data?.message || 'Failed to load patients');
     }
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   // Load patient history
   const loadPatientHistory = useCallback(async (patientId: number) => {
@@ -144,126 +116,96 @@ export const useHealthProviderData = () => {
 
   // Load profile
   const loadProfile = useCallback(async () => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     try {
-      const response = await fetch(buildHealthProviderApiUrl('/profile'), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await handleApiResponse(response, 'Failed to load profile');
-      setProfile(data.provider);
-    } catch (error) {
+      const response = await healthProviderAPI.getProfile(user.user_id);
+      setProfile(response.data.provider || response.data);
+    } catch (error: any) {
       console.error('Error loading profile:', error);
-      setError('Failed to load profile');
+      setError(error.response?.data?.message || 'Failed to load profile');
     }
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   // Load availability
   const loadAvailability = useCallback(async () => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     try {
-      const response = await fetch(buildHealthProviderApiUrl('/availability'), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await handleApiResponse(response, 'Failed to load availability');
-      setAvailability(data.availability || {});
-    } catch (error) {
+      const response = await healthProviderAPI.getAvailability(user.user_id);
+      setAvailability(response.data.availability || response.data || {});
+    } catch (error: any) {
       console.error('Error loading availability:', error);
-      setError('Failed to load availability schedule');
+      setError(error.response?.data?.message || 'Failed to load availability schedule');
     }
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   // Load schedule
-  const loadSchedule = useCallback(async () => {
-    if (!user?.access_token) return;
+  const loadSchedule = useCallback(async (startDate?: string, endDate?: string) => {
+    if (!user?.user_id) return;
     
     try {
-      const response = await fetch(buildHealthProviderApiUrl('/schedule'), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
+      const params: any = {};
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
+      
+      const response = await healthProviderAPI.getAppointments(params);
+      const appointmentsByDate: Record<string, any[]> = {};
+      
+      (response.data.appointments || []).forEach((apt: any) => {
+        const date = apt.appointment_date.split('T')[0];
+        if (!appointmentsByDate[date]) appointmentsByDate[date] = [];
+        appointmentsByDate[date].push(apt);
       });
       
-      const data = await handleApiResponse(response, 'Failed to load schedule');
-      setSchedule(data.schedule || {});
-    } catch (error) {
+      setSchedule(appointmentsByDate);
+    } catch (error: any) {
       console.error('Error loading schedule:', error);
-      setError('Failed to load weekly schedule');
+      setError(error.response?.data?.message || 'Failed to load schedule');
     }
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   // Load analytics
   const loadAnalytics = useCallback(async (days: number = 30) => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     try {
-      const response = await fetch(buildHealthProviderApiUrl(`/analytics?days=${days}`), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await handleApiResponse(response, 'Failed to load analytics');
-      setAnalytics(data);
-    } catch (error) {
+      const response = await healthProviderAPI.getAnalytics(user.user_id, { days });
+      setAnalytics(response.data);
+    } catch (error: any) {
       console.error('Error loading analytics:', error);
-      setError('Failed to load analytics data');
+      setError(error.response?.data?.message || 'Failed to load analytics data');
     }
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   // Load available providers for booking
   const loadAvailableProviders = useCallback(async () => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     try {
-      const response = await fetch(buildHealthProviderApiUrl('/providers/available'), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await handleApiResponse(response, 'Failed to load available providers');
-      setAvailableProviders(data.providers || []);
-    } catch (error) {
+      const response = await healthProviderAPI.getPublicProviders();
+      setAvailableProviders(response.data.providers || response.data || []);
+    } catch (error: any) {
       console.error('Error loading available providers:', error);
-      setError('Failed to load available providers');
+      setError(error.response?.data?.message || 'Failed to load available providers');
     }
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   // Load provider time slots
   const loadProviderTimeSlots = useCallback(async (providerId: number, date: string) => {
-    if (!user?.access_token) return;
+    if (!user?.user_id) return;
     
     setLoadingTimeSlots(true);
     try {
-      const response = await fetch(buildHealthProviderApiUrl(`/providers/${providerId}/slots?date=${date}`), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const data = await handleApiResponse(response, 'Failed to load time slots');
-      setProviderTimeSlots(data.time_slots || []);
-    } catch (error) {
+      const response = await healthProviderAPI.getProviderTimeSlots(providerId, date);
+      setProviderTimeSlots(response.data.time_slots || response.data || []);
+    } catch (error: any) {
       console.error('Error loading time slots:', error);
-      setError('Failed to load available time slots');
+      setError(error.response?.data?.message || 'Failed to load available time slots');
     } finally {
       setLoadingTimeSlots(false);
     }
-  }, [user?.access_token]);
+  }, [user?.user_id]);
 
   // Claim appointment
   const claimAppointment = useCallback(async (appointmentId: number) => {

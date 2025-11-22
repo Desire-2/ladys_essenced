@@ -208,8 +208,9 @@ def create_content_item():
         for user in users:
             notification = Notification(
                 user_id=user.id,
+                title='New Article',
                 message=f"New article: \"{new_item.title}\"",
-                notification_type='education'
+                type='education'
             )
             db.session.add(notification)
         

@@ -205,7 +205,10 @@ export const MealsTab: React.FC<MealsTabProps> = ({
                               <span className="fs-3 mb-2 meal-icon">{type.icon}</span>
                               <span className="fw-semibold">{type.label}</span>
                               {hoveredMealType === type.value && (
-                                <small className="text-muted mt-1 animate__animated animate__fadeIn" style={{ fontSize: '0.7rem' }}>
+                                <small className="text-muted mt-1" style={{ 
+                                  fontSize: '0.7rem',
+                                  animation: 'fadeIn 0.3s ease-in'
+                                }}>
                                   {type.tip}
                                 </small>
                               )}
@@ -328,7 +331,9 @@ export const MealsTab: React.FC<MealsTabProps> = ({
                               </div>
                               <p className="text-muted small mb-1">{tip.description}</p>
                               {expandedTip === index && (
-                                <div className="mt-3 p-3 bg-light bg-opacity-50 rounded-3 animate__animated animate__fadeIn">
+                                <div className="mt-3 p-3 bg-light bg-opacity-50 rounded-3" style={{
+                                  animation: 'fadeIn 0.3s ease-in'
+                                }}>
                                   <small className={`text-${tip.color} fw-semibold d-block mb-2`}>
                                     <i className="fas fa-info-circle me-1"></i>
                                     Why it helps:

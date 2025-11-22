@@ -202,3 +202,59 @@ export const validateChildForm = (data: {
     errors
   };
 };
+
+/**
+ * Navigate to period logs management
+ */
+export const navigateToPeriodLogs = (source: string = 'dashboard'): void => {
+  // Create a custom event for period logs navigation
+  const event = new CustomEvent('openPeriodLogs', { 
+    detail: { 
+      source,
+      timestamp: new Date().toISOString(),
+      userAction: true
+    }
+  });
+  
+  // Store navigation context
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('periodLogsNavigation', JSON.stringify({
+      source,
+      timestamp: new Date().toISOString()
+    }));
+  }
+  
+  // Dispatch the event
+  window.dispatchEvent(event);
+  
+  // Log for debugging
+  console.log(`Period logs navigation triggered from: ${source}`);
+};
+
+/**
+ * Get period log statistics for display
+ */
+export const getPeriodLogStats = (): {
+  thisMonth: number;
+  accuracy: number;
+  streak: number;
+} => {
+  // This would normally fetch from API or local storage
+  // For now, return mock data
+  return {
+    thisMonth: Math.floor(Math.random() * 20) + 5,
+    accuracy: Math.floor(Math.random() * 10) + 90,
+    streak: Math.floor(Math.random() * 40) + 10
+  };
+};
+
+/**
+ * Format period management button stats
+ */
+export const formatPeriodStats = (stats: { thisMonth: number; accuracy: number; streak: number }) => {
+  return {
+    thisMonth: `${stats.thisMonth} logs`,
+    accuracy: `${stats.accuracy}%`,
+    streak: `${stats.streak} days`
+  };
+};

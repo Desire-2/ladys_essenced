@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { buildAuthApiUrl } from '../../utils/apiConfig';
+import { API_BASE_URL } from '../../config/api';
 
 interface DashboardStats {
   users: {
@@ -298,10 +299,7 @@ export default function AdminDashboard() {
   }, []);
 
   const buildApiUrl = useCallback((endpoint: string, params?: Record<string, any>) => {
-    const apiBaseUrl = process.env.NODE_ENV === 'production' 
-      ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
-      : 'http://localhost:5001';
-    const url = new URL(`/api/admin${endpoint}`, apiBaseUrl);
+    const url = new URL(`/api/admin${endpoint}`, API_BASE_URL || window.location.origin);
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== '') {

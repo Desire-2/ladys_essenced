@@ -17,7 +17,7 @@ import { formatDate } from '../../app/dashboard/utils';
 export function useDashboardData() {
   // Get enhanced notifications from context
   const { notifications: enhancedNotifications, fetchNotifications: refreshNotifications } = useNotification();
-  const { hasRole } = useAuth();
+  const { hasRole, accessToken } = useAuth();
   const { getAppointmentsForChild, getMealsForChild, getCycleDataForChild } = useParentChildData();
   
   // State for different data types
@@ -73,22 +73,30 @@ export function useDashboardData() {
 
   // Individual data loading functions
   const loadCycleData = useCallback(async (selectedChild?: number | null) => {
+    if (!accessToken) {
+      console.warn('Skipping cycle data load until authentication token is available');
+      return;
+    }
     setDataLoading('cycle', true);
     clearDataError('cycle');
 
     try {
-      console.log('Loading cycle data for user:', selectedChild || 'current user');
+      console.log('🔄 Loading cycle data for user:', selectedChild || 'current user');
       
       let cycleResponse;
       
       if (selectedChild && hasRole('parent')) {
         // Use parent-child aware method for parent viewing child data
+        console.log('👨‍👩‍👧 Using parent-child method for child:', selectedChild);
         const cycleData = await getCycleDataForChild(selectedChild);
         cycleResponse = { data: cycleData };
       } else {
         // Use regular API for self or when no child selected
-        cycleResponse = await (cycleAPI.getStats as any)(selectedChild);
+        console.log('👤 Using regular API for user:', selectedChild || 'current');
+        cycleResponse = await cycleAPI.getStats(selectedChild as any);
       }
+
+      console.log('📊 Raw cycle response:', cycleResponse);
 
       const transformedCycleData = {
         nextPeriod: cycleResponse.data.next_period_prediction 
@@ -106,19 +114,34 @@ export function useDashboardData() {
         totalLogs: cycleResponse.data.total_logs || 0
       };
 
+      console.log('✅ Transformed cycle data:', transformedCycleData);
       setCycleData(transformedCycleData);
       setDataAvailable('cycle', true);
-      console.log('Cycle data loaded:', transformedCycleData);
     } catch (err: any) {
-      console.error('Failed to load cycle data:', err);
+      console.error('❌ Failed to load cycle data:', err);
+      console.error('Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       setDataError('cycle', err.response?.data?.message || err.message || 'Failed to load cycle tracking data');
       setDataAvailable('cycle', false);
     } finally {
       setDataLoading('cycle', false);
     }
-  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, hasRole, getCycleDataForChild]);
+  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, hasRole, getCycleDataForChild, accessToken]);
 
   const loadMealsData = useCallback(async (selectedChild?: number | null) => {
+    // Token is handled by axios interceptor, but log if missing
+    if (!accessToken && typeof window !== 'undefined') {
+      const storedToken = localStorage.getItem('access_token');
+      if (!storedToken) {
+        console.error('❌ No token available for meals API call');
+        setDataError('meals', 'Authorization token is required. Please log in again.');
+        return;
+      }
+      console.log('⚠️ accessToken state not set but localStorage has token, proceeding...');
+    }
     setDataLoading('meals', true);
     clearDataError('meals');
 
@@ -146,9 +169,19 @@ export function useDashboardData() {
     } finally {
       setDataLoading('meals', false);
     }
-  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, hasRole, getMealsForChild]);
+  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, hasRole, getMealsForChild, accessToken]);
 
   const loadAppointmentsData = useCallback(async (selectedChild?: number | null, forceRefresh = false) => {
+    // Token is handled by axios interceptor, but log if missing
+    if (!accessToken && typeof window !== 'undefined') {
+      const storedToken = localStorage.getItem('access_token');
+      if (!storedToken) {
+        console.error('❌ No token available for appointments API call');
+        setDataError('appointments', 'Authorization token is required. Please log in again.');
+        return;
+      }
+      console.log('⚠️ accessToken state not set but localStorage has token, proceeding...');
+    }
     setDataLoading('appointments', true);
     clearDataError('appointments');
 
@@ -202,50 +235,91 @@ export function useDashboardData() {
     } finally {
       setDataLoading('appointments', false);
     }
-  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, hasRole, getAppointmentsForChild]);
+  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, hasRole, getAppointmentsForChild, accessToken]);
 
   const loadNotificationsData = useCallback(async () => {
+    if (!accessToken) {
+      console.warn('⚠️ Skipping notification refresh - no access token available');
+      return;
+    }
     setDataLoading('notifications', true);
     clearDataError('notifications');
 
     try {
-      console.log('Loading enhanced notifications...');
+      console.log('📬 Loading enhanced notifications...');
       // Use enhanced notification context to refresh data
-      await refreshNotifications();
-      setDataAvailable('notifications', true);
-      console.log('Enhanced notifications refreshed');
+      const result = await refreshNotifications();
+      
+      if (result !== null) {
+        setDataAvailable('notifications', true);
+        console.log('✅ Enhanced notifications refreshed successfully');
+      } else {
+        console.warn('⚠️ Notifications fetch returned null, likely auth issue');
+        setDataAvailable('notifications', false);
+      }
     } catch (err: any) {
-      console.error('Failed to load notifications:', err);
-      setDataError('notifications', err.message || 'Failed to load notifications');
+      // This catch might not be reached if fetchNotifications handles its own errors
+      console.error('❌ Unexpected error in notification refresh:', err);
+      setDataError('notifications', err?.message || 'Failed to load notifications');
       setDataAvailable('notifications', false);
     } finally {
       setDataLoading('notifications', false);
     }
-  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, refreshNotifications]);
+  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, refreshNotifications, accessToken]);
 
   const loadCalendarData = useCallback(async (year?: number, month?: number, selectedChild?: number | null) => {
+    if (!accessToken) {
+      console.warn('⚠️ Skipping calendar load - no access token available');
+      setDataError('calendar', 'Authentication required. Please log in.');
+      return;
+    }
+    
     setDataLoading('calendar', true);
     clearDataError('calendar');
 
     try {
       const targetDate = year && month ? new Date(year, month - 1) : new Date();
-      // Use type assertion to handle API type mismatch
-      const response = await (cycleAPI.getCalendarData as any)(
+      console.log('🗓️ Loading calendar data for:', {
+        year: targetDate.getFullYear(),
+        month: targetDate.getMonth() + 1,
+        user: selectedChild || 'current'
+      });
+      
+      const response = await cycleAPI.getCalendarData(
         targetDate.getFullYear(), 
         targetDate.getMonth() + 1, 
-        selectedChild
+        selectedChild as any
       );
+      
+      console.log('✅ Calendar data loaded:', response.data);
       setCalendarData(response.data);
       setDataAvailable('calendar', true);
-      console.log('Calendar data loaded for user:', selectedChild || 'current user', response.data);
     } catch (err: any) {
-      console.error('Failed to load calendar data:', err);
-      setDataError('calendar', err.response?.data?.message || 'Failed to load calendar data');
+      console.error('❌ Failed to load calendar data:', err);
+      console.error('Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Failed to load calendar data';
+      if (err.message?.includes('Invalid token') || err.message?.includes('expired')) {
+        errorMessage = 'Session expired. Please refresh the page or log in again.';
+      } else if (err.message?.includes('Authorization')) {
+        errorMessage = 'Authentication required. Please log in.';
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setDataError('calendar', errorMessage);
       setDataAvailable('calendar', false);
     } finally {
       setDataLoading('calendar', false);
     }
-  }, [setDataLoading, clearDataError, setDataError, setDataAvailable]);
+  }, [setDataLoading, clearDataError, setDataError, setDataAvailable, accessToken]);
 
   // Helper function to retry loading specific data type
   const retryDataLoad = useCallback(async (dataType: string, selectedChild?: number | null) => {
@@ -270,13 +344,18 @@ export function useDashboardData() {
 
   // Load all dashboard data
   const loadAllData = useCallback(async (selectedChild?: number | null) => {
+    if (!accessToken) {
+      console.warn('Skipping dashboard data load until authentication token is available');
+      return;
+    }
+
     await Promise.allSettled([
       loadCycleData(selectedChild),
       loadMealsData(selectedChild),
       loadAppointmentsData(selectedChild),
       loadNotificationsData()
     ]);
-  }, [loadCycleData, loadMealsData, loadAppointmentsData, loadNotificationsData]);
+  }, [loadCycleData, loadMealsData, loadAppointmentsData, loadNotificationsData, accessToken]);
 
   return {
     // Data

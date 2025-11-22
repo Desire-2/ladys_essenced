@@ -300,8 +300,9 @@ def submit_for_review(content_id):
         # Note: In a real system, you'd notify all admins
         admin_notification = Notification(
             user_id=1,  # Admin user ID
+            title='Content Review',
             message=f"New content '{content_item.title}' submitted for review by {writer.user.name}",
-            notification_type='content_review'
+            type='content_review'
         )
         db.session.add(admin_notification)
         db.session.commit()

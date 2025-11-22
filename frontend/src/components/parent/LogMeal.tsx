@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../../config/api';
 
 interface LogMealProps {
   childId: number;
@@ -57,7 +58,7 @@ export const LogMeal: React.FC<LogMealProps> = ({ childId, childName, onSuccess 
         fat: formData.fat ? parseFloat(formData.fat) : null
       };
 
-      const response = await fetch('http://localhost:5001/api/meal-logs', {
+      const response = await fetch(`${API_BASE_URL}/api/meal-logs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

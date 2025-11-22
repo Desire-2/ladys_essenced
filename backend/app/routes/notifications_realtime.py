@@ -400,16 +400,7 @@ class NotificationFactory:
             user_id=appointment.user_id,
             title=rendered['title'],
             message=rendered['message'],
-            notification_type=rendered['type'],
-            priority=rendered['priority'],
-            category=rendered['category'],
-            requires_action=rendered['requires_action'],
-            action_label=rendered['action_label'],
-            action_url=rendered['action_url'],
-            delivery_channels=json.dumps(rendered['delivery_channels']),
-            related_appointment_id=appointment.id,
-            related_provider_id=appointment.provider_id,
-            sender_id=appointment.health_provider.user_id if appointment.health_provider else None
+            type=rendered['type']
         )
         
         return notification
@@ -446,15 +437,7 @@ class NotificationFactory:
             user_id=provider.user_id,
             title=rendered['title'],
             message=rendered['message'],
-            notification_type=rendered['type'],
-            priority=rendered['priority'],
-            category=rendered['category'],
-            requires_action=rendered['requires_action'],
-            action_label=rendered['action_label'],
-            action_url=rendered['action_url'],
-            delivery_channels=json.dumps(rendered['delivery_channels']),
-            related_provider_id=provider.id,
-            sender_id=user.id
+            type=rendered['type']
         )
         
         return notification
@@ -489,14 +472,7 @@ class NotificationFactory:
             user_id=parent_user.id,
             title=rendered['title'],
             message=rendered['message'],
-            notification_type=rendered['type'],
-            priority=rendered['priority'],
-            category=rendered['category'],
-            requires_action=rendered['requires_action'],
-            action_label=rendered['action_label'],
-            action_url=rendered['action_url'],
-            delivery_channels=json.dumps(rendered['delivery_channels']),
-            sender_id=child_user.id
+            type=rendered['type']
         )
         
         return notification

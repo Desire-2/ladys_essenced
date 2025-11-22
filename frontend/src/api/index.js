@@ -1,10 +1,12 @@
 import axios from 'axios';
+import { getApiBaseUrl } from '../utils/apiBase';
+
+const preferProxy = typeof window !== 'undefined';
+const API_BASE_URL = getApiBaseUrl({ preferProxy });
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: process.env.NODE_ENV === 'production' 
-    ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
-    : 'http://localhost:5001',  // Use port 5001 for development
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -13,18 +15,42 @@ const api = axios.create({
 // Add request interceptor to include auth token in requests
 api.interceptors.request.use(
   (config) => {
-    console.log('API Request:', config.method?.toUpperCase(), config.url);
-    const token = localStorage.getItem('access_token'); // Changed from 'token'
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log('Token added to request:', token.substring(0, 20) + '...');
+    console.log('🌐 API Request:', config.method?.toUpperCase(), config.url);
+    
+    // Only access localStorage if we're in the browser
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        // Validate token format before using
+        if (token.split('.').length === 3) {
+          // Always use the latest token from localStorage
+          config.headers.Authorization = `Bearer ${token}`;
+          if (config._isRetry) {
+            console.log('🔄 Retry request with refreshed token:', token.substring(0, 20) + '...');
+          } else {
+            console.log('✅ Valid token added to request:', token.substring(0, 20) + '...');
+          }
+        } else {
+          console.error('❌ Malformed token detected, clearing storage');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          console.warn('⚠️ Tokens cleared due to malformed format');
+        }
+      } else {
+        console.warn('⚠️ No access_token found in localStorage');
+        const allKeys = Object.keys(localStorage);
+        console.log('Available localStorage keys:', allKeys);
+        console.log('User ID:', localStorage.getItem('user_id'));
+        console.log('User Type:', localStorage.getItem('user_type'));
+      }
     } else {
-      console.log('No token found in localStorage');
+      console.warn('⚠️ localStorage not available (SSR)');
     }
+    
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
+    console.error('❌ Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
@@ -36,49 +62,86 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    console.error('API Response Error:', {
-      status: error.response?.status,
-      url: error.config?.url,
-      message: error.response?.data?.message,
-      error: error.message
-    });
+    // Handle cases where error object is incomplete
+    if (!error || (!error.response && !error.message && !error.request)) {
+      console.warn('⚠️ Received incomplete error object, likely network issue');
+      return Promise.reject(new Error('Network error or request cancelled'));
+    }
+    
+    // Only log detailed error if there's actual error information
+    if (error.response || error.message) {
+      console.error('API Response Error:', {
+        status: error.response?.status,
+        url: error.config?.url,
+        message: error.response?.data?.message || error.message,
+        data: error.response?.data
+      });
+    } else {
+      console.warn('⚠️ Network or unknown error occurred');
+    }
     
     const originalRequest = error.config;
     
+    // If no config, we can't retry
+    if (!originalRequest) {
+      console.error('❌ No request config available for retry');
+      return Promise.reject(error);
+    }
+    
     // If error is 401 and not already retrying
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && typeof window !== 'undefined') {
       originalRequest._retry = true;
       
       try {
         // Try to refresh the token
-        const refreshToken = localStorage.getItem('refresh_token'); // Changed from 'refreshToken'
+        const refreshToken = localStorage.getItem('refresh_token');
         if (!refreshToken) {
           console.log('No refresh token available, redirecting to login');
           throw new Error('No refresh token available');
         }
         
+        // Validate refresh token format
+        if (refreshToken.split('.').length !== 3) {
+          console.error('❌ Malformed refresh token, clearing tokens');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          throw new Error('Malformed refresh token');
+        }
+        
         console.log('Attempting token refresh...');
-        const refreshBaseURL = process.env.NODE_ENV === 'production' 
-          ? (process.env.NEXT_PUBLIC_API_URL || 'https://ladys-essenced.onrender.com')
-          : '';
+        const refreshBaseURL = getApiBaseUrl({ preferProxy });
         const response = await axios.post(`${refreshBaseURL}/api/auth/refresh`, {}, {
           headers: {
             'Authorization': `Bearer ${refreshToken}`
-          }
+          },
+          timeout: 10000 // 10 second timeout
         });
         
-        const { token } = response.data;
-        localStorage.setItem('access_token', token); // Changed from 'token' to 'access_token'
-        console.log('Token refreshed successfully');
+        const { access_token } = response.data;
+        if (!access_token) {
+          throw new Error('No access_token in refresh response');
+        }
         
-        // Retry the original request with new token
-        originalRequest.headers.Authorization = `Bearer ${token}`;
+        // Validate new token before storing
+        if (access_token.split('.').length !== 3) {
+          console.error('❌ Received malformed access token from refresh');
+          throw new Error('Malformed access token received');
+        }
+        
+        localStorage.setItem('access_token', access_token);
+        console.log('✅ Token refreshed successfully');
+        
+        // Update the Authorization header explicitly for the retry
+        originalRequest.headers.Authorization = `Bearer ${access_token}`;
+        originalRequest._isRetry = true;
+        
+        console.log('🔄 Retrying original request with new token...');
         return api(originalRequest);
       } catch (refreshError) {
         // If refresh fails, redirect to login
-        console.error('Token refresh failed:', refreshError);
-        localStorage.removeItem('access_token'); // Changed from 'token'
-        localStorage.removeItem('refresh_token'); // Changed from 'refreshToken'
+        console.error('❌ Token refresh failed:', refreshError);
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_id');
         localStorage.removeItem('user_type');
         window.location.href = '/login';
@@ -119,6 +182,60 @@ export const cycleAPI = {
     if (userId) url += `&user_id=${userId}`;
     return api.get(url);
   },
+  // ML-Enhanced Prediction Endpoints
+  getPredictions: (months = 3, userId = null) => {
+    let url = `/api/cycle-logs/predictions?months=${months}`;
+    if (userId) url += `&user_id=${userId}`;
+    return api.get(url);
+  },
+  getMLInsights: (userId = null) => {
+    let url = '/api/cycle-logs/ml-insights';
+    if (userId) url += `?user_id=${userId}`;
+    return api.get(url);
+  },
+  getPatternAnalysis: (userId = null) => {
+    let url = '/api/cycle-logs/pattern-analysis';
+    if (userId) url += `?user_id=${userId}`;
+    return api.get(url);
+  },
+  getAdaptiveLearningStatus: (userId = null) => {
+    let url = '/api/cycle-logs/adaptive-status';
+    if (userId) url += `?user_id=${userId}`;
+    return api.get(url);
+  },
+  getSeasonalPatterns: (userId = null) => {
+    let url = '/api/cycle-logs/seasonal-patterns';
+    if (userId) url += `?user_id=${userId}`;
+    return api.get(url);
+  },
+  getAnomalyDetection: (userId = null) => {
+    let url = '/api/cycle-logs/anomaly-detection';
+    if (userId) url += `?user_id=${userId}`;
+    return api.get(url);
+  },
+  getConfidenceMetrics: (userId = null) => {
+    let url = '/api/cycle-logs/confidence-metrics';
+    if (userId) url += `?user_id=${userId}`;
+    return api.get(url);
+  },
+};
+
+// Period Logs API - Enhanced period-specific tracking
+export const periodAPI = {
+  getLogs: (page = 1, perPage = 10) => api.get(`/api/period-logs/?page=${page}&per_page=${perPage}`),
+  getLog: (id) => api.get(`/api/period-logs/${id}`),
+  createLog: (logData) => api.post('/api/period-logs/', logData),
+  updateLog: (id, logData) => api.put(`/api/period-logs/${id}`, logData),
+  deleteLog: (id) => api.delete(`/api/period-logs/${id}`),
+  getAnalytics: () => api.get('/api/period-logs/analytics'),
+  getInsights: () => api.get('/api/period-logs/insights'),
+  getCurrentPeriod: () => api.get('/api/period-logs/current'),
+  endCurrentPeriod: (data) => api.post('/api/period-logs/end-current', data),
+  
+  // Parent access methods
+  getChildLogs: (childId, page = 1, perPage = 10) => 
+    api.get(`/api/period-logs/parent/${childId}?page=${page}&per_page=${perPage}`),
+  getChildAnalytics: (childId) => api.get(`/api/period-logs/parent/${childId}/analytics`),
 };
 
 // Meal Logging API

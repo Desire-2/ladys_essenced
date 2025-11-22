@@ -66,8 +66,8 @@ export const getStatusBadgeClass = (status: string) => {
 };
 
 // Time calculation utilities
-export const calculateTotalWeeklyHours = (availability: any) => {
-  return Object.values(availability)
+export const calculateTotalWeeklyHours = (availability: any): number => {
+  const total = Object.values(availability)
     .filter((schedule: any) => schedule.is_available)
     .reduce((total: number, schedule: any) => {
       const start = new Date(`2024-01-01 ${schedule.start_time}`);
@@ -75,8 +75,9 @@ export const calculateTotalWeeklyHours = (availability: any) => {
       const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
       return total + hours;
     }, 0);
+  return total as number;
 };
 
-export const getAvailableDaysCount = (availability: any) => {
+export const getAvailableDaysCount = (availability: any): number => {
   return Object.values(availability).filter((schedule: any) => schedule.is_available).length;
 };

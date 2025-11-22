@@ -9,7 +9,7 @@ meal_logs_bp = Blueprint('meal_logs', __name__)
 @meal_logs_bp.route('/', methods=['GET'])
 @jwt_required()
 def get_meal_logs():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     # Get query parameters for pagination and filtering
     page = request.args.get('page', 1, type=int)
@@ -98,7 +98,7 @@ def get_meal_logs():
 @meal_logs_bp.route('/<int:log_id>', methods=['GET'])
 @jwt_required()
 def get_meal_log(log_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     # Find the specific meal log
     log = MealLog.query.filter_by(id=log_id, user_id=current_user_id).first()
@@ -125,7 +125,7 @@ def get_meal_log(log_id):
 @meal_logs_bp.route('/', methods=['POST'])
 @jwt_required()
 def create_meal_log():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     data = request.get_json()
     
     # Get target user_id (for parent creating log for child)
@@ -213,7 +213,7 @@ def create_meal_log():
 @meal_logs_bp.route('/<int:log_id>', methods=['PUT'])
 @jwt_required()
 def update_meal_log(log_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     data = request.get_json()
     
     # Find the specific meal log
@@ -277,7 +277,7 @@ def update_meal_log(log_id):
 @meal_logs_bp.route('/<int:log_id>', methods=['DELETE'])
 @jwt_required()
 def delete_meal_log(log_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     # Find the specific meal log
     log = MealLog.query.filter_by(id=log_id, user_id=current_user_id).first()
@@ -300,7 +300,7 @@ def delete_meal_log(log_id):
 @meal_logs_bp.route('/stats', methods=['GET'])
 @jwt_required()
 def get_meal_stats():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     # Get time range parameters
     start_date = request.args.get('start_date')

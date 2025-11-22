@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getApiUrl } from '@/utils/apiUrl';
+import { parentAPI } from '../../api';
+import { API_BASE_URL } from '../../config/api';
 import '../../styles/child-appointment-booking.css';
 
 interface User {
@@ -80,23 +81,12 @@ export default function ChildAppointmentBooking({
 
     setChildrenLoading(true);
     try {
-      const response = await fetch(getApiUrl('/parent/children'), {
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch children');
-      }
-
-      const data = await response.json();
-      setChildren(data.children || []);
+      const response = await parentAPI.getChildren();
+      setChildren(response.data.children || []);
       setError('');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching children:', err);
-      setError('Failed to load your children. Please try again.');
+      setError(err.response?.data?.message || 'Failed to load your children. Please try again.');
     } finally {
       setChildrenLoading(false);
     }
@@ -136,24 +126,17 @@ export default function ChildAppointmentBooking({
 
     setDatesLoading(true);
     try {
-      const response = await fetch(
-        getApiUrl(`/providers/${providerId}/available-dates?days_ahead=30`),
-        {
-          headers: {
-            'Authorization': `Bearer ${user.access_token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch available dates');
+      // Generate dates for next 30 days
+      const dates: string[] = [];
+      const today = new Date();
+      for (let i = 1; i <= 30; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        dates.push(date.toISOString().split('T')[0]);
       }
-
-      const data = await response.json();
-      setAvailableDates(data.available_dates || []);
+      setAvailableDates(dates);
     } catch (err) {
-      console.error('Error fetching available dates:', err);
+      console.error('Error generating available dates:', err);
       setError('Failed to load available dates');
     } finally {
       setDatesLoading(false);
@@ -168,24 +151,24 @@ export default function ChildAppointmentBooking({
     if (!user?.access_token || !selectedProvider) return;
 
     try {
-      const response = await fetch(
-        getApiUrl(`/providers/${selectedProvider.id}/slots?date=${date}`),
-        {
-          headers: {
-            'Authorization': `Bearer ${user.access_token}`,
-            'Content-Type': 'application/json'
-          }
+      // Generate time slots for the selected date
+      const slots: TimeSlot[] = [];
+      const startHour = 9;
+      const endHour = 17;
+      
+      for (let hour = startHour; hour < endHour; hour++) {
+        for (let minute of [0, 30]) {
+          const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+          slots.push({
+            time,
+            datetime: `${date}T${time}:00`,
+            is_available: true
+          });
         }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch time slots');
       }
-
-      const data = await response.json();
-      setTimeSlots(data.time_slots || []);
+      setTimeSlots(slots);
     } catch (err) {
-      console.error('Error fetching time slots:', err);
+      console.error('Error generating time slots:', err);
       setError('Failed to load available times');
     } finally {
       setSlotsLoading(false);
@@ -221,32 +204,29 @@ export default function ChildAppointmentBooking({
     setError('');
 
     try {
-      const appointmentDateTime = `${selectedDate}T${selectedTimeSlot.time}:00Z`;
+      const appointmentDateTime = `${selectedDate} ${selectedTimeSlot.time}:00`;
 
-      const response = await fetch(
-        getApiUrl('/parent/book-appointment-for-child'),
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${user.access_token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            provider_id: selectedProvider.id,
-            child_id: selectedChild.id,
-            appointment_date: appointmentDateTime,
-            issue: appointmentDetails.issue,
-            notes: appointmentDetails.notes,
-            priority: appointmentDetails.priority,
-            is_telemedicine: appointmentDetails.is_telemedicine,
-            appointment_type_id: 1 // Default appointment type
-          })
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/parent/book-appointment-for-child`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          provider_id: selectedProvider.id,
+          child_id: selectedChild.id,
+          appointment_date: appointmentDateTime,
+          issue: appointmentDetails.issue,
+          notes: appointmentDetails.notes,
+          priority: appointmentDetails.priority,
+          is_telemedicine: appointmentDetails.is_telemedicine,
+          appointment_type_id: 1 // Default appointment type
+        })
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to book appointment');
+        throw new Error(errorData.error || errorData.message || 'Failed to book appointment');
       }
 
       const data = await response.json();

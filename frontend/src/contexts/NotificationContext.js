@@ -2,6 +2,7 @@
 
 import { useState, createContext, useContext, useEffect } from 'react';
 import { notificationAPI } from '../api';
+import { useAuth } from './AuthContext';
 
 // Create notifications context
 const NotificationContext = createContext();
@@ -17,23 +18,38 @@ export const NotificationProvider = ({ children }) => {
     totalPages: 1,
     totalItems: 0
   });
+  const { accessToken } = useAuth();
 
   // Fetch notifications
   const fetchNotifications = async (page = 1, perPage = 10, filters = {}) => {
+    if (!accessToken) {
+      console.warn('⚠️ Cannot fetch notifications: No access token available');
+      return null;
+    }
     try {
       setLoading(true);
       setError(null);
       const response = await notificationAPI.getNotifications(page, perPage, filters);
-      setNotifications(response.data.items);
-      setUnreadCount(response.data.unread_count);
+      
+      // Validate response structure
+      if (!response || !response.data) {
+        console.error('❌ Invalid notification response:', response);
+        setError('Invalid response from server');
+        return null;
+      }
+      
+      setNotifications(response.data.items || []);
+      setUnreadCount(response.data.unread_count || 0);
       setPagination({
-        currentPage: response.data.current_page,
-        totalPages: response.data.pages,
-        totalItems: response.data.total
+        currentPage: response.data.current_page || 1,
+        totalPages: response.data.pages || 1,
+        totalItems: response.data.total || 0
       });
       return response.data;
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch notifications');
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch notifications';
+      console.error('❌ Error fetching notifications:', errorMessage);
+      setError(errorMessage);
       return null;
     } finally {
       setLoading(false);
@@ -42,18 +58,35 @@ export const NotificationProvider = ({ children }) => {
 
   // Fetch unread count
   const fetchUnreadCount = async () => {
+    if (!accessToken) {
+      console.warn('⚠️ Cannot fetch unread count: No access token available');
+      setUnreadCount(0);
+      return 0;
+    }
     try {
       const response = await notificationAPI.getUnreadCount();
-      setUnreadCount(response.data.unread_count);
-      return response.data.unread_count;
+      
+      // Validate response
+      if (!response || !response.data) {
+        console.error('❌ Invalid unread count response:', response);
+        return 0;
+      }
+      
+      const count = response.data.unread_count || 0;
+      setUnreadCount(count);
+      return count;
     } catch (err) {
-      console.error('Failed to fetch unread count:', err);
+      console.error('❌ Failed to fetch unread count:', err.response?.data?.message || err.message);
+      setUnreadCount(0);
       return 0;
     }
   };
 
   // Mark notification as read
   const markAsRead = async (id) => {
+    if (!accessToken) {
+      return { success: false, error: 'Authentication required' };
+    }
     try {
       setLoading(true);
       setError(null);
@@ -78,6 +111,9 @@ export const NotificationProvider = ({ children }) => {
 
   // Mark all notifications as read
   const markAllAsRead = async () => {
+    if (!accessToken) {
+      return { success: false, error: 'Authentication required' };
+    }
     try {
       setLoading(true);
       setError(null);
@@ -98,6 +134,9 @@ export const NotificationProvider = ({ children }) => {
 
   // Delete notification
   const deleteNotification = async (id) => {
+    if (!accessToken) {
+      return { success: false, error: 'Authentication required' };
+    }
     try {
       setLoading(true);
       setError(null);
@@ -123,6 +162,9 @@ export const NotificationProvider = ({ children }) => {
 
   // Fetch notification settings
   const fetchNotificationSettings = async () => {
+    if (!accessToken) {
+      return null;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -139,6 +181,9 @@ export const NotificationProvider = ({ children }) => {
 
   // Update notification settings
   const updateNotificationSettings = async (settingsData) => {
+    if (!accessToken) {
+      return { success: false, error: 'Authentication required' };
+    }
     try {
       setLoading(true);
       setError(null);
@@ -155,6 +200,10 @@ export const NotificationProvider = ({ children }) => {
 
   // Poll for new notifications periodically
   useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
     const pollInterval = 60000; // 1 minute
     
     const pollForNotifications = () => {
@@ -164,7 +213,7 @@ export const NotificationProvider = ({ children }) => {
     const intervalId = setInterval(pollForNotifications, pollInterval);
     
     return () => clearInterval(intervalId);
-  }, []);
+  }, [accessToken]);
 
   return (
     <NotificationContext.Provider 

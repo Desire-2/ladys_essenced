@@ -35,6 +35,9 @@ class User(db.Model):
     current_session_data = db.Column(db.Text, nullable=True)
     session_timeout_minutes = db.Column(db.Integer, default=2)
     
+    # Privacy and parent access control
+    allow_parent_access = db.Column(db.Boolean, default=True)  # Whether parents can access this user's data
+    
     # Relationships
     cycle_logs = db.relationship('CycleLog', backref='user', lazy=True)
     meal_logs = db.relationship('MealLog', backref='user', lazy=True)
@@ -179,11 +182,175 @@ class CycleLog(db.Model):
     flow_intensity = db.Column(db.String(20), nullable=True)  # 'light', 'medium', 'heavy'
     symptoms = db.Column(db.Text, nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    
+    # Enhanced tracking fields for better predictions
+    mood = db.Column(db.String(20), nullable=True)  # 'very_good', 'good', 'neutral', 'low', 'very_low'
+    energy_level = db.Column(db.String(20), nullable=True)  # 'high', 'moderate', 'low', 'very_low'
+    sleep_quality = db.Column(db.String(20), nullable=True)  # 'excellent', 'good', 'fair', 'poor'
+    stress_level = db.Column(db.String(20), nullable=True)  # 'low', 'moderate', 'high', 'very_high'
+    exercise_activities = db.Column(db.Text, nullable=True)  # JSON string of activities
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     def __repr__(self):
         return f'<CycleLog {self.id}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'cycle_length': self.cycle_length,
+            'period_length': self.period_length,
+            'flow_intensity': self.flow_intensity,
+            'symptoms': self.symptoms,
+            'notes': self.notes,
+            'mood': self.mood,
+            'energy_level': self.energy_level,
+            'sleep_quality': self.sleep_quality,
+            'stress_level': self.stress_level,
+            'exercise_activities': self.exercise_activities,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class PeriodLog(db.Model):
+    """Detailed period-specific tracking for enhanced menstrual health management"""
+    __tablename__ = 'period_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    cycle_log_id = db.Column(db.Integer, db.ForeignKey('cycle_logs.id'), nullable=True)  # Link to main cycle
+    
+    # Period specific details
+    start_date = db.Column(db.DateTime, nullable=False)
+    end_date = db.Column(db.DateTime, nullable=True)
+    
+    # Daily flow tracking (JSON array of daily records)
+    daily_flow = db.Column(db.JSON, nullable=True)  # [{"date": "2024-01-15", "intensity": "heavy", "products_used": 3}]
+    
+    # Product usage tracking
+    products_used = db.Column(db.JSON, nullable=True)  # [{"type": "pad", "brand": "Always", "count": 5}]
+    total_products_count = db.Column(db.Integer, nullable=True)
+    
+    # Pain and symptom management
+    pain_level = db.Column(db.Integer, nullable=True)  # 1-10 scale
+    pain_location = db.Column(db.String(100), nullable=True)  # 'lower_abdomen', 'lower_back', 'both'
+    pain_management = db.Column(db.JSON, nullable=True)  # [{"method": "ibuprofen", "effectiveness": 8}]
+    
+    # Physical symptoms tracking
+    breast_tenderness = db.Column(db.Integer, nullable=True)  # 1-5 scale
+    bloating_level = db.Column(db.Integer, nullable=True)  # 1-5 scale
+    headache_severity = db.Column(db.Integer, nullable=True)  # 1-5 scale
+    nausea_level = db.Column(db.Integer, nullable=True)  # 1-5 scale
+    fatigue_level = db.Column(db.Integer, nullable=True)  # 1-5 scale
+    
+    # Mood and emotional tracking
+    mood_changes = db.Column(db.JSON, nullable=True)  # [{"date": "2024-01-15", "mood": "irritable", "intensity": 3}]
+    emotional_symptoms = db.Column(db.JSON, nullable=True)  # ["anxiety", "mood_swings", "depression"]
+    
+    # Activity impact
+    activity_limitations = db.Column(db.JSON, nullable=True)  # ["work", "exercise", "social"]
+    missed_activities = db.Column(db.Text, nullable=True)
+    
+    # Self-care and wellness
+    self_care_activities = db.Column(db.JSON, nullable=True)  # [{"activity": "hot_bath", "effectiveness": 7}]
+    diet_changes = db.Column(db.JSON, nullable=True)  # ["reduced_caffeine", "increased_water"]
+    sleep_impact = db.Column(db.Integer, nullable=True)  # 1-5 scale (1=very disruptive, 5=no impact)
+    
+    # Medical tracking
+    medication_taken = db.Column(db.JSON, nullable=True)  # [{"name": "ibuprofen", "dosage": "400mg", "times_per_day": 2}]
+    supplements_taken = db.Column(db.JSON, nullable=True)  # [{"name": "iron", "dosage": "18mg"}]
+    
+    # Environmental and lifestyle factors
+    stress_factors = db.Column(db.JSON, nullable=True)  # ["work", "relationships", "financial"]
+    exercise_modifications = db.Column(db.Text, nullable=True)
+    
+    # Overall period rating
+    overall_severity = db.Column(db.Integer, nullable=True)  # 1-10 scale
+    period_satisfaction = db.Column(db.Integer, nullable=True)  # 1-5 scale (how well managed)
+    
+    # Notes and observations
+    notes = db.Column(db.Text, nullable=True)
+    observations = db.Column(db.Text, nullable=True)  # What worked/didn't work
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='period_logs')
+    cycle_log = db.relationship('CycleLog', backref='period_logs')
+    
+    def __repr__(self):
+        return f'<PeriodLog {self.id}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'cycle_log_id': self.cycle_log_id,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'daily_flow': self.daily_flow,
+            'products_used': self.products_used,
+            'total_products_count': self.total_products_count,
+            'pain_level': self.pain_level,
+            'pain_location': self.pain_location,
+            'pain_management': self.pain_management,
+            'breast_tenderness': self.breast_tenderness,
+            'bloating_level': self.bloating_level,
+            'headache_severity': self.headache_severity,
+            'nausea_level': self.nausea_level,
+            'fatigue_level': self.fatigue_level,
+            'mood_changes': self.mood_changes,
+            'emotional_symptoms': self.emotional_symptoms,
+            'activity_limitations': self.activity_limitations,
+            'missed_activities': self.missed_activities,
+            'self_care_activities': self.self_care_activities,
+            'diet_changes': self.diet_changes,
+            'sleep_impact': self.sleep_impact,
+            'medication_taken': self.medication_taken,
+            'supplements_taken': self.supplements_taken,
+            'stress_factors': self.stress_factors,
+            'exercise_modifications': self.exercise_modifications,
+            'overall_severity': self.overall_severity,
+            'period_satisfaction': self.period_satisfaction,
+            'notes': self.notes,
+            'observations': self.observations,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    @property
+    def duration_days(self):
+        """Calculate period duration in days"""
+        if self.start_date and self.end_date:
+            return (self.end_date - self.start_date).days + 1
+        return None
+    
+    @property
+    def is_active(self):
+        """Check if period is currently active (no end date)"""
+        return self.end_date is None
+    
+    def get_flow_summary(self):
+        """Get summary of flow patterns"""
+        if not self.daily_flow:
+            return None
+        
+        flow_days = len(self.daily_flow)
+        heavy_days = sum(1 for day in self.daily_flow if day.get('intensity') == 'heavy')
+        light_days = sum(1 for day in self.daily_flow if day.get('intensity') == 'light')
+        
+        return {
+            'total_days': flow_days,
+            'heavy_days': heavy_days,
+            'light_days': light_days,
+            'average_products_per_day': sum(day.get('products_used', 0) for day in self.daily_flow) / flow_days if flow_days > 0 else 0
+        }
 
 
 class MealLog(db.Model):

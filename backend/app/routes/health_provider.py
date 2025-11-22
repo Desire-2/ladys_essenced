@@ -25,10 +25,7 @@ def create_provider_notification(user_id: int, message: str, notification_type: 
             user_id=user_id,
             title=notification_type.replace('_', ' ').title(),
             message=message,
-            notification_type=notification_type,
-            priority=priority,
-            category='appointment',
-            delivery_channels=json.dumps(['app'])
+            type=notification_type
         )
         result = notification_manager.send_notification(notification)
         print(f"✅ Notification sent to user {user_id}: {message[:50]}...")

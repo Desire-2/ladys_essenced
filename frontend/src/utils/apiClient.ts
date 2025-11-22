@@ -54,8 +54,11 @@ class ApiClient {
 
       if (response.ok) {
         const data = await response.json();
-        this.updateAuthToken(data.access_token);
-        return true;
+        const nextToken = data.access_token || data.token;
+        if (nextToken) {
+          this.updateAuthToken(nextToken);
+          return true;
+        }
       }
     } catch (error) {
       console.error('Token refresh failed:', error);
@@ -76,6 +79,10 @@ class ApiClient {
     } = options;
 
     const url = endpoint.startsWith('http') ? endpoint : getApiUrl(endpoint);
+    if (typeof window !== 'undefined') {
+      this.authToken = localStorage.getItem('access_token');
+      this.refreshToken = localStorage.getItem('refresh_token');
+    }
     
     const headers: HeadersInit = {
       'Content-Type': 'application/json',

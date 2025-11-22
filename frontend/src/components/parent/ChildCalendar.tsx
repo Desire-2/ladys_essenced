@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import { useParent } from '@/contexts/ParentContext';
 
 interface CalendarEvent {
@@ -32,13 +33,13 @@ export const ChildCalendar: React.FC<ChildCalendarProps> = ({ childId, childName
       
       // Fetch cycle logs, meals, and appointments
       const [cycleRes, mealRes, appointmentRes] = await Promise.all([
-        fetch(`http://localhost:5001/api/parents/children/${childId}/cycle-logs`, {
+        fetch(`${API_BASE_URL}/api/parents/children/${childId}/cycle-logs`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch(`http://localhost:5001/api/parents/children/${childId}/meal-logs`, {
+        fetch(`${API_BASE_URL}/api/parents/children/${childId}/meal-logs`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch(`http://localhost:5001/api/parents/children/${childId}/appointments`, {
+        fetch(`${API_BASE_URL}/api/parents/children/${childId}/appointments`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);

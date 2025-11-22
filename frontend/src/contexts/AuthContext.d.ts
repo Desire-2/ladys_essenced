@@ -13,6 +13,12 @@ export interface AuthContextType {
   getUserDisplayName: () => string;
   getDashboardRoute: () => string;
   makeAuthenticatedRequest: (endpoint: string, options?: any) => Promise<any>;
+  accessToken: string | null;
+  refreshToken: string | null;
+  accessChildAccount: (childId: number) => void;
+  getAccessedChildId: () => string | null;
+  clearChildAccess: () => void;
+  isAccessingChildAccount: () => boolean;
 }
 
 export declare function useAuth(): AuthContextType;

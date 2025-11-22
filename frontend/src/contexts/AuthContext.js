@@ -19,10 +19,22 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);
+  const [storedRefreshToken, setStoredRefreshToken] = useState(null);
+
+  const getStoredValue = (key) => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    return localStorage.getItem(key);
+  };
 
   // Helper function to make authenticated API calls
   const makeAuthenticatedRequest = async (endpoint, options = {}) => {
-    const token = localStorage.getItem('access_token');
+    const token = accessToken || getStoredValue('access_token');
+    if (!accessToken && token) {
+      setAccessToken(token);
+    }
     if (!token) {
       throw new Error('No authentication token');
     }
@@ -38,7 +50,37 @@ export const AuthProvider = ({ children }) => {
 
     if (!response.ok) {
       if (response.status === 401) {
-        // Token expired or invalid, logout user
+        // Token expired - try to refresh before logging out
+        const refreshToken = getStoredValue('refresh_token');
+        if (refreshToken && !options._retry) {
+          try {
+            console.log('🔄 Token expired, attempting refresh in AuthContext...');
+            const refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${refreshToken}`
+              }
+            });
+            
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json();
+              if (refreshData.access_token) {
+                localStorage.setItem('access_token', refreshData.access_token);
+                setAccessToken(refreshData.access_token);
+                console.log('✅ Token refreshed successfully in AuthContext');
+                
+                // Retry the original request with new token
+                return makeAuthenticatedRequest(endpoint, { ...options, _retry: true });
+              }
+            }
+          } catch (refreshError) {
+            console.error('❌ Token refresh failed:', refreshError);
+          }
+        }
+        
+        // If refresh failed or not attempted, logout user
+        console.warn('⚠️ Authentication expired, logging out');
         logout();
         throw new Error('Authentication expired');
       }
@@ -74,10 +116,21 @@ export const AuthProvider = ({ children }) => {
   // Check if user is logged in on initial load and fetch profile based on user type
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem('access_token');
-      const userType = localStorage.getItem('user_type');
+      const token = getStoredValue('access_token');
+      const userType = getStoredValue('user_type');
+      const userId = getStoredValue('user_id');
+      const refreshToken = getStoredValue('refresh_token');
       
-      if (token && userType) {
+      console.log('🔍 AuthContext: Checking authentication on mount', {
+        hasToken: !!token,
+        userType,
+        userId
+      });
+      
+      setAccessToken(token);
+      setStoredRefreshToken(refreshToken);
+      
+      if (token && userType && userId) {
         try {
           let profileData = null;
           
@@ -103,31 +156,37 @@ export const AuthProvider = ({ children }) => {
               break;
           }
 
-          console.log('Setting user with profile data:', profileData);
+          console.log('✅ AuthContext: Setting user with profile data:', profileData);
           setUser({
             ...profileData,
             user_type: userType,
-            user_id: localStorage.getItem('user_id')
+            user_id: userId
           });
         } catch (err) {
-          console.error('Failed to fetch user profile:', err);
+          console.error('❌ AuthContext: Failed to fetch user profile:', err);
           console.error('Error message:', err.message);
           // Only clear tokens if it's an authentication error
           // Don't logout for other errors (like 404 route not found)
           if (err.message === 'Authentication expired') {
+            console.warn('⚠️ Authentication expired, clearing tokens');
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
+            setAccessToken(null);
+            setStoredRefreshToken(null);
             localStorage.removeItem('user_id');
             localStorage.removeItem('user_type');
           } else {
             // For other errors, keep the user logged in with stored data
+            console.log('⚠️ Profile fetch failed but keeping user logged in with stored data');
             setUser({
-              user_id: localStorage.getItem('user_id'),
+              user_id: userId,
               user_type: userType,
               name: 'User', // Fallback data
             });
           }
         }
+      } else {
+        console.log('⚠️ No stored credentials found');
       }
       setLoading(false);
     };
@@ -167,6 +226,8 @@ export const AuthProvider = ({ children }) => {
       // Store tokens in localStorage with consistent naming
       localStorage.setItem('access_token', actualToken);
       localStorage.setItem('refresh_token', refresh_token);
+      setAccessToken(actualToken);
+      setStoredRefreshToken(refresh_token);
       localStorage.setItem('user_id', user_id);
       localStorage.setItem('user_type', user_type);
 
@@ -254,6 +315,8 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_id');
     localStorage.removeItem('user_type');
+    setAccessToken(null);
+    setStoredRefreshToken(null);
     setUser(null);
   };
 
@@ -410,7 +473,9 @@ export const AuthProvider = ({ children }) => {
       accessChildAccount,
       getAccessedChildId,
       clearChildAccess,
-      isAccessingChildAccount
+      isAccessingChildAccount,
+      accessToken,
+      refreshToken: storedRefreshToken
     }}>
       {children}
     </AuthContext.Provider>

@@ -19,10 +19,8 @@ def create_simple_notification(user_id: int, message: str, notification_type: st
             user_id=user_id,
             title=notification_type.replace('_', ' ').title(),
             message=message,
-            notification_type=notification_type,
-            priority=priority,
-            category='system',
-            delivery_channels=json.dumps(['app'])
+            type='info',
+            notification_type=notification_type
         )
         return notification_manager.send_notification(notification)
     except Exception as e:
@@ -32,7 +30,7 @@ def create_simple_notification(user_id: int, message: str, notification_type: st
 @appointments_bp.route('/', methods=['GET'])
 @jwt_required()
 def get_appointments():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     # Get query parameters for pagination and filtering
     page = request.args.get('page', 1, type=int)
@@ -86,7 +84,7 @@ def get_appointments():
 @appointments_bp.route('/<int:appointment_id>', methods=['GET'])
 @jwt_required()
 def get_appointment(appointment_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     # Find the specific appointment
     appointment = Appointment.query.filter_by(id=appointment_id, user_id=current_user_id).first()
@@ -111,7 +109,7 @@ def get_appointment(appointment_id):
 @appointments_bp.route('/', methods=['POST'])
 @jwt_required()
 def create_appointment():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     data = request.get_json()
     
     # Validate required fields
@@ -304,7 +302,7 @@ def create_appointment():
 @appointments_bp.route('/<int:appointment_id>', methods=['PUT'])
 @jwt_required()
 def update_appointment(appointment_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     data = request.get_json()
     
     # Find the specific appointment
@@ -426,7 +424,7 @@ def update_appointment(appointment_id):
 @appointments_bp.route('/<int:appointment_id>', methods=['DELETE'])
 @jwt_required()
 def delete_appointment(appointment_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     # Find the specific appointment
     appointment = Appointment.query.filter_by(id=appointment_id, user_id=current_user_id).first()
@@ -455,7 +453,7 @@ def delete_appointment(appointment_id):
 @appointments_bp.route('/upcoming', methods=['GET'])
 @jwt_required()
 def get_upcoming_appointments():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     # Get optional user_id parameter for parent viewing child's data
     requested_user_id = request.args.get('user_id', type=int)
@@ -523,7 +521,7 @@ def get_upcoming_appointments():
 @jwt_required()
 def send_appointment_reminders():
     """Send reminder notifications for upcoming appointments"""
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     try:
         # Get appointments in the next 24-48 hours
@@ -560,7 +558,7 @@ def send_appointment_reminders():
 @jwt_required()
 def get_appointment_statistics():
     """Get appointment statistics with notifications"""
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     try:
         # Get appointment counts by status

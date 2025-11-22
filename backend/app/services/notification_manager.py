@@ -23,7 +23,8 @@ class NotificationManager:
                 user_id=user_id,
                 title=title,
                 message=message,
-                type=notification_type
+                type=notification_type,
+                notification_type=notification_type
             )
             
             db.session.add(notification)
@@ -154,7 +155,7 @@ class NotificationManager:
                 user_id=user_id,
                 title=title,
                 message=message,
-                notification_type=template.notification_type
+                notification_type=template.notification_type  # This parameter gets mapped to 'type' in create_notification
             )
         except Exception as e:
             print(f"Error creating notification from template: {e}")

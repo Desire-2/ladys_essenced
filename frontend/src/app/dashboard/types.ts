@@ -141,7 +141,7 @@ export interface CalendarData {
   [key: string]: any; // Define based on your specific calendar data structure
 }
 
-export type ActiveTab = 'overview' | 'cycle' | 'meals' | 'appointments' | 'children';
+export type ActiveTab = 'overview' | 'cycle' | 'meals' | 'appointments' | 'children' | 'settings';
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type FlowIntensity = 'light' | 'medium' | 'heavy';

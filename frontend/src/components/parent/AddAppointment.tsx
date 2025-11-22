@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../../config/api';
 
 interface AddAppointmentProps {
   childId: number;
@@ -54,7 +55,7 @@ export const AddAppointment: React.FC<AddAppointmentProps> = ({ childId, childNa
         notes: formData.notes || null
       };
 
-      const response = await fetch('http://localhost:5001/api/appointments', {
+      const response = await fetch(`${API_BASE_URL}/api/appointments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

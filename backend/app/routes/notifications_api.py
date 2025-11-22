@@ -45,6 +45,12 @@ def get_notifications():
             error_out=False
         )
         
+        # Get unread count for this user
+        unread_count = Notification.query.filter_by(
+            user_id=current_user_id,
+            is_read=False
+        ).count()
+        
         # Format the response using the correct attribute names
         result = {
             'items': [{
@@ -61,7 +67,8 @@ def get_notifications():
             'current_page': page,
             'per_page': per_page,
             'has_next': notifications.has_next,
-            'has_prev': notifications.has_prev
+            'has_prev': notifications.has_prev,
+            'unread_count': unread_count
         }
         
         return jsonify(result), 200
@@ -125,7 +132,7 @@ def get_unread_count():
             is_read=False
         ).count()
         
-        return jsonify({'count': count}), 200
+        return jsonify({'unread_count': count}), 200
         
     except Exception as e:
         logger.error(f"Failed to get unread count: {str(e)}")

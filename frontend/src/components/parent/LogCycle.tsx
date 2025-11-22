@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import { useParent } from '@/contexts/ParentContext';
 
 interface LogCycleProps {
@@ -53,7 +54,7 @@ export const LogCycle: React.FC<LogCycleProps> = ({ childId, childName, onSucces
       };
 
       // Use parent endpoint to log cycle for child
-      const response = await fetch(`http://localhost:5001/api/parents/children/${childId}/cycle-logs`, {
+      const response = await fetch(`${API_BASE_URL}/api/parents/children/${childId}/cycle-logs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -37,7 +37,8 @@ def get_children():
                     'name': adolescent_user.name,
                     'phone_number': adolescent_user.phone_number,
                     'date_of_birth': adolescent.date_of_birth.isoformat() if adolescent.date_of_birth else None,
-                    'relationship': relation.relationship_type
+                    'relationship': relation.relationship_type,
+                    'parent_access_enabled': adolescent_user.allow_parent_access
                 })
     
     return jsonify(children), 200
@@ -65,6 +66,10 @@ def get_child(adolescent_id):
     # Get adolescent details
     adolescent = Adolescent.query.get(adolescent_id)
     adolescent_user = User.query.get(adolescent.user_id)
+    
+    # Check if child allows parent access
+    if not adolescent_user.allow_parent_access:
+        return jsonify({'message': 'Access denied: Child has disabled parent access to their account'}), 403
     
     # Format the response
     child_data = {
@@ -276,8 +281,13 @@ def get_child_cycle_logs(adolescent_id):
     if not relation:
         return jsonify({'message': 'Child not found or not associated with this parent'}), 404
     
-    # Get adolescent user ID
+    # Get adolescent and check parent access permission
     adolescent = Adolescent.query.get(adolescent_id)
+    child_user = User.query.get(adolescent.user_id)
+    
+    # Check if child allows parent access
+    if not child_user.allow_parent_access:
+        return jsonify({'message': 'Access denied: Child has disabled parent access to their account'}), 403
     adolescent_user_id = adolescent.user_id
     
     # Get cycle logs for the adolescent
@@ -339,24 +349,44 @@ def create_child_cycle_log(adolescent_id):
     data = request.get_json()
     
     # Validate required fields
-    if 'start_date' not in data:
-        return jsonify({'message': 'Start date is required'}), 400
+    if not data.get('start_date'):
+        return jsonify({'message': 'Start date is required and cannot be null'}), 400
     
     try:
         from app.models import CycleLog, Notification
         
-        # Parse dates
-        start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
+        # Parse dates with proper null checks
+        start_date_str = str(data['start_date'])
+        if 'Z' in start_date_str:
+            start_date_str = start_date_str.replace('Z', '+00:00')
+            
+        start_date = datetime.fromisoformat(start_date_str)
         end_date = None
         if 'end_date' in data and data['end_date']:
-            end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+            end_date_str = str(data['end_date']).replace('Z', '+00:00')
+            end_date = datetime.fromisoformat(end_date_str)
         
-        # Prepare symptoms: accept list or string
+        # Prepare symptoms: accept list or string with proper null handling
         symptoms_raw = data.get('symptoms')
-        if isinstance(symptoms_raw, list):
-            symptoms_str = ','.join(symptoms_raw)
-        else:
-            symptoms_str = symptoms_raw
+        symptoms_str = None
+        if symptoms_raw:
+            if isinstance(symptoms_raw, list):
+                # Filter out empty strings and convert to string
+                symptoms_list = [str(s).strip() for s in symptoms_raw if s and str(s).strip()]
+                symptoms_str = ','.join(symptoms_list) if symptoms_list else None
+            elif isinstance(symptoms_raw, str) and symptoms_raw.strip():
+                symptoms_str = symptoms_raw.strip()
+        
+        # Prepare exercise activities: accept list or string
+        exercise_raw = data.get('exercise_activities')
+        exercise_str = None
+        if exercise_raw:
+            if isinstance(exercise_raw, list):
+                # Filter out empty strings and convert to string
+                exercise_list = [str(e).strip() for e in exercise_raw if e and str(e).strip()]
+                exercise_str = ','.join(exercise_list) if exercise_list else None
+            elif isinstance(exercise_raw, str) and exercise_raw.strip():
+                exercise_str = exercise_raw.strip()
         
         # Create new cycle log for the child (NOT the parent)
         new_log = CycleLog(
@@ -366,7 +396,13 @@ def create_child_cycle_log(adolescent_id):
             cycle_length=data.get('cycle_length'),
             period_length=data.get('period_length'),
             symptoms=symptoms_str,
-            notes=data.get('notes')
+            notes=data.get('notes'),
+            # Enhanced wellness tracking
+            mood=data.get('mood'),
+            energy_level=data.get('energy_level'),
+            sleep_quality=data.get('sleep_quality'),
+            stress_level=data.get('stress_level'),
+            exercise_activities=exercise_str
         )
         
         db.session.add(new_log)
@@ -382,8 +418,9 @@ def create_child_cycle_log(adolescent_id):
             # Create notification for the child
             notification = Notification(
                 user_id=adolescent_user_id,  # Notify the child
+                title='Cycle Prediction',
                 message=f"Your next period is predicted to start on {next_cycle_date.strftime('%Y-%m-%d')}",
-                notification_type='cycle'
+                type='cycle'
             )
             
             db.session.add(notification)
@@ -476,8 +513,14 @@ def get_child_appointments(adolescent_id):
     if not relation:
         return jsonify({'message': 'Child not found or not associated with this parent'}), 404
     
-    # Get adolescent user ID
+    # Get adolescent and check parent access permission
     adolescent = Adolescent.query.get(adolescent_id)
+    child_user = User.query.get(adolescent.user_id)
+    
+    # Check if child allows parent access
+    if not child_user.allow_parent_access:
+        return jsonify({'message': 'Access denied: Child has disabled parent access to their account'}), 403
+    
     adolescent_user_id = adolescent.user_id
     
     # Get appointments for the adolescent
