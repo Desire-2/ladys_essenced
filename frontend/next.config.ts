@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Disable SWC minification to avoid SIGBUS errors on some systems
+  swcMinify: false,
+  
   async rewrites() {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
     

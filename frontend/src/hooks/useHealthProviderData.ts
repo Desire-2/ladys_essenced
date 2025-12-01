@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { healthProviderAPI } from '../api';
+import { healthProviderAPI, buildHealthProviderApiUrl } from '../api';
 import { handleApiResponse } from '../utils/health-provider';
 import type { 
   ProviderStats, 

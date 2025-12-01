@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { buildHealthProviderApiUrl } from '../../utils/apiConfig';
+import { healthProviderAPI, buildHealthProviderApiUrl } from '../../api';
 
 interface Notification {
   id: number;

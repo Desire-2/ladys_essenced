@@ -22,18 +22,22 @@ export function useParentChildData() {
         console.log('🔍 useParentChildData: Making API call for parent viewing child appointments');
         const response = await (appointmentAPI.getUpcoming as any)(childUserId);
         console.log('🔍 useParentChildData: Response received:', response.data);
-        return response.data;
+        const data = response.data;
+        return Array.isArray(data) ? data : [];
       } else {
         // For non-parents, just get their own appointments
         console.log('🔍 useParentChildData: Making API call for own appointments');
         const response = await appointmentAPI.getUpcoming();
         console.log('🔍 useParentChildData: Response received:', response.data);
-        return response.data;
+        const data = response.data;
+        return Array.isArray(data) ? data : [];
       }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to load appointments';
+      console.error('Error in getAppointmentsForChild:', errorMessage);
       setError(errorMessage);
-      throw new Error(errorMessage);
+      // Return empty array instead of throwing to prevent filter errors
+      return [];
     } finally {
       setLoading(false);
     }
@@ -48,16 +52,20 @@ export function useParentChildData() {
         // Use the general meal API with user_id parameter
         // This will trigger the parent-child validation in the backend
         const response = await (mealAPI.getLogs as any)(1, 5, {}, childUserId);
-        return response.data.logs || [];
+        const data = response.data.logs;
+        return Array.isArray(data) ? data : [];
       } else {
         // For non-parents, just get their own meals
         const response = await mealAPI.getLogs(1, 5, {});
-        return response.data.logs || [];
+        const data = response.data.logs;
+        return Array.isArray(data) ? data : [];
       }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to load meals';
+      console.error('Error in getMealsForChild:', errorMessage);
       setError(errorMessage);
-      throw new Error(errorMessage);
+      // Return empty array instead of throwing to prevent filter errors
+      return [];
     } finally {
       setLoading(false);
     }
@@ -72,16 +80,18 @@ export function useParentChildData() {
         // Use the general cycle API with user_id parameter
         // This will trigger the parent-child validation in the backend
         const response = await (cycleAPI.getStats as any)(childUserId);
-        return response.data;
+        return response.data || {};
       } else {
         // For non-parents, just get their own cycle data
         const response = await cycleAPI.getStats();
-        return response.data;
+        return response.data || {};
       }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to load cycle data';
+      console.error('Error in getCycleDataForChild:', errorMessage);
       setError(errorMessage);
-      throw new Error(errorMessage);
+      // Return empty object instead of throwing
+      return {};
     } finally {
       setLoading(false);
     }

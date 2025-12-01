@@ -408,4 +408,7 @@ export const healthProviderAPI = {
   },
 };
 
+// Export utility functions for building API URLs
+export { buildHealthProviderApiUrl } from '../utils/apiConfig';
+
 export default api;

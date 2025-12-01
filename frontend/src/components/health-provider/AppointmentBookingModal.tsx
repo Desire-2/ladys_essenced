@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { buildHealthProviderApiUrl } from '../../utils/apiConfig';
+import { appointmentAPI, buildHealthProviderApiUrl } from '../../api';
 import { handleApiResponse } from '../../utils/health-provider';
 import type { HealthProvider, TimeSlot } from '../../types/health-provider';
 

@@ -148,24 +148,36 @@ export function useDashboardData() {
     try {
       console.log('Loading recent meals for user:', selectedChild || 'current user');
       
-      let meals = [];
+      let meals: any[] = [];
       
       if (selectedChild && hasRole('parent')) {
         // Use parent-child aware method for parent viewing child data
-        meals = await getMealsForChild(selectedChild);
+        try {
+          const result = await getMealsForChild(selectedChild);
+          meals = Array.isArray(result) ? result : [];
+        } catch (childErr: any) {
+          console.error('Error loading meals for child:', childErr);
+          // Set error but keep meals as empty array
+          setDataError('meals', childErr.message || 'Failed to load meals for child');
+          meals = [];
+        }
       } else {
         // Use regular API for self or when no child selected
         const mealsResponse = await (mealAPI.getLogs as any)(1, 5, {}, selectedChild);
-        meals = mealsResponse.data.logs || [];
+        const data = mealsResponse.data.logs;
+        meals = Array.isArray(data) ? data : [];
       }
       
-      setRecentMeals(meals);
+      // Always ensure meals is an array before setting
+      setRecentMeals(Array.isArray(meals) ? meals : []);
       setDataAvailable('meals', true);
       console.log('Meals loaded:', meals);
     } catch (err: any) {
       console.error('Failed to load meals:', err);
       setDataError('meals', err.response?.data?.message || err.message || 'Failed to load meal logs');
       setDataAvailable('meals', false);
+      // Ensure empty array is set on error
+      setRecentMeals([]);
     } finally {
       setDataLoading('meals', false);
     }
@@ -193,7 +205,7 @@ export function useDashboardData() {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
       
-      let appointments = [];
+      let appointments: any[] = [];
       
       console.log('🔍 useDashboardData: selectedChild:', selectedChild);
       console.log('🔍 useDashboardData: hasRole("parent"):', hasRole('parent'));
@@ -201,15 +213,25 @@ export function useDashboardData() {
       if (selectedChild && hasRole('parent')) {
         // Use parent-child aware method for parent viewing child data
         console.log('🔍 useDashboardData: Using parent-child method for selectedChild:', selectedChild);
-        appointments = await getAppointmentsForChild(selectedChild);
+        try {
+          const result = await getAppointmentsForChild(selectedChild);
+          appointments = Array.isArray(result) ? result : [];
+        } catch (childErr: any) {
+          console.error('Error loading appointments for child:', childErr);
+          // Set error but keep appointments as empty array
+          setDataError('appointments', childErr.message || 'Failed to load appointments for child');
+          appointments = [];
+        }
       } else {
         // Use regular API for self or when no child selected
         console.log('🔍 useDashboardData: Using regular API with selectedChild:', selectedChild);
         const appointmentsResponse = await (appointmentAPI.getUpcoming as any)(selectedChild);
-        appointments = appointmentsResponse.data || [];
+        const data = appointmentsResponse.data;
+        appointments = Array.isArray(data) ? data : [];
       }
       
-      setUpcomingAppointments(appointments);
+      // Always ensure appointments is an array before setting
+      setUpcomingAppointments(Array.isArray(appointments) ? appointments : []);
       setDataAvailable('appointments', true);
       
       console.log('Appointments loaded successfully:', appointments.length, 'appointments found');
