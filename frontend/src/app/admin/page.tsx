@@ -299,7 +299,9 @@ export default function AdminDashboard() {
   }, []);
 
   const buildApiUrl = useCallback((endpoint: string, params?: Record<string, any>) => {
-    const url = new URL(`/api/admin${endpoint}`, API_BASE_URL || window.location.origin);
+    // Always use the backend URL directly for admin API calls (port 5001)
+    const backendUrl = API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+    const url = new URL(`/api/admin${endpoint}`, backendUrl);
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== '') {
@@ -473,6 +475,7 @@ export default function AdminDashboard() {
   const loadAnalytics = useCallback(async (reportType = 'user_activity') => {
     try {
       setTabLoading(true);
+      setError(''); // Clear any previous errors
       
       const data = await makeApiCall(buildApiUrl('/analytics/generate'), {
         method: 'POST',
@@ -486,11 +489,15 @@ export default function AdminDashboard() {
       setAnalytics(data);
     } catch (err: any) {
       console.error('Failed to load analytics:', err);
-      showToast('error', err.message || 'Failed to load analytics');
+      const errorMessage = err.message || 'Failed to load analytics';
+      setError(errorMessage);
+      showToast('error', errorMessage);
+      // Set empty analytics data on error
+      setAnalytics({ report_type: reportType, data: [] });
     } finally {
       setTabLoading(false);
     }
-  }, [makeApiCall, showToast]);
+  }, [makeApiCall, showToast, buildApiUrl]);
 
   // === COURSE MANAGEMENT FUNCTIONS ===
 

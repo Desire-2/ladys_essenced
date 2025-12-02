@@ -49,10 +49,18 @@ def admin_required(f):
                 from app import db
                 import json
                 current_app.logger.warning(f"Admin profile missing for user {current_user.id}, creating now...")
+                # Create with all permissions in object format to match database schema
+                default_permissions = {
+                    "manage_users": True,
+                    "manage_content": True,
+                    "view_analytics": True,
+                    "manage_appointments": True,
+                    "view_system_logs": True,
+                    "all": True
+                }
                 admin_profile = Admin(
                     user_id=current_user.id,
-                    permissions=json.dumps(['all']),
-                    is_super_admin=False
+                    permissions=json.dumps(default_permissions)
                 )
                 db.session.add(admin_profile)
                 db.session.commit()
@@ -181,16 +189,30 @@ def check_permissions(required_permissions):
             
             try:
                 import json
-                user_permissions = json.loads(g.admin_profile.permissions or '[]')
+                permissions_str = g.admin_profile.permissions or '{}'
+                user_permissions = json.loads(permissions_str)
                 
-                # Check if user has 'all' permissions or specific required permissions
-                if 'all' in user_permissions:
-                    return f(*args, **kwargs)
+                current_app.logger.info(f"Checking permissions: required={required_permissions}, user_has={user_permissions}")
                 
-                if not all(perm in user_permissions for perm in required_permissions):
-                    return jsonify({'error': 'Insufficient permissions'}), 403
+                # Handle both array format ['all', 'manage_users'] and object format {'all': true, 'manage_users': true}
+                if isinstance(user_permissions, dict):
+                    # Check if user has 'all' permission set to true
+                    if user_permissions.get('all') is True:
+                        return f(*args, **kwargs)
+                    
+                    # Check if all required permissions are set to true
+                    if all(user_permissions.get(perm) is True for perm in required_permissions):
+                        return f(*args, **kwargs)
+                elif isinstance(user_permissions, list):
+                    # Legacy array format support
+                    if 'all' in user_permissions:
+                        return f(*args, **kwargs)
+                    
+                    if all(perm in user_permissions for perm in required_permissions):
+                        return f(*args, **kwargs)
                 
-                return f(*args, **kwargs)
+                current_app.logger.warning(f"Permission denied: user lacks {required_permissions}")
+                return jsonify({'error': 'Insufficient permissions'}), 403
                 
             except Exception as e:
                 current_app.logger.error(f"Permission check error: {str(e)}")

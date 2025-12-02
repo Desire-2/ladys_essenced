@@ -1479,9 +1479,16 @@ def generate_analytics():
         start_date_str = data.get('start_date')
         end_date_str = data.get('end_date')
         
-        # Parse dates
-        start_date = datetime.fromisoformat(start_date_str) if start_date_str else datetime.now() - timedelta(days=30)
-        end_date = datetime.fromisoformat(end_date_str) if end_date_str else datetime.now()
+        # Parse dates - handle 'Z' suffix for UTC timezone
+        def parse_iso_date(date_str):
+            if not date_str:
+                return None
+            # Replace 'Z' with '+00:00' for proper ISO format parsing
+            date_str = date_str.replace('Z', '+00:00')
+            return datetime.fromisoformat(date_str)
+        
+        start_date = parse_iso_date(start_date_str) if start_date_str else datetime.now() - timedelta(days=30)
+        end_date = parse_iso_date(end_date_str) if end_date_str else datetime.now()
         
         if report_type == 'user_activity':
             # Generate user activity analytics
@@ -1530,5 +1537,7 @@ def generate_analytics():
             return jsonify({'error': 'Invalid report type'}), 400
             
     except Exception as e:
-        current_app.logger.error(f"Error generating analytics: {str(e)}")
-        return jsonify({'error': 'Failed to generate analytics'}), 500
+        import traceback
+        error_traceback = traceback.format_exc()
+        current_app.logger.error(f"Error generating analytics: {str(e)}\nTraceback:\n{error_traceback}")
+        return jsonify({'error': f'Failed to generate analytics: {str(e)}'}), 500
