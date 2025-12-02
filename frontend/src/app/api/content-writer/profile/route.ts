@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
     const response = await fetch(`${backendUrl}/api/content-writer/profile`, {
       method: 'GET',
       headers: {
@@ -50,7 +50,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
     
     const response = await fetch(`${backendUrl}/api/content-writer/profile`, {
       method: 'PUT',

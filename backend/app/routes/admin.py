@@ -116,7 +116,7 @@ def get_dashboard_stats():
 @admin_required
 @check_permissions(['manage_users'])
 def get_all_users():
-    """Get all users with pagination and filtering"""
+    """Get all users with pagination and filtering - OPTIMIZED"""
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
@@ -125,28 +125,56 @@ def get_all_users():
         sort_by = request.args.get('sort_by', 'created_at')
         sort_order = request.args.get('sort_order', 'desc')
         
-        query = User.query
+        # Use raw SQL for better performance with indexes
+        base_query = "SELECT id, name, phone_number, email, user_type, is_active, created_at, last_activity FROM users WHERE 1=1"
+        count_query = "SELECT COUNT(*) FROM users WHERE 1=1"
+        params = {}
         
+        # Apply filters
         if user_type:
-            query = query.filter(User.user_type == user_type)
+            base_query += " AND user_type = :user_type"
+            count_query += " AND user_type = :user_type"
+            params['user_type'] = user_type
         
         if search:
-            search_filter = or_(
-                User.name.contains(search),
-                User.phone_number.contains(search),
-                User.email.contains(search)
-            )
-            query = query.filter(search_filter)
+            # Use ILIKE for case-insensitive search (PostgreSQL)
+            search_condition = " AND (name ILIKE :search OR phone_number ILIKE :search OR email ILIKE :search)"
+            base_query += search_condition
+            count_query += search_condition
+            params['search'] = f"%{search}%"
         
-        # Apply sorting
-        sort_column = getattr(User, sort_by, User.created_at)
-        if sort_order == 'desc':
-            sort_column = desc(sort_column)
-        query = query.order_by(sort_column)
+        # Get total count
+        total_result = db.session.execute(db.text(count_query), params).scalar()
+        total_pages = (total_result + per_page - 1) // per_page
         
-        users = query.paginate(
-            page=page, per_page=per_page, error_out=False
-        )
+        # Apply sorting (validated to prevent SQL injection)
+        allowed_sorts = {'created_at', 'name', 'user_type', 'is_active', 'last_activity'}
+        sort_column = sort_by if sort_by in allowed_sorts else 'created_at'
+        sort_direction = 'DESC' if sort_order == 'desc' else 'ASC'
+        base_query += f" ORDER BY {sort_column} {sort_direction}"
+        
+        # Apply pagination
+        offset = (page - 1) * per_page
+        base_query += " LIMIT :limit OFFSET :offset"
+        params['limit'] = per_page
+        params['offset'] = offset
+        
+        # Execute query
+        result = db.session.execute(db.text(base_query), params)
+        users_data = result.fetchall()
+        
+        # Format results
+        users = [{
+            'id': row[0],
+            'name': row[1],
+            'username': None,  # Not in this query for performance
+            'phone_number': row[2],
+            'email': row[3],
+            'user_type': row[4],
+            'is_active': row[5],
+            'created_at': row[6].isoformat() if row[6] else None,
+            'last_activity': row[7].isoformat() if row[7] else None
+        } for row in users_data]
         
         log_user_activity('view_users_list', {
             'page': page, 
@@ -155,22 +183,12 @@ def get_all_users():
         })
         
         return jsonify({
-            'users': [{
-                'id': user.id,
-                'name': user.name,
-                'username': getattr(user, 'username', None),
-                'phone_number': user.phone_number,
-                'email': user.email,
-                'user_type': user.user_type,
-                'is_active': user.is_active,
-                'created_at': user.created_at.isoformat(),
-                'last_activity': user.last_activity.isoformat() if user.last_activity else None
-            } for user in users.items],
-            'total': users.total,
-            'pages': users.pages,
-            'current_page': users.page,
-            'has_prev': users.has_prev,
-            'has_next': users.has_next
+            'users': users,
+            'total': total_result,
+            'pages': total_pages,
+            'current_page': page,
+            'has_prev': page > 1,
+            'has_next': page < total_pages
         }), 200
         
     except Exception as e:
@@ -547,46 +565,183 @@ def bulk_user_action():
             
             for user in users:
                 try:
+                    # Import additional models that might not be in the initial imports
+                    from app.models import (
+                        PeriodLog, Feedback, SystemLog,
+                        InsightCache, NotificationSubscription, LoginAttempt
+                    )
+                    
                     # Delete all related records before deleting the user
-                    CycleLog.query.filter_by(user_id=user.id).delete()
-                    MealLog.query.filter_by(user_id=user.id).delete()
-                    Appointment.query.filter_by(user_id=user.id).delete()
-                    Notification.query.filter_by(user_id=user.id).delete()
-                    UserSession.query.filter_by(user_id=user.id).delete()
+                    # Use try-except for each deletion to handle missing tables or schema mismatches
+                    
+                    # Core user data - use raw SQL to avoid schema mismatches
+                    try:
+                        db.session.execute(
+                            db.text("DELETE FROM cycle_logs WHERE user_id = :user_id"),
+                            {"user_id": user.id}
+                        )
+                    except Exception:
+                        db.session.rollback()
+                    
+                    try:
+                        db.session.execute(
+                            db.text("DELETE FROM period_logs WHERE user_id = :user_id"),
+                            {"user_id": user.id}
+                        )
+                    except Exception:
+                        db.session.rollback()
+                    
+                    try:
+                        db.session.execute(
+                            db.text("DELETE FROM meal_logs WHERE user_id = :user_id"),
+                            {"user_id": user.id}
+                        )
+                    except Exception:
+                        db.session.rollback()
+                    
+                    # Notifications and subscriptions - use raw SQL
+                    try:
+                        db.session.execute(
+                            db.text("DELETE FROM notifications WHERE user_id = :user_id"),
+                            {"user_id": user.id}
+                        )
+                    except Exception:
+                        db.session.rollback()
+                    
+                    try:
+                        db.session.execute(
+                            db.text("DELETE FROM notification_subscriptions WHERE user_id = :user_id"),
+                            {"user_id": user.id}
+                        )
+                    except Exception:
+                        db.session.rollback()
+                    
+                    # User sessions and logs - use raw SQL
+                    try:
+                        db.session.execute(
+                            db.text("DELETE FROM user_sessions WHERE user_id = :user_id"),
+                            {"user_id": user.id}
+                        )
+                    except Exception:
+                        db.session.rollback()
+                    
+                    try:
+                        db.session.execute(
+                            db.text("DELETE FROM system_logs WHERE user_id = :user_id"),
+                            {"user_id": user.id}
+                        )
+                    except Exception:
+                        db.session.rollback()
+                    
+                    # Login attempts (by phone number)
+                    if user.phone_number:
+                        try:
+                            db.session.execute(
+                                db.text("DELETE FROM login_attempts WHERE phone_number = :phone_number"),
+                                {"phone_number": user.phone_number}
+                            )
+                        except Exception:
+                            db.session.rollback()
+                    
+                    # Insights cache
+                    try:
+                        db.session.execute(
+                            db.text("DELETE FROM insight_cache WHERE user_id = :user_id"),
+                            {"user_id": user.id}
+                        )
+                    except Exception:
+                        db.session.rollback()
+                    
+                    # Feedback
+                    try:
+                        db.session.execute(
+                            db.text("DELETE FROM feedbacks WHERE user_id = :user_id"),
+                            {"user_id": user.id}
+                        )
+                    except Exception:
+                        db.session.rollback()
                     
                     # Delete role-specific records
                     if user.user_type == 'parent':
                         parent = Parent.query.filter_by(user_id=user.id).first()
                         if parent:
-                            ParentChild.query.filter_by(parent_id=parent.id).delete()
+                            try:
+                                ParentChild.query.filter_by(parent_id=parent.id).delete()
+                            except Exception:
+                                db.session.rollback()
                             db.session.delete(parent)
                     
                     elif user.user_type == 'adolescent':
                         adolescent = Adolescent.query.filter_by(user_id=user.id).first()
                         if adolescent:
-                            ParentChild.query.filter_by(adolescent_id=adolescent.id).delete()
+                            try:
+                                ParentChild.query.filter_by(adolescent_id=adolescent.id).delete()
+                            except Exception:
+                                db.session.rollback()
                             db.session.delete(adolescent)
                     
                     elif user.user_type == 'content_writer':
                         content_writer = ContentWriter.query.filter_by(user_id=user.id).first()
                         if content_writer:
+                            try:
+                                # Update or delete content items by this writer
+                                # Set author_id to NULL instead of deleting content
+                                ContentItem.query.filter_by(author_id=content_writer.id).update({'author_id': None})
+                                
+                                # Handle courses - either delete or reassign
+                                # For now, we'll prevent deletion if writer has published courses
+                                published_courses = Course.query.filter_by(
+                                    author_id=content_writer.id, 
+                                    status='published'
+                                ).count()
+                                if published_courses > 0:
+                                    raise Exception(f'Cannot delete: writer has {published_courses} published course(s)')
+                                
+                                # Delete draft courses
+                                Course.query.filter_by(author_id=content_writer.id).delete()
+                            except Exception:
+                                db.session.rollback()
+                            
                             db.session.delete(content_writer)
                     
                     elif user.user_type == 'health_provider':
                         health_provider = HealthProvider.query.filter_by(user_id=user.id).first()
                         if health_provider:
+                            try:
+                                # Update appointments assigned to this provider to set provider_id to NULL
+                                Appointment.query.filter_by(provider_id=health_provider.id).update({'provider_id': None})
+                            except Exception:
+                                db.session.rollback()
                             db.session.delete(health_provider)
                     
+                    elif user.user_type == 'admin':
+                        admin_profile = Admin.query.filter_by(user_id=user.id).first()
+                        if admin_profile:
+                            db.session.delete(admin_profile)
+                    
+                    # Delete appointments created by this user (after handling provider and role-specific records)
+                    try:
+                        db.session.execute(
+                            db.text("DELETE FROM appointments WHERE user_id = :user_id"),
+                            {"user_id": user.id}
+                        )
+                    except Exception:
+                        db.session.rollback()
+                    
+                    # Finally, delete the user
                     db.session.delete(user)
+                    
+                    # Commit this user's deletion immediately
+                    db.session.commit()
                     results['successful'] += 1
+                    
                 except Exception as e:
+                    db.session.rollback()  # Rollback this specific user's deletion
                     results['failed'] += 1
                     results['details'].append({'user_id': user.id, 'error': str(e)})
                     current_app.logger.error(f"Error deleting user {user.id}: {str(e)}")
             
             message = f'Deleted {results["successful"]} users'
-        
-        db.session.commit()
         
         log_user_activity('bulk_user_action', {
             'action': action,

@@ -85,6 +85,16 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
+    # Database connection pooling and optimization
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_size': 10,  # Number of connections to keep open
+        'pool_recycle': 3600,  # Recycle connections after 1 hour
+        'pool_pre_ping': True,  # Verify connections before using
+        'max_overflow': 20,  # Allow up to 20 additional connections when pool is full
+        'pool_timeout': 30,  # Wait up to 30 seconds for a connection
+        'echo': False,  # Set to True for SQL query logging (dev only)
+    }
+    
     # JWT Configuration with debug info
     jwt_secret = os.environ.get('JWT_SECRET_KEY', 'dev-secret-key')
     print(f"JWT_SECRET_KEY loaded: {jwt_secret[:10]}..." if jwt_secret else "JWT_SECRET_KEY not found!")
@@ -102,6 +112,10 @@ def create_app():
     migrate.init_app(app, db)
     jwt.init_app(app)
     bcrypt.init_app(app)
+    
+    # Initialize performance monitoring
+    from app.utils.performance import init_performance_monitoring
+    init_performance_monitoring(app)
     
     # JWT error handlers
     @jwt.expired_token_loader

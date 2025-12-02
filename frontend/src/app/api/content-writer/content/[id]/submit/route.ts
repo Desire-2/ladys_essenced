@@ -13,7 +13,7 @@ export async function PATCH(
       );
     }
 
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
     const { id } = await params;
     
     const response = await fetch(`${backendUrl}/api/content-writer/content/${id}/submit`, {

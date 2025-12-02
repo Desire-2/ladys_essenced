@@ -14,7 +14,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
     const { id } = await params;
     
     const response = await fetch(`${backendUrl}/api/content-writer/content/${id}`, {
@@ -59,7 +59,7 @@ export async function DELETE(
       );
     }
 
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
     const { id } = await params;
     
     const response = await fetch(`${backendUrl}/api/content-writer/content/${id}`, {

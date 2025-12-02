@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Proxy to backend API
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
     const response = await fetch(`${backendUrl}/api/content-writer/dashboard/stats`, {
       method: 'GET',
       headers: {

@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   try {
     // Forward the JWT token if present
     const token = req.headers.get('authorization') || '';
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5001';
     const res = await fetch(`${backendUrl}/api/health-provider/dashboard/stats`, {
       method: 'GET',
       headers: {

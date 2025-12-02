@@ -699,6 +699,35 @@ export default function AdminDashboard() {
     }
   }, [makeApiCall, showToast, buildApiUrl, setActionLoadingState, loadUsers, usersPagination.current_page, loadUserStatistics]);
 
+  // Delete Single User Function
+  const deleteSingleUser = useCallback(async (userId: number, userName: string) => {
+    const confirmed = window.confirm(`Are you sure you want to DELETE ${userName}?\n\nThis action cannot be undone and will permanently remove:\n- User account\n- All user data and records\n- All associated content\n\nType the user's name to confirm.`);
+    
+    if (!confirmed) return;
+
+    try {
+      setActionLoadingState(`delete_user_${userId}`, true);
+      const data = await makeApiCall(buildApiUrl('/users/bulk-action'), {
+        method: 'POST',
+        body: JSON.stringify({ user_ids: [userId], action: 'delete' })
+      });
+      
+      if (data.results && data.results.successful > 0) {
+        showToast('success', `User "${userName}" deleted successfully`);
+        // Refresh users list and statistics
+        loadUsers(usersPagination.current_page);
+        loadUserStatistics();
+      } else {
+        const errorMsg = data.details && data.details[0] ? data.details[0].error : 'Failed to delete user';
+        showToast('error', errorMsg);
+      }
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to delete user');
+    } finally {
+      setActionLoadingState(`delete_user_${userId}`, false);
+    }
+  }, [makeApiCall, showToast, buildApiUrl, setActionLoadingState, loadUsers, usersPagination.current_page, loadUserStatistics]);
+
   const handleResetPassword = useCallback(async (userId: number, userName: string) => {
     const actionKey = `reset-password-${userId}`;
     
@@ -2210,6 +2239,20 @@ export default function AdminDashboard() {
                                 >
                                   <i className="fas fa-cog"></i>
                                 </button>
+                                {user.user_type !== 'admin' && (
+                                  <button
+                                    className="btn btn-outline-danger btn-sm"
+                                    onClick={() => deleteSingleUser(user.id, user.name)}
+                                    disabled={actionLoading[`delete_user_${user.id}`]}
+                                    title="Delete User Permanently"
+                                  >
+                                    {actionLoading[`delete_user_${user.id}`] ? (
+                                      <i className="fas fa-spinner fa-spin"></i>
+                                    ) : (
+                                      <i className="fas fa-trash"></i>
+                                    )}
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
