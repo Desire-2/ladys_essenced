@@ -1472,10 +1472,10 @@ def get_system_logs():
 @admin_required
 @check_permissions(['view_analytics'])
 def generate_analytics():
-    """Generate analytics report"""
+    """Generate comprehensive analytics report"""
     try:
         data = request.get_json()
-        report_type = data.get('report_type', 'user_activity')
+        report_type = data.get('report_type', 'overview')
         start_date_str = data.get('start_date')
         end_date_str = data.get('end_date')
         
@@ -1490,47 +1490,337 @@ def generate_analytics():
         start_date = parse_iso_date(start_date_str) if start_date_str else datetime.now() - timedelta(days=30)
         end_date = parse_iso_date(end_date_str) if end_date_str else datetime.now()
         
-        if report_type == 'user_activity':
-            # Generate user activity analytics
-            daily_active_users = db.session.query(
+        # ========== OVERVIEW REPORT ==========
+        if report_type == 'overview':
+            # Comprehensive overview of all system metrics
+            total_users = User.query.filter(User.created_at <= end_date).count()
+            new_users = User.query.filter(User.created_at.between(start_date, end_date)).count()
+            active_users = User.query.filter(
+                User.last_activity.between(start_date, end_date)
+            ).count()
+            
+            # User type breakdown
+            user_types = db.session.query(
+                User.user_type,
+                func.count(User.id).label('count')
+            ).filter(User.created_at <= end_date).group_by(User.user_type).all()
+            
+            # Content stats
+            total_content = ContentItem.query.filter(ContentItem.created_at <= end_date).count()
+            published_content = ContentItem.query.filter(
+                ContentItem.created_at <= end_date,
+                ContentItem.status == 'published'
+            ).count()
+            new_content = ContentItem.query.filter(
+                ContentItem.created_at.between(start_date, end_date)
+            ).count()
+            
+            # Appointment stats
+            total_appointments = Appointment.query.filter(Appointment.created_at <= end_date).count()
+            pending_appointments = Appointment.query.filter(
+                Appointment.created_at <= end_date,
+                Appointment.status == 'pending'
+            ).count()
+            new_appointments = Appointment.query.filter(
+                Appointment.created_at.between(start_date, end_date)
+            ).count()
+            
+            # Health tracking stats
+            cycle_logs_count = CycleLog.query.filter(
+                CycleLog.created_at.between(start_date, end_date)
+            ).count()
+            meal_logs_count = MealLog.query.filter(
+                MealLog.created_at.between(start_date, end_date)
+            ).count()
+            
+            return jsonify({
+                'report_type': 'overview',
+                'period': {
+                    'start': start_date.isoformat(),
+                    'end': end_date.isoformat()
+                },
+                'summary': {
+                    'total_users': total_users,
+                    'new_users': new_users,
+                    'active_users': active_users,
+                    'total_content': total_content,
+                    'published_content': published_content,
+                    'new_content': new_content,
+                    'total_appointments': total_appointments,
+                    'pending_appointments': pending_appointments,
+                    'new_appointments': new_appointments,
+                    'cycle_logs': cycle_logs_count,
+                    'meal_logs': meal_logs_count
+                },
+                'user_types': [{'type': ut[0], 'count': ut[1]} for ut in user_types]
+            }), 200
+        
+        # ========== USER ACTIVITY REPORT ==========
+        elif report_type == 'user_activity':
+            # Daily active users
+            daily_active = db.session.query(
                 func.date(User.last_activity).label('date'),
                 func.count(User.id).label('count')
             ).filter(
                 User.last_activity.between(start_date, end_date)
-            ).group_by(func.date(User.last_activity)).all()
+            ).group_by(func.date(User.last_activity)).order_by('date').all()
+            
+            # Most active users
+            most_active = db.session.query(
+                User.id,
+                User.name,
+                User.user_type,
+                User.last_activity
+            ).filter(
+                User.last_activity.between(start_date, end_date)
+            ).order_by(desc(User.last_activity)).limit(10).all()
             
             return jsonify({
                 'report_type': 'user_activity',
-                'data': [{'date': str(item.date), 'count': item.count} for item in daily_active_users]
+                'data': [{'date': str(item.date), 'count': item.count} for item in daily_active],
+                'most_active_users': [{
+                    'id': u[0],
+                    'name': u[1],
+                    'user_type': u[2],
+                    'last_activity': u[3].isoformat() if u[3] else None
+                } for u in most_active]
             }), 200
         
-        elif report_type == 'content_performance':
-            # Generate content performance analytics
-            content_views = ContentItem.query.filter(
-                ContentItem.created_at.between(start_date, end_date)
-            ).order_by(desc(ContentItem.views)).limit(10).all()
-            
-            return jsonify({
-                'report_type': 'content_performance',
-                'data': [{
-                    'id': item.id,
-                    'title': item.title,
-                    'views': getattr(item, 'views', 0)
-                } for item in content_views]
-            }), 200
-        
+        # ========== USER REGISTRATIONS REPORT ==========
         elif report_type == 'user_registrations':
-            # Generate user registration analytics
+            # Daily registrations
             daily_registrations = db.session.query(
                 func.date(User.created_at).label('date'),
                 func.count(User.id).label('count')
             ).filter(
                 User.created_at.between(start_date, end_date)
-            ).group_by(func.date(User.created_at)).all()
+            ).group_by(func.date(User.created_at)).order_by('date').all()
+            
+            # Registrations by user type
+            by_type = db.session.query(
+                User.user_type,
+                func.count(User.id).label('count')
+            ).filter(
+                User.created_at.between(start_date, end_date)
+            ).group_by(User.user_type).all()
+            
+            # Recent registrations
+            recent_users = User.query.filter(
+                User.created_at.between(start_date, end_date)
+            ).order_by(desc(User.created_at)).limit(20).all()
             
             return jsonify({
                 'report_type': 'user_registrations',
-                'data': [{'date': str(item.date), 'count': item.count} for item in daily_registrations]
+                'data': [{'date': str(item.date), 'count': item.count} for item in daily_registrations],
+                'by_type': [{'user_type': ut[0], 'count': ut[1]} for ut in by_type],
+                'recent_users': [{
+                    'id': u.id,
+                    'name': u.name,
+                    'user_type': u.user_type,
+                    'created_at': u.created_at.isoformat()
+                } for u in recent_users]
+            }), 200
+        
+        # ========== CONTENT PERFORMANCE REPORT ==========
+        elif report_type == 'content_performance':
+            # Top content by views
+            top_content = ContentItem.query.filter(
+                ContentItem.created_at <= end_date
+            ).order_by(desc(ContentItem.views)).limit(15).all()
+            
+            # Content by status
+            content_status = db.session.query(
+                ContentItem.status,
+                func.count(ContentItem.id).label('count')
+            ).filter(
+                ContentItem.created_at <= end_date
+            ).group_by(ContentItem.status).all()
+            
+            # Content created over time
+            content_timeline = db.session.query(
+                func.date(ContentItem.created_at).label('date'),
+                func.count(ContentItem.id).label('count')
+            ).filter(
+                ContentItem.created_at.between(start_date, end_date)
+            ).group_by(func.date(ContentItem.created_at)).order_by('date').all()
+            
+            # Top authors
+            top_authors = db.session.query(
+                ContentWriter.id,
+                User.name,
+                func.count(ContentItem.id).label('content_count')
+            ).join(User, ContentWriter.user_id == User.id).join(
+                ContentItem, ContentWriter.id == ContentItem.author_id
+            ).filter(
+                ContentItem.created_at.between(start_date, end_date)
+            ).group_by(ContentWriter.id, User.name).order_by(
+                desc('content_count')
+            ).limit(10).all()
+            
+            return jsonify({
+                'report_type': 'content_performance',
+                'top_content': [{
+                    'id': item.id,
+                    'title': item.title,
+                    'views': getattr(item, 'views', 0),
+                    'status': item.status,
+                    'created_at': item.created_at.isoformat()
+                } for item in top_content],
+                'by_status': [{'status': s[0], 'count': s[1]} for s in content_status],
+                'timeline': [{'date': str(item.date), 'count': item.count} for item in content_timeline],
+                'top_authors': [{
+                    'author_id': a[0],
+                    'name': a[1],
+                    'content_count': a[2]
+                } for a in top_authors]
+            }), 200
+        
+        # ========== APPOINTMENTS ANALYTICS ==========
+        elif report_type == 'appointments':
+            # Appointments over time
+            appointments_timeline = db.session.query(
+                func.date(Appointment.created_at).label('date'),
+                func.count(Appointment.id).label('count')
+            ).filter(
+                Appointment.created_at.between(start_date, end_date)
+            ).group_by(func.date(Appointment.created_at)).order_by('date').all()
+            
+            # By status
+            by_status = db.session.query(
+                Appointment.status,
+                func.count(Appointment.id).label('count')
+            ).filter(
+                Appointment.created_at.between(start_date, end_date)
+            ).group_by(Appointment.status).all()
+            
+            # By priority
+            by_priority = db.session.query(
+                Appointment.priority,
+                func.count(Appointment.id).label('count')
+            ).filter(
+                Appointment.created_at.between(start_date, end_date)
+            ).group_by(Appointment.priority).all()
+            
+            # Average wait time (time between creation and appointment date)
+            avg_wait = db.session.query(
+                func.avg(
+                    func.extract('epoch', Appointment.appointment_date - Appointment.created_at) / 86400
+                ).label('avg_days')
+            ).filter(
+                Appointment.created_at.between(start_date, end_date),
+                Appointment.appointment_date.isnot(None)
+            ).first()
+            
+            return jsonify({
+                'report_type': 'appointments',
+                'timeline': [{'date': str(item.date), 'count': item.count} for item in appointments_timeline],
+                'by_status': [{'status': s[0], 'count': s[1]} for s in by_status],
+                'by_priority': [{'priority': p[0], 'count': p[1]} for p in by_priority],
+                'avg_wait_days': round(avg_wait[0], 2) if avg_wait[0] else 0
+            }), 200
+        
+        # ========== HEALTH TRACKING ANALYTICS ==========
+        elif report_type == 'health_tracking':
+            # Cycle logs over time
+            cycle_timeline = db.session.query(
+                func.date(CycleLog.created_at).label('date'),
+                func.count(CycleLog.id).label('count')
+            ).filter(
+                CycleLog.created_at.between(start_date, end_date)
+            ).group_by(func.date(CycleLog.created_at)).order_by('date').all()
+            
+            # Meal logs over time
+            meal_timeline = db.session.query(
+                func.date(MealLog.created_at).label('date'),
+                func.count(MealLog.id).label('count')
+            ).filter(
+                MealLog.created_at.between(start_date, end_date)
+            ).group_by(func.date(MealLog.created_at)).order_by('date').all()
+            
+            # Meal type distribution
+            meal_types = db.session.query(
+                MealLog.meal_type,
+                func.count(MealLog.id).label('count')
+            ).filter(
+                MealLog.created_at.between(start_date, end_date)
+            ).group_by(MealLog.meal_type).all()
+            
+            # Active health trackers
+            active_cycle_users = db.session.query(
+                func.count(func.distinct(CycleLog.user_id))
+            ).filter(
+                CycleLog.created_at.between(start_date, end_date)
+            ).scalar()
+            
+            active_meal_users = db.session.query(
+                func.count(func.distinct(MealLog.user_id))
+            ).filter(
+                MealLog.created_at.between(start_date, end_date)
+            ).scalar()
+            
+            return jsonify({
+                'report_type': 'health_tracking',
+                'cycle_timeline': [{'date': str(item.date), 'count': item.count} for item in cycle_timeline],
+                'meal_timeline': [{'date': str(item.date), 'count': item.count} for item in meal_timeline],
+                'meal_types': [{'type': m[0], 'count': m[1]} for m in meal_types],
+                'active_users': {
+                    'cycle_tracking': active_cycle_users,
+                    'meal_tracking': active_meal_users
+                }
+            }), 200
+        
+        # ========== ENGAGEMENT METRICS ==========
+        elif report_type == 'engagement':
+            # Calculate engagement scores
+            total_users = User.query.filter(User.created_at <= end_date).count()
+            
+            # Users with cycle logs
+            users_with_cycles = db.session.query(
+                func.count(func.distinct(CycleLog.user_id))
+            ).filter(CycleLog.created_at.between(start_date, end_date)).scalar()
+            
+            # Users with meal logs
+            users_with_meals = db.session.query(
+                func.count(func.distinct(MealLog.user_id))
+            ).filter(MealLog.created_at.between(start_date, end_date)).scalar()
+            
+            # Users with appointments
+            users_with_appointments = db.session.query(
+                func.count(func.distinct(Appointment.user_id))
+            ).filter(Appointment.created_at.between(start_date, end_date)).scalar()
+            
+            # Content engagement (users viewing content)
+            content_views_total = db.session.query(
+                func.sum(ContentItem.views)
+            ).filter(ContentItem.created_at <= end_date).scalar() or 0
+            
+            # Retention rate (users active in period who were created before period)
+            returning_users = db.session.query(
+                func.count(func.distinct(User.id))
+            ).filter(
+                User.created_at < start_date,
+                User.last_activity.between(start_date, end_date)
+            ).scalar()
+            
+            users_before_period = User.query.filter(User.created_at < start_date).count()
+            retention_rate = (returning_users / users_before_period * 100) if users_before_period > 0 else 0
+            
+            return jsonify({
+                'report_type': 'engagement',
+                'metrics': {
+                    'total_users': total_users,
+                    'cycle_tracking_users': users_with_cycles,
+                    'meal_tracking_users': users_with_meals,
+                    'appointment_users': users_with_appointments,
+                    'content_views': content_views_total,
+                    'returning_users': returning_users,
+                    'retention_rate': round(retention_rate, 2)
+                },
+                'engagement_rates': {
+                    'cycle_tracking': round((users_with_cycles / total_users * 100) if total_users > 0 else 0, 2),
+                    'meal_tracking': round((users_with_meals / total_users * 100) if total_users > 0 else 0, 2),
+                    'appointments': round((users_with_appointments / total_users * 100) if total_users > 0 else 0, 2)
+                }
             }), 200
         
         else:

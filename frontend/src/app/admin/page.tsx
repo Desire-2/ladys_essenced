@@ -2994,27 +2994,47 @@ export default function AdminDashboard() {
             <div className="card shadow-sm mb-4">
               <div className="card-body">
                 <div className="row g-3 align-items-center">
-                  <div className="col-md-6">
-                    <div className="input-group">
-                      <span className="input-group-text">
-                        <i className="fas fa-chart-bar"></i>
-                      </span>
-                      <select
-                        className="form-select"
-                        onChange={(e) => loadAnalytics(e.target.value)}
-                      >
-                        <option value="user_activity">User Activity</option>
-                        <option value="content_performance">Content Performance</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-md-6 text-end">
-                    <button
-                      className="btn btn-outline-primary btn-sm"
-                      onClick={() => loadAnalytics()}
+                  <div className="col-md-4">
+                    <label className="form-label small mb-1">Report Type</label>
+                    <select
+                      className="form-select"
+                      onChange={(e) => loadAnalytics(e.target.value)}
+                      defaultValue="overview"
                     >
-                      <i className="fas fa-sync-alt me-1"></i>
-                      Refresh
+                      <option value="overview">📊 Overview Dashboard</option>
+                      <option value="user_activity">👥 User Activity</option>
+                      <option value="user_registrations">📝 User Registrations</option>
+                      <option value="content_performance">📚 Content Performance</option>
+                      <option value="appointments">🏥 Appointments Analytics</option>
+                      <option value="health_tracking">💊 Health Tracking</option>
+                      <option value="engagement">📈 Engagement Metrics</option>
+                    </select>
+                  </div>
+                  <div className="col-md-3">
+                    <label className="form-label small mb-1">Date Range</label>
+                    <select className="form-select" defaultValue="30">
+                      <option value="7">Last 7 days</option>
+                      <option value="30">Last 30 days</option>
+                      <option value="90">Last 90 days</option>
+                      <option value="365">Last year</option>
+                    </select>
+                  </div>
+                  <div className="col-md-3 d-flex align-items-end">
+                    <button
+                      className="btn btn-primary w-100"
+                      onClick={() => loadAnalytics()}
+                      disabled={tabLoading}
+                    >
+                      {tabLoading ? (
+                        <><span className="spinner-border spinner-border-sm me-2"></span>Loading...</>
+                      ) : (
+                        <><i className="fas fa-sync-alt me-2"></i>Generate Report</>
+                      )}
+                    </button>
+                  </div>
+                  <div className="col-md-2 d-flex align-items-end">
+                    <button className="btn btn-outline-success w-100">
+                      <i className="fas fa-download me-2"></i>Export
                     </button>
                   </div>
                 </div>
@@ -3022,46 +3042,409 @@ export default function AdminDashboard() {
             </div>
 
             {/* Analytics Display */}
-            <div className="card shadow-sm">
-              <div className="card-header bg-transparent border-0">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-chart-line text-success me-2"></i>
-                  Analytics Dashboard
-                </h5>
-              </div>
-              <div className="card-body">
-                {analytics ? (
+            {analytics ? (
+              <div>
+                {/* OVERVIEW REPORT */}
+                {analytics.report_type === 'overview' && (
                   <div>
-                    <h6 className="text-muted mb-3">
-                      {analytics.report_type.replace('_', ' ').toUpperCase()} REPORT
-                    </h6>
-                    <div className="row">
-                      {analytics.data.map((item, index) => (
-                        <div key={index} className="col-md-4 mb-3">
-                          <div className="card bg-light">
-                            <div className="card-body text-center">
-                              <h4 className="text-primary">
-                                {typeof item.count === 'number' ? item.count : 
-                                 typeof item.views === 'number' ? item.views : 
-                                 JSON.stringify(item)}
-                              </h4>
-                              <small className="text-muted">
-                                {item.date || item.title || `Item ${index + 1}`}
-                              </small>
+                    {/* Summary Cards */}
+                    <div className="row g-3 mb-4">
+                      <div className="col-md-3">
+                        <div className="card border-primary shadow-sm h-100">
+                          <div className="card-body text-center">
+                            <i className="fas fa-users fa-2x text-primary mb-2"></i>
+                            <h3 className="mb-1">{analytics.summary.total_users}</h3>
+                            <small className="text-muted">Total Users</small>
+                            <div className="mt-2">
+                              <span className="badge bg-success">+{analytics.summary.new_users} new</span>
                             </div>
                           </div>
                         </div>
-                      ))}
+                      </div>
+                      <div className="col-md-3">
+                        <div className="card border-info shadow-sm h-100">
+                          <div className="card-body text-center">
+                            <i className="fas fa-book fa-2x text-info mb-2"></i>
+                            <h3 className="mb-1">{analytics.summary.total_content}</h3>
+                            <small className="text-muted">Content Items</small>
+                            <div className="mt-2">
+                              <span className="badge bg-info">{analytics.summary.published_content} published</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-3">
+                        <div className="card border-warning shadow-sm h-100">
+                          <div className="card-body text-center">
+                            <i className="fas fa-calendar-check fa-2x text-warning mb-2"></i>
+                            <h3 className="mb-1">{analytics.summary.total_appointments}</h3>
+                            <small className="text-muted">Appointments</small>
+                            <div className="mt-2">
+                              <span className="badge bg-warning text-dark">{analytics.summary.pending_appointments} pending</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-3">
+                        <div className="card border-success shadow-sm h-100">
+                          <div className="card-body text-center">
+                            <i className="fas fa-heartbeat fa-2x text-success mb-2"></i>
+                            <h3 className="mb-1">{analytics.summary.cycle_logs + analytics.summary.meal_logs}</h3>
+                            <small className="text-muted">Health Logs</small>
+                            <div className="mt-2">
+                              <span className="badge bg-success">{analytics.summary.cycle_logs} cycle</span>
+                              <span className="badge bg-success ms-1">{analytics.summary.meal_logs} meal</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* User Types Distribution */}
+                    <div className="card shadow-sm mb-4">
+                      <div className="card-header">
+                        <h5 className="mb-0"><i className="fas fa-pie-chart me-2"></i>User Types Distribution</h5>
+                      </div>
+                      <div className="card-body">
+                        <div className="row">
+                          {analytics.user_types.map((ut: any) => (
+                            <div key={ut.type} className="col-md-4 mb-3">
+                              <div className="d-flex align-items-center">
+                                <div className="flex-grow-1">
+                                  <strong className="text-capitalize">{ut.type.replace('_', ' ')}</strong>
+                                  <div className="progress" style={{ height: '20px' }}>
+                                    <div 
+                                      className="progress-bar bg-primary" 
+                                      style={{ width: `${(ut.count / analytics.summary.total_users * 100)}%` }}
+                                    >
+                                      {ut.count}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="text-center py-5">
-                    <i className="fas fa-chart-bar fa-3x text-muted mb-3"></i>
-                    <p className="text-muted">Loading analytics data...</p>
+                )}
+
+                {/* USER ACTIVITY REPORT */}
+                {analytics.report_type === 'user_activity' && (
+                  <div>
+                    <div className="card shadow-sm mb-4">
+                      <div className="card-header">
+                        <h5 className="mb-0"><i className="fas fa-chart-line me-2"></i>Daily Active Users</h5>
+                      </div>
+                      <div className="card-body">
+                        <div className="table-responsive">
+                          <table className="table table-hover">
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Active Users</th>
+                                <th>Visual</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {analytics.data.map((item: any) => (
+                                <tr key={item.date}>
+                                  <td>{new Date(item.date).toLocaleDateString()}</td>
+                                  <td><strong>{item.count}</strong></td>
+                                  <td>
+                                    <div className="progress" style={{ height: '10px', width: '200px' }}>
+                                      <div className="progress-bar bg-info" style={{ width: `${Math.min(item.count * 10, 100)}%` }}></div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+
+                    {analytics.most_active_users && analytics.most_active_users.length > 0 && (
+                      <div className="card shadow-sm">
+                        <div className="card-header">
+                          <h5 className="mb-0"><i className="fas fa-star me-2"></i>Most Active Users</h5>
+                        </div>
+                        <div className="card-body">
+                          <div className="table-responsive">
+                            <table className="table">
+                              <thead>
+                                <tr>
+                                  <th>Name</th>
+                                  <th>Type</th>
+                                  <th>Last Activity</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {analytics.most_active_users.map((user: any) => (
+                                  <tr key={user.id}>
+                                    <td>{user.name}</td>
+                                    <td><span className="badge bg-secondary">{user.user_type}</span></td>
+                                    <td>{user.last_activity ? new Date(user.last_activity).toLocaleString() : 'N/A'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ENGAGEMENT METRICS REPORT */}
+                {analytics.report_type === 'engagement' && (
+                  <div>
+                    <div className="row g-3 mb-4">
+                      <div className="col-md-4">
+                        <div className="card shadow-sm">
+                          <div className="card-body text-center">
+                            <i className="fas fa-chart-pie fa-2x text-primary mb-2"></i>
+                            <h4>{analytics.metrics.retention_rate}%</h4>
+                            <small className="text-muted">Retention Rate</small>
+                            <p className="small mt-2 mb-0">{analytics.metrics.returning_users} returning users</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-4">
+                        <div className="card shadow-sm">
+                          <div className="card-body text-center">
+                            <i className="fas fa-eye fa-2x text-info mb-2"></i>
+                            <h4>{analytics.metrics.content_views}</h4>
+                            <small className="text-muted">Content Views</small>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-4">
+                        <div className="card shadow-sm">
+                          <div className="card-body text-center">
+                            <i className="fas fa-users fa-2x text-success mb-2"></i>
+                            <h4>{analytics.metrics.total_users}</h4>
+                            <small className="text-muted">Total Users</small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="card shadow-sm">
+                      <div className="card-header">
+                        <h5 className="mb-0"><i className="fas fa-percentage me-2"></i>Feature Engagement Rates</h5>
+                      </div>
+                      <div className="card-body">
+                        <div className="mb-3">
+                          <div className="d-flex justify-content-between mb-1">
+                            <span>Cycle Tracking</span>
+                            <strong>{analytics.engagement_rates.cycle_tracking}%</strong>
+                          </div>
+                          <div className="progress" style={{ height: '25px' }}>
+                            <div className="progress-bar bg-success" style={{ width: `${analytics.engagement_rates.cycle_tracking}%` }}>
+                              {analytics.metrics.cycle_tracking_users} users
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mb-3">
+                          <div className="d-flex justify-content-between mb-1">
+                            <span>Meal Tracking</span>
+                            <strong>{analytics.engagement_rates.meal_tracking}%</strong>
+                          </div>
+                          <div className="progress" style={{ height: '25px' }}>
+                            <div className="progress-bar bg-info" style={{ width: `${analytics.engagement_rates.meal_tracking}%` }}>
+                              {analytics.metrics.meal_tracking_users} users
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="d-flex justify-content-between mb-1">
+                            <span>Appointments</span>
+                            <strong>{analytics.engagement_rates.appointments}%</strong>
+                          </div>
+                          <div className="progress" style={{ height: '25px' }}>
+                            <div className="progress-bar bg-warning" style={{ width: `${analytics.engagement_rates.appointments}%` }}>
+                              {analytics.metrics.appointment_users} users
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* APPOINTMENTS ANALYTICS */}
+                {analytics.report_type === 'appointments' && (
+                  <div>
+                    <div className="row g-3 mb-4">
+                      <div className="col-md-6">
+                        <div className="card shadow-sm">
+                          <div className="card-header">
+                            <h6 className="mb-0">By Status</h6>
+                          </div>
+                          <div className="card-body">
+                            {analytics.by_status.map((item: any) => (
+                              <div key={item.status} className="mb-2">
+                                <div className="d-flex justify-content-between">
+                                  <span className="text-capitalize">{item.status}</span>
+                                  <strong>{item.count}</strong>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="card shadow-sm">
+                          <div className="card-header">
+                            <h6 className="mb-0">By Priority</h6>
+                          </div>
+                          <div className="card-body">
+                            {analytics.by_priority.map((item: any) => (
+                              <div key={item.priority} className="mb-2">
+                                <div className="d-flex justify-content-between">
+                                  <span className="text-capitalize">{item.priority}</span>
+                                  <strong>{item.count}</strong>
+                                </div>
+                              </div>
+                            ))}
+                            <hr />
+                            <div className="text-center">
+                              <small className="text-muted">Avg Wait Time</small>
+                              <h5 className="text-primary mb-0">{analytics.avg_wait_days} days</h5>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="card shadow-sm">
+                      <div className="card-header">
+                        <h5 className="mb-0">Appointments Timeline</h5>
+                      </div>
+                      <div className="card-body">
+                        <div className="table-responsive">
+                          <table className="table table-sm">
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Count</th>
+                                <th>Trend</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {analytics.timeline.map((item: any) => (
+                                <tr key={item.date}>
+                                  <td>{new Date(item.date).toLocaleDateString()}</td>
+                                  <td><strong>{item.count}</strong></td>
+                                  <td>
+                                    <div className="progress" style={{ height: '8px', width: '100px' }}>
+                                      <div className="progress-bar bg-warning" style={{ width: `${item.count * 10}%` }}></div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* HEALTH TRACKING REPORT */}
+                {analytics.report_type === 'health_tracking' && (
+                  <div>
+                    <div className="row g-3 mb-4">
+                      <div className="col-md-6">
+                        <div className="card shadow-sm">
+                          <div className="card-body text-center">
+                            <i className="fas fa-heart fa-2x text-danger mb-2"></i>
+                            <h3>{analytics.active_users.cycle_tracking}</h3>
+                            <small className="text-muted">Active Cycle Trackers</small>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="card shadow-sm">
+                          <div className="card-body text-center">
+                            <i className="fas fa-utensils fa-2x text-success mb-2"></i>
+                            <h3>{analytics.active_users.meal_tracking}</h3>
+                            <small className="text-muted">Active Meal Trackers</small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <div className="card shadow-sm">
+                          <div className="card-header">
+                            <h6 className="mb-0">Cycle Tracking Timeline</h6>
+                          </div>
+                          <div className="card-body">
+                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                              {analytics.cycle_timeline.map((item: any) => (
+                                <div key={item.date} className="mb-2">
+                                  <div className="d-flex justify-content-between">
+                                    <small>{new Date(item.date).toLocaleDateString()}</small>
+                                    <strong>{item.count}</strong>
+                                  </div>
+                                  <div className="progress" style={{ height: '6px' }}>
+                                    <div className="progress-bar bg-danger" style={{ width: `${item.count * 15}%` }}></div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="card shadow-sm">
+                          <div className="card-header">
+                            <h6 className="mb-0">Meal Types Distribution</h6>
+                          </div>
+                          <div className="card-body">
+                            {analytics.meal_types.map((item: any) => (
+                              <div key={item.type} className="mb-3">
+                                <div className="d-flex justify-content-between mb-1">
+                                  <span className="text-capitalize">{item.type}</span>
+                                  <strong>{item.count}</strong>
+                                </div>
+                                <div className="progress">
+                                  <div className="progress-bar bg-success" style={{ width: `${item.count * 5}%` }}></div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Generic report display for other types */}
+                {!['overview', 'user_activity', 'engagement', 'appointments', 'health_tracking'].includes(analytics.report_type) && (
+                  <div className="card shadow-sm">
+                    <div className="card-header">
+                      <h5 className="mb-0 text-capitalize">{analytics.report_type.replace('_', ' ')} Report</h5>
+                    </div>
+                    <div className="card-body">
+                      <pre className="bg-light p-3 rounded">{JSON.stringify(analytics, null, 2)}</pre>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
+            ) : (
+              <div className="card shadow-sm">
+                <div className="card-body text-center py-5">
+                  <i className="fas fa-chart-bar fa-4x text-muted mb-3"></i>
+                  <h5 className="text-muted">Select a report type to get started</h5>
+                  <p className="text-muted">Choose from the options above to generate comprehensive analytics</p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
