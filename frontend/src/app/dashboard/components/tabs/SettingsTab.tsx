@@ -293,16 +293,6 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ userType }) => {
                   </div>
 
                   <div className="mb-3">
-                    <label className="form-label fw-bold text-dark">Email</label>
-                    <input 
-                      type="email" 
-                      className="form-control bg-light" 
-                      value={accountSettings.email || 'Not set'}
-                      disabled
-                    />
-                  </div>
-
-                  <div className="mb-3">
                     <label className="form-label fw-bold text-dark">Phone Number</label>
                     <input 
                       type="text" 
@@ -310,6 +300,18 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ userType }) => {
                       value={accountSettings.phone_number || 'Not set'}
                       disabled
                     />
+                    <small className="text-muted">Primary contact for login and notifications</small>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label fw-bold text-dark">Email <span className="text-muted">(Optional)</span></label>
+                    <input 
+                      type="email" 
+                      className="form-control bg-light" 
+                      value={accountSettings.email || 'Not set'}
+                      disabled
+                    />
+                    <small className="text-muted">Used for email notifications if enabled</small>
                   </div>
 
                   <div className="mb-3">

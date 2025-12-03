@@ -223,7 +223,7 @@ export const AddChildForm: React.FC<AddChildFormProps> = ({
               placeholder="e.g., +250780000000"
             />
             <small className="text-muted d-block mt-1">
-              Child can use this to login if provided, or use email/other methods.
+              Child can use this phone number to login with password or PIN authentication.
             </small>
           </div>
 
@@ -245,7 +245,7 @@ export const AddChildForm: React.FC<AddChildFormProps> = ({
                 required={!editingChild}
               />
               <small className="text-muted d-block mt-1">
-                Child will use this to login. They can change it later.
+                Child will use this to login along with their phone number. They can also enable PIN authentication later for easier access.
               </small>
             </div>
           )}

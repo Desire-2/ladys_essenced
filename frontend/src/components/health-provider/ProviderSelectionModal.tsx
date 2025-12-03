@@ -197,12 +197,10 @@ export default function ProviderSelectionModal({
                                   {provider.clinic_address}
                                 </p>
                               )}
-                              {provider.phone && (
-                                <p className="card-text text-muted mb-2">
-                                  <i className="fas fa-phone me-1"></i>
-                                  {provider.phone}
-                                </p>
-                              )}
+                              <p className="card-text text-muted mb-2">
+                                <i className="fas fa-phone me-1"></i>
+                                {provider.phone || <span className="text-muted">No phone</span>}
+                              </p>
                               {provider.email && (
                                 <p className="card-text text-muted mb-0">
                                   <i className="fas fa-envelope me-1"></i>

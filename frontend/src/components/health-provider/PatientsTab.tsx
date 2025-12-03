@@ -37,9 +37,13 @@ export default function PatientsTab({
                     <td><strong>{patient.name}</strong></td>
                     <td>
                       <div>
-                        <i className="fas fa-phone me-1"></i>{patient.phone_number}
-                        <br />
-                        <small><i className="fas fa-envelope me-1"></i>{patient.email}</small>
+                        <i className="fas fa-phone me-1"></i>{patient.phone_number || <span className="text-muted">No phone</span>}
+                        {patient.email && (
+                          <>
+                            <br />
+                            <small className="text-muted"><i className="fas fa-envelope me-1"></i>{patient.email}</small>
+                          </>
+                        )}
                       </div>
                     </td>
                     <td>

@@ -35,8 +35,8 @@ export default function ProfileTab({
                 <p>{profile.name}</p>
               </div>
               <div className="col-md-6">
-                <strong>Email:</strong>
-                <p>{profile.email}</p>
+                <strong>Phone Number:</strong>
+                <p>{profile.phone || <span className="text-muted">Not provided</span>}</p>
               </div>
             </div>
             <div className="row mb-3">
@@ -55,8 +55,8 @@ export default function ProfileTab({
                 <p>{profile.clinic_name}</p>
               </div>
               <div className="col-md-6">
-                <strong>Phone:</strong>
-                <p>{profile.phone}</p>
+                <strong>Email:</strong>
+                <p>{profile.email || <span className="text-muted">Not provided</span>}</p>
               </div>
             </div>
             <div className="row mb-3">

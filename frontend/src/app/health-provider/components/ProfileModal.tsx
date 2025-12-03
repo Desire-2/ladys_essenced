@@ -38,8 +38,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ profile, show, onClose, onS
                     <input type="text" className="form-control" name="name" value={form.name} onChange={handleChange} required />
                   </div>
                   <div className="mb-3">
-                    <label className="form-label">Email</label>
-                    <input type="email" className="form-control" name="email" value={form.email} onChange={handleChange} required />
+                    <label className="form-label">Phone Number</label>
+                    <input type="tel" className="form-control" name="phone" value={form.phone} onChange={handleChange} required />
+                    <small className="text-muted">Primary contact for appointments and SMS notifications</small>
                   </div>
                   <div className="mb-3">
                     <label className="form-label">Specialization</label>
@@ -56,8 +57,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ profile, show, onClose, onS
                     <textarea className="form-control" name="clinic_address" rows={2} value={form.clinic_address} onChange={handleChange} />
                   </div>
                   <div className="mb-3">
-                    <label className="form-label">Phone Number</label>
-                    <input type="tel" className="form-control" name="phone" value={form.phone} onChange={handleChange} />
+                    <label className="form-label">Email <span className="text-muted">(Optional)</span></label>
+                    <input type="email" className="form-control" name="email" value={form.email} onChange={handleChange} />
+                    <small className="text-muted">Optional for email notifications</small>
                   </div>
                 </div>
               </div>

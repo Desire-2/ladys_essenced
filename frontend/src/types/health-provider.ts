@@ -34,7 +34,7 @@ export interface Appointment {
   id: number;
   patient_name: string;
   patient_phone: string;
-  patient_email: string;
+  patient_email?: string; // Optional
   issue: string;
   appointment_date: string | null;
   preferred_date: string | null;
@@ -57,8 +57,8 @@ export interface UnassignedAppointment {
 export interface Patient {
   id: number;
   name: string;
-  email: string;
-  phone_number: string;
+  phone_number: string; // Primary contact method
+  email?: string; // Optional
   total_appointments: number;
   last_appointment: string | null;
   last_appointment_status: string | null;
@@ -72,13 +72,13 @@ export interface PatientHistory {
 export interface HealthProvider {
   id: number;
   name: string;
-  email: string;
+  phone: string; // Primary contact method
   specialization: string;
   clinic_name: string;
   clinic_address: string;
-  phone: string;
   license_number: string;
   is_verified: boolean;
+  email?: string; // Optional
   created_at: string;
 }
 

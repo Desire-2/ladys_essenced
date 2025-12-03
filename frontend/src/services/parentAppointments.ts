@@ -11,8 +11,8 @@ export interface Child {
   id: number;
   user_id: number;
   name: string;
-  email: string;
-  phone_number?: string;
+  phone_number?: string; // Primary contact - optional for children
+  email?: string; // Optional
   date_of_birth?: string;
   relationship_type: string;
   created_at?: string;

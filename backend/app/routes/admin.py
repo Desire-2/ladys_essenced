@@ -903,6 +903,499 @@ def change_user_role(user_id):
         current_app.logger.error(f"Error changing user role: {str(e)}")
         return jsonify({'error': 'Failed to change user role', 'details': str(e)}), 500
 
+# ===================================
+# HEALTH PROVIDER MANAGEMENT ENDPOINTS
+# ===================================
+
+@admin_bp.route('/health-providers', methods=['GET'])
+@admin_required
+@check_permissions(['manage_users'])
+def get_all_health_providers():
+    """Get all health providers with pagination and filtering"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        search = request.args.get('search')
+        is_verified = request.args.get('is_verified')
+        specialization = request.args.get('specialization')
+        
+        # Build query
+        query = HealthProvider.query.join(User, HealthProvider.user_id == User.id)
+        
+        # Apply filters
+        if search:
+            query = query.filter(
+                or_(
+                    User.name.ilike(f'%{search}%'),
+                    User.email.ilike(f'%{search}%'),
+                    HealthProvider.clinic_name.ilike(f'%{search}%'),
+                    HealthProvider.specialization.ilike(f'%{search}%'),
+                    HealthProvider.license_number.ilike(f'%{search}%')
+                )
+            )
+        
+        if is_verified is not None:
+            verified = is_verified.lower() == 'true'
+            query = query.filter(HealthProvider.is_verified == verified)
+        
+        if specialization:
+            query = query.filter(HealthProvider.specialization.ilike(f'%{specialization}%'))
+        
+        # Paginate
+        pagination = query.order_by(desc(HealthProvider.created_at)).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        providers = []
+        for provider in pagination.items:
+            # Count appointments for this provider
+            total_appointments = Appointment.query.filter_by(provider_id=provider.id).count()
+            pending_appointments = Appointment.query.filter_by(
+                provider_id=provider.id, 
+                status='pending'
+            ).count()
+            completed_appointments = Appointment.query.filter_by(
+                provider_id=provider.id, 
+                status='completed'
+            ).count()
+            
+            providers.append({
+                'id': provider.id,
+                'user_id': provider.user_id,
+                'name': provider.user.name if provider.user else 'Unknown',
+                'email': provider.user.email if provider.user else None,
+                'phone': provider.phone,
+                'license_number': provider.license_number,
+                'specialization': provider.specialization,
+                'clinic_name': provider.clinic_name,
+                'clinic_address': provider.clinic_address,
+                'is_verified': provider.is_verified,
+                'is_active': provider.user.is_active if provider.user else False,
+                'created_at': provider.created_at.isoformat() if provider.created_at else None,
+                'appointments': {
+                    'total': total_appointments,
+                    'pending': pending_appointments,
+                    'completed': completed_appointments
+                }
+            })
+        
+        log_user_activity('view_health_providers_list', {'page': page, 'search': search})
+        
+        return jsonify({
+            'providers': providers,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': page,
+            'has_prev': pagination.has_prev,
+            'has_next': pagination.has_next
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting health providers: {str(e)}")
+        return jsonify({'error': 'Failed to fetch health providers', 'message': str(e)}), 500
+
+@admin_bp.route('/health-providers/<int:provider_id>', methods=['GET'])
+@admin_required
+@check_permissions(['manage_users'])
+def get_health_provider_details(provider_id):
+    """Get detailed information about a specific health provider"""
+    try:
+        provider = HealthProvider.query.get(provider_id)
+        if not provider:
+            return jsonify({'error': 'Health provider not found'}), 404
+        
+        # Get appointment statistics
+        total_appointments = Appointment.query.filter_by(provider_id=provider.id).count()
+        appointments_by_status = db.session.query(
+            Appointment.status, 
+            func.count(Appointment.id)
+        ).filter_by(provider_id=provider.id).group_by(Appointment.status).all()
+        
+        # Recent appointments
+        recent_appointments = Appointment.query.filter_by(
+            provider_id=provider.id
+        ).order_by(desc(Appointment.created_at)).limit(10).all()
+        
+        # Parse availability hours
+        availability_hours = {}
+        if provider.availability_hours:
+            try:
+                if isinstance(provider.availability_hours, str):
+                    availability_data = json.loads(provider.availability_hours)
+                else:
+                    availability_data = provider.availability_hours
+                availability_hours = availability_data.get('availability_hours', {})
+            except:
+                availability_hours = {}
+        
+        provider_data = {
+            'id': provider.id,
+            'user_id': provider.user_id,
+            'name': provider.user.name if provider.user else 'Unknown',
+            'email': provider.user.email if provider.user else None,
+            'phone_number': provider.user.phone_number if provider.user else None,
+            'phone': provider.phone,
+            'license_number': provider.license_number,
+            'specialization': provider.specialization,
+            'clinic_name': provider.clinic_name,
+            'clinic_address': provider.clinic_address,
+            'is_verified': provider.is_verified,
+            'is_active': provider.user.is_active if provider.user else False,
+            'created_at': provider.created_at.isoformat() if provider.created_at else None,
+            'availability_hours': availability_hours,
+            'statistics': {
+                'total_appointments': total_appointments,
+                'by_status': {status: count for status, count in appointments_by_status}
+            },
+            'recent_appointments': [{
+                'id': appt.id,
+                'patient_name': appt.user.name if appt.user else 'Unknown',
+                'issue': appt.issue,
+                'status': appt.status,
+                'priority': appt.priority,
+                'appointment_date': appt.appointment_date.isoformat() if appt.appointment_date else None,
+                'created_at': appt.created_at.isoformat() if appt.created_at else None
+            } for appt in recent_appointments]
+        }
+        
+        log_user_activity('view_health_provider_details', {'provider_id': provider_id})
+        
+        return jsonify(provider_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting health provider details: {str(e)}")
+        return jsonify({'error': 'Failed to fetch provider details', 'message': str(e)}), 500
+
+@admin_bp.route('/health-providers', methods=['POST'])
+@admin_required
+@check_permissions(['manage_users'])
+def create_health_provider():
+    """Create a new health provider"""
+    try:
+        from app import bcrypt
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['name', 'email', 'password', 'specialization']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Check if email already exists
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({'error': 'Email already exists'}), 400
+        
+        # Create user account
+        password_hash = bcrypt.generate_password_hash(data['password']).decode('utf-8')
+        user = User(
+            name=data['name'],
+            email=data['email'],
+            phone_number=data.get('phone_number'),
+            password_hash=password_hash,
+            user_type='health_provider',
+            is_active=True
+        )
+        db.session.add(user)
+        db.session.flush()  # Get user.id
+        
+        # Create health provider profile
+        provider = HealthProvider(
+            user_id=user.id,
+            license_number=data.get('license_number', ''),
+            specialization=data['specialization'],
+            clinic_name=data.get('clinic_name', ''),
+            clinic_address=data.get('clinic_address', ''),
+            phone=data.get('phone', data.get('phone_number')),
+            email=data['email'],
+            is_verified=data.get('is_verified', False)
+        )
+        db.session.add(provider)
+        db.session.commit()
+        
+        log_user_activity('create_health_provider', {'provider_id': provider.id})
+        
+        return jsonify({
+            'message': 'Health provider created successfully',
+            'provider': {
+                'id': provider.id,
+                'user_id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'specialization': provider.specialization,
+                'is_verified': provider.is_verified
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating health provider: {str(e)}")
+        return jsonify({'error': 'Failed to create health provider', 'message': str(e)}), 500
+
+@admin_bp.route('/health-providers/<int:provider_id>', methods=['PUT'])
+@admin_required
+@check_permissions(['manage_users'])
+def update_health_provider(provider_id):
+    """Update health provider information"""
+    try:
+        provider = HealthProvider.query.get(provider_id)
+        if not provider:
+            return jsonify({'error': 'Health provider not found'}), 404
+        
+        data = request.get_json()
+        
+        # Update user fields
+        if provider.user:
+            if data.get('name'):
+                provider.user.name = data['name']
+            if data.get('email'):
+                # Check if email is taken by another user
+                existing = User.query.filter(
+                    User.email == data['email'],
+                    User.id != provider.user_id
+                ).first()
+                if existing:
+                    return jsonify({'error': 'Email already exists'}), 400
+                provider.user.email = data['email']
+            if data.get('phone_number'):
+                provider.user.phone_number = data['phone_number']
+            if 'is_active' in data:
+                provider.user.is_active = data['is_active']
+        
+        # Update provider fields
+        if data.get('license_number') is not None:
+            provider.license_number = data['license_number']
+        if data.get('specialization'):
+            provider.specialization = data['specialization']
+        if data.get('clinic_name') is not None:
+            provider.clinic_name = data['clinic_name']
+        if data.get('clinic_address') is not None:
+            provider.clinic_address = data['clinic_address']
+        if data.get('phone') is not None:
+            provider.phone = data['phone']
+        if data.get('email'):
+            provider.email = data['email']
+        if 'is_verified' in data:
+            provider.is_verified = data['is_verified']
+        
+        # Update availability hours if provided
+        if data.get('availability_hours'):
+            provider.availability_hours = json.dumps(data['availability_hours'])
+        
+        db.session.commit()
+        
+        log_user_activity('update_health_provider', {'provider_id': provider_id})
+        
+        return jsonify({
+            'message': 'Health provider updated successfully',
+            'provider': {
+                'id': provider.id,
+                'name': provider.user.name if provider.user else 'Unknown',
+                'email': provider.user.email if provider.user else None,
+                'specialization': provider.specialization,
+                'is_verified': provider.is_verified,
+                'is_active': provider.user.is_active if provider.user else False
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating health provider: {str(e)}")
+        return jsonify({'error': 'Failed to update health provider', 'message': str(e)}), 500
+
+@admin_bp.route('/health-providers/<int:provider_id>', methods=['DELETE'])
+@admin_required
+@check_permissions(['manage_users'])
+def delete_health_provider(provider_id):
+    """Delete a health provider"""
+    try:
+        provider = HealthProvider.query.get(provider_id)
+        if not provider:
+            return jsonify({'error': 'Health provider not found'}), 404
+        
+        # Check for active appointments
+        active_appointments = Appointment.query.filter_by(
+            provider_id=provider.id
+        ).filter(
+            Appointment.status.in_(['pending', 'confirmed'])
+        ).count()
+        
+        if active_appointments > 0:
+            return jsonify({
+                'error': 'Cannot delete provider with active appointments',
+                'active_appointments': active_appointments
+            }), 400
+        
+        user_id = provider.user_id
+        
+        # Delete provider profile first
+        db.session.delete(provider)
+        
+        # Optionally delete user account
+        if request.args.get('delete_user') == 'true':
+            user = User.query.get(user_id)
+            if user:
+                db.session.delete(user)
+        
+        db.session.commit()
+        
+        log_user_activity('delete_health_provider', {'provider_id': provider_id})
+        
+        return jsonify({
+            'message': 'Health provider deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting health provider: {str(e)}")
+        return jsonify({'error': 'Failed to delete health provider', 'message': str(e)}), 500
+
+@admin_bp.route('/health-providers/<int:provider_id>/verify', methods=['POST'])
+@admin_required
+@check_permissions(['manage_users'])
+def verify_health_provider(provider_id):
+    """Verify or unverify a health provider"""
+    try:
+        provider = HealthProvider.query.get(provider_id)
+        if not provider:
+            return jsonify({'error': 'Health provider not found'}), 404
+        
+        data = request.get_json() or {}
+        verify = data.get('verify', True)
+        
+        provider.is_verified = verify
+        db.session.commit()
+        
+        # Create notification for provider
+        if provider.user:
+            notification_message = (
+                f"Your health provider account has been {'verified' if verify else 'unverified'}. "
+                f"{'You can now start accepting appointments.' if verify else 'Please contact support for more information.'}"
+            )
+            notification = Notification(
+                user_id=provider.user_id,
+                title='Account Verification Status Updated',
+                message=notification_message,
+                type='system'
+            )
+            db.session.add(notification)
+            db.session.commit()
+        
+        log_user_activity('verify_health_provider', {
+            'provider_id': provider_id, 
+            'verified': verify
+        })
+        
+        return jsonify({
+            'message': f'Health provider {"verified" if verify else "unverified"} successfully',
+            'is_verified': provider.is_verified
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error verifying health provider: {str(e)}")
+        return jsonify({'error': 'Failed to verify health provider', 'message': str(e)}), 500
+
+@admin_bp.route('/health-providers/<int:provider_id>/appointments', methods=['GET'])
+@admin_required
+@check_permissions(['view_analytics'])
+def get_provider_appointments(provider_id):
+    """Get all appointments for a specific health provider"""
+    try:
+        provider = HealthProvider.query.get(provider_id)
+        if not provider:
+            return jsonify({'error': 'Health provider not found'}), 404
+        
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        status = request.args.get('status')
+        
+        query = Appointment.query.filter_by(provider_id=provider_id)
+        
+        if status:
+            query = query.filter_by(status=status)
+        
+        pagination = query.order_by(desc(Appointment.appointment_date)).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        appointments = [{
+            'id': appt.id,
+            'patient_name': appt.user.name if appt.user else 'Unknown',
+            'patient_email': appt.user.email if appt.user else None,
+            'patient_phone': appt.user.phone_number if appt.user else None,
+            'issue': appt.issue,
+            'status': appt.status,
+            'priority': appt.priority,
+            'appointment_date': appt.appointment_date.isoformat() if appt.appointment_date else None,
+            'created_at': appt.created_at.isoformat() if appt.created_at else None
+        } for appt in pagination.items]
+        
+        return jsonify({
+            'appointments': appointments,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': page
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting provider appointments: {str(e)}")
+        return jsonify({'error': 'Failed to fetch appointments', 'message': str(e)}), 500
+
+@admin_bp.route('/health-providers/statistics', methods=['GET'])
+@admin_required
+@check_permissions(['view_analytics'])
+def get_health_provider_statistics():
+    """Get overall health provider statistics"""
+    try:
+        total_providers = HealthProvider.query.count()
+        verified_providers = HealthProvider.query.filter_by(is_verified=True).count()
+        unverified_providers = total_providers - verified_providers
+        
+        # Active providers (those with appointments in last 30 days)
+        thirty_days_ago = datetime.now() - timedelta(days=30)
+        active_providers = db.session.query(
+            func.count(func.distinct(Appointment.provider_id))
+        ).filter(
+            Appointment.created_at >= thirty_days_ago
+        ).scalar()
+        
+        # Providers by specialization
+        specializations = db.session.query(
+            HealthProvider.specialization,
+            func.count(HealthProvider.id)
+        ).group_by(HealthProvider.specialization).all()
+        
+        # Recent provider registrations
+        recent_providers = HealthProvider.query.order_by(
+            desc(HealthProvider.created_at)
+        ).limit(5).all()
+        
+        return jsonify({
+            'total_providers': total_providers,
+            'verified_providers': verified_providers,
+            'unverified_providers': unverified_providers,
+            'active_providers': active_providers,
+            'by_specialization': [{
+                'specialization': spec or 'Unspecified',
+                'count': count
+            } for spec, count in specializations],
+            'recent_providers': [{
+                'id': p.id,
+                'name': p.user.name if p.user else 'Unknown',
+                'specialization': p.specialization,
+                'is_verified': p.is_verified,
+                'created_at': p.created_at.isoformat() if p.created_at else None
+            } for p in recent_providers]
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error getting provider statistics: {str(e)}")
+        return jsonify({'error': 'Failed to fetch statistics', 'message': str(e)}), 500
+
+# ===================================
+# END HEALTH PROVIDER MANAGEMENT
+# ===================================
+
 @admin_bp.route('/users/bulk-change-role', methods=['POST'])
 @admin_required
 @check_permissions(['manage_users'])

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../contexts/AuthContext';
 import { buildAuthApiUrl } from '../../utils/apiConfig';
 import { API_BASE_URL } from '../../config/api';
+import HealthProviderManagement from '../../components/admin/HealthProviderManagement';
 
 interface DashboardStats {
   users: {
@@ -49,7 +50,7 @@ interface User {
   name: string;
   username?: string;
   phone_number: string;
-  email: string;
+  email?: string; // Optional
   user_type: string;
   is_active: boolean;
   created_at: string;
@@ -90,6 +91,70 @@ interface SystemLog {
 interface Analytics {
   report_type: string;
   data: any[];
+  summary?: {
+    total_users: number;
+    new_users: number;
+    total_content: number;
+    published_content: number;
+    total_appointments: number;
+    pending_appointments: number;
+    cycle_logs: number;
+    meal_logs: number;
+  };
+  user_types?: Array<{
+    type: string;
+    count: number;
+  }>;
+  timeline?: Array<{
+    date: string;
+    count: number;
+  }>;
+  by_status?: Array<{
+    status: string;
+    count: number;
+  }>;
+  by_priority?: Array<{
+    priority: string;
+    count: number;
+  }>;
+  most_active_users?: Array<{
+    user_id: number;
+    user_name: string;
+    activity_count: number;
+  }>;
+  growth_rate?: number;
+  engagement_metrics?: any;
+  metrics?: {
+    total_users?: number;
+    cycle_tracking_users?: number;
+    meal_tracking_users?: number;
+    appointment_users?: number;
+    content_views?: number;
+    returning_users?: number;
+    retention_rate?: number;
+  };
+  engagement_rates?: {
+    cycle_tracking?: number;
+    meal_tracking?: number;
+    appointments?: number;
+  };
+  cycle_timeline?: Array<{
+    date: string;
+    count: number;
+  }>;
+  meal_timeline?: Array<{
+    date: string;
+    count: number;
+  }>;
+  meal_types?: Array<{
+    type: string;
+    count: number;
+  }>;
+  active_users?: {
+    cycle_tracking?: number;
+    meal_tracking?: number;
+  };
+  avg_wait_days?: number;
 }
 
 interface PaginationInfo {
@@ -156,7 +221,8 @@ interface CourseStats {
 interface ContentWriter {
   id: number;
   name: string;
-  email: string;
+  phone_number?: string;
+  email?: string; // Optional
   courses_count: number;
   created_at: string;
 }
@@ -209,7 +275,7 @@ export default function AdminDashboard() {
   const [userStatistics, setUserStatistics] = useState<any>(null);
   const [bulkAction, setBulkAction] = useState('');
   const [userFormData, setUserFormData] = useState({
-    name: '', phone_number: '', email: '', user_type: 'parent', password: '', is_active: true
+    name: '', phone_number: '', email: '', user_type: 'parent', password: '', is_active: true // email optional
   });
   
   // Loading and error states
@@ -1140,8 +1206,10 @@ export default function AdminDashboard() {
                         <dd className="col-sm-8">{selectedUser.id}</dd>
                         <dt className="col-sm-4">Phone:</dt>
                         <dd className="col-sm-8">{selectedUser.phone_number}</dd>
+                        <dt className="col-sm-4">Phone Number:</dt>
+                        <dd className="col-sm-8">{selectedUser.phone_number || 'Not provided'}</dd>
                         <dt className="col-sm-4">Email:</dt>
-                        <dd className="col-sm-8">{selectedUser.email || 'Not provided'}</dd>
+                        <dd className="col-sm-8">{selectedUser.email || 'Not provided'} <small className="text-muted">(Optional)</small></dd>
                         <dt className="col-sm-4">Type:</dt>
                         <dd className="col-sm-8">
                           <span className={`badge bg-${
@@ -1551,6 +1619,7 @@ export default function AdminDashboard() {
                 {[
                   { id: 'overview', label: 'Overview', icon: 'fas fa-chart-line', shortLabel: 'Overview' },
                   { id: 'users', label: 'User Management', icon: 'fas fa-users', shortLabel: 'Users' },
+                  { id: 'health-providers', label: 'Health Providers', icon: 'fas fa-user-md', shortLabel: 'Providers' },
                   { id: 'content', label: 'Content Review', icon: 'fas fa-file-alt', shortLabel: 'Content' },
                   { id: 'courses', label: 'Course Management', icon: 'fas fa-graduation-cap', shortLabel: 'Courses' },
                   { id: 'appointments', label: 'Appointments', icon: 'fas fa-calendar-check', shortLabel: 'Appts' },
@@ -2013,7 +2082,7 @@ export default function AdminDashboard() {
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="Search users by name, phone, or email..."
+                        placeholder="Search users by name or phone number..."
                         value={filters.search}
                         onChange={(e) => handleFilterChange('search', e.target.value)}
                       />
@@ -2174,7 +2243,7 @@ export default function AdminDashboard() {
                                 </div>
                                 <div>
                                   <div className="fw-semibold">{user.name || user.username}</div>
-                                  <small className="text-muted">{user.email || user.phone_number}</small>
+                                  <small className="text-muted">{user.phone_number || user.email || 'No contact'}</small>
                                 </div>
                               </div>
                             </td>
@@ -2279,6 +2348,13 @@ export default function AdminDashboard() {
                 type="users"
               />
             </div>
+          </div>
+        )}
+
+        {/* Health Providers Tab */}
+        {activeTab === 'health-providers' && (
+          <div>
+            <HealthProviderManagement />
           </div>
         )}
 
@@ -3667,12 +3743,14 @@ export default function AdminDashboard() {
                       <input type="text" className="form-control" name="name" />
                     </div>
                     <div className="col-md-6">
-                      <label className="form-label">Email</label>
-                      <input type="email" className="form-control" name="email" />
+                      <label className="form-label">Phone Number *</label>
+                      <input type="tel" className="form-control" name="phone_number" required />
+                      <small className="text-muted">Primary contact for login and SMS notifications</small>
                     </div>
                     <div className="col-md-6">
-                      <label className="form-label">Phone Number</label>
-                      <input type="tel" className="form-control" name="phone_number" />
+                      <label className="form-label">Email <span className="text-muted">(Optional)</span></label>
+                      <input type="email" className="form-control" name="email" />
+                      <small className="text-muted">Optional for email notifications</small>
                     </div>
                     <div className="col-md-6">
                       <label className="form-label">Password *</label>

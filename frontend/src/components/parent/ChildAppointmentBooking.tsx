@@ -6,7 +6,8 @@ import '../../styles/child-appointment-booking.css';
 interface User {
   id: number;
   name: string;
-  email: string;
+  phone_number: string; // Primary identifier
+  email?: string; // Optional
   user_type: string;
   access_token?: string;
 }

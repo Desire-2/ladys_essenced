@@ -111,7 +111,8 @@ class NotificationService {
   }
 
   async updateNotificationPreferences(preferences: {
-    email_notifications: boolean;
+    sms_notifications: boolean; // Primary notification channel via phone
+    email_notifications?: boolean; // Optional
     push_notifications: boolean;
     appointment_reminders: boolean;
     cycle_predictions: boolean;
@@ -241,7 +242,8 @@ class NotificationService {
 
   private getMockPreferences() {
     return {
-      email_notifications: true,
+      sms_notifications: true, // Primary notification channel
+      email_notifications: false, // Optional
       push_notifications: true,
       appointment_reminders: true,
       cycle_predictions: true,
