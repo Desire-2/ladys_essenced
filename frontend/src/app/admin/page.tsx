@@ -6,6 +6,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { buildAuthApiUrl } from '../../utils/apiConfig';
 import { API_BASE_URL } from '../../config/api';
 import HealthProviderManagement from '../../components/admin/HealthProviderManagement';
+import StatsCard from '../../components/admin/StatsCard';
+import SectionHeader from '../../components/admin/SectionHeader';
+import LoadingSpinner from '../../components/admin/LoadingSpinner';
+import ContentCard from '../../components/admin/ContentCard';
+import EmptyState from '../../components/admin/EmptyState';
 
 interface DashboardStats {
   users: {
@@ -1032,21 +1037,7 @@ export default function AdminDashboard() {
     }
   }, [loadUsers, loadAppointments, loadSystemLogs]);
 
-  // Enhanced loading and error components
-  const LoadingSpinner = ({ size = 'default' }: { size?: 'small' | 'default' | 'large' }) => {
-    const sizeClasses = {
-      small: 'spinner-border-sm',
-      default: '',
-      large: 'spinner-border-lg'
-    };
-
-    return (
-      <div className={`spinner-border text-primary ${sizeClasses[size]}`} role="status">
-        <span className="visually-hidden">Loading...</span>
-      </div>
-    );
-  };
-
+  // Enhanced UI components
   const ToastContainer = () => (
     <div className="toast-container position-fixed top-0 end-0 p-3" style={{ zIndex: 9999 }}>
       {toasts.map(toast => (
@@ -1561,386 +1552,686 @@ export default function AdminDashboard() {
 
   return (
     <>
-      <ToastContainer />
-      <ConfirmDialog />
-      <UserModal />
-      <ContentModal />
+      <style jsx>{`
+        .cursor-pointer {
+          cursor: pointer;
+        }
+        .admin-dashboard-wrapper {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        .sidebar {
+          transition: all 0.3s ease;
+        }
+        .sidebar nav button:hover {
+          transform: translateX(2px);
+        }
+        .card {
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        @media (max-width: 991px) {
+          .sidebar {
+            transform: translateX(-100%);
+          }
+          .sidebar.show {
+            transform: translateX(0);
+          }
+        }
+      `}</style>
       
-      <div className="container-fluid py-3 py-md-4 px-2 px-md-3">
-        {/* Enhanced Header - Responsive */}
-        <div className="row align-items-center mb-3 mb-md-4 g-2">
-          <div className="col-12 col-md">
-            <h1 className="h4 h3-md mb-0">
-              <i className="fas fa-tachometer-alt text-primary me-2"></i>
-              Admin Dashboard
-            </h1>
-            <p className="text-muted mb-0 small">Welcome back, {user?.name}</p>
+      <div className="admin-dashboard-wrapper d-flex" style={{ minHeight: '100vh', backgroundColor: '#f0f2f5' }}>
+        <ToastContainer />
+        <ConfirmDialog />
+        <UserModal />
+        <ContentModal />
+      
+      {/* Sidebar Navigation */}
+      <aside 
+        className="sidebar bg-white shadow d-flex flex-column position-fixed"
+        style={{
+          width: '280px',
+          height: '100vh',
+          left: 0,
+          top: 0,
+          zIndex: 1030,
+          borderRight: '1px solid #e9ecef',
+          overflowY: 'auto'
+        }}
+      >
+        {/* Brand Section */}
+        <div className="p-4 border-bottom">
+          <div className="d-flex align-items-center">
+            <div 
+              className="d-flex align-items-center justify-content-center me-3" 
+              style={{
+                width: '48px',
+                height: '48px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '14px',
+                color: 'white',
+                flexShrink: 0
+              }}
+            >
+              <i className="fas fa-crown" style={{ fontSize: '22px' }}></i>
+            </div>
+            <div>
+              <h5 className="mb-0 fw-bold text-dark">Lady's Essence</h5>
+              <small className="text-muted">Admin Panel</small>
+            </div>
           </div>
-          <div className="col-12 col-md-auto">
-            <div className="d-flex gap-2 flex-wrap">
+        </div>
+
+        {/* Navigation Menu */}
+        <nav className="flex-grow-1 p-3">
+          <div className="d-grid gap-2">
+            {[
+              { id: 'overview', label: 'Overview', icon: 'chart-line', color: '#667eea' },
+              { id: 'users', label: 'User Management', icon: 'users', color: '#f093fb' },
+              { id: 'health-providers', label: 'Health Providers', icon: 'user-md', color: '#4facfe' },
+              { id: 'content', label: 'Content Review', icon: 'file-alt', color: '#43e97b' },
+              { id: 'courses', label: 'Course Management', icon: 'graduation-cap', color: '#fa709a' },
+              { id: 'appointments', label: 'Appointments', icon: 'calendar-check', color: '#feca57' },
+              { id: 'logs', label: 'System Logs', icon: 'list-alt', color: '#ff6b6b' },
+              { id: 'analytics', label: 'Analytics', icon: 'chart-bar', color: '#4834d4' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                className={`btn text-start d-flex align-items-center gap-3 px-3 py-3 position-relative`}
+                onClick={() => handleTabChange(item.id)}
+                style={{
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: activeTab === item.id ? `${item.color}15` : 'transparent',
+                  color: activeTab === item.id ? item.color : '#6c757d',
+                  fontWeight: activeTab === item.id ? '600' : '500',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== item.id) {
+                    e.currentTarget.style.background = '#f8f9fa';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== item.id) {
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                {activeTab === item.id && (
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: '4px',
+                      height: '60%',
+                      background: item.color,
+                      borderRadius: '0 4px 4px 0'
+                    }}
+                  />
+                )}
+                <i className={`fas fa-${item.icon}`} style={{ fontSize: '18px', width: '20px' }}></i>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+
+        {/* User Profile Section */}
+        <div className="p-3 border-top">
+          <div className="dropdown dropup w-100">
+            <button 
+              className="btn btn-light w-100 d-flex align-items-center gap-2 p-3" 
+              data-bs-toggle="dropdown"
+              style={{ borderRadius: '12px' }}
+            >
+              <div 
+                className="d-flex align-items-center justify-content-center flex-shrink-0"
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  borderRadius: '10px',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  fontSize: '16px'
+                }}
+              >
+                {user?.name?.charAt(0).toUpperCase() || 'A'}
+              </div>
+              <div className="flex-grow-1 text-start overflow-hidden">
+                <div className="fw-semibold small text-truncate">{user?.name || 'Admin'}</div>
+                <div className="text-muted text-truncate" style={{ fontSize: '11px' }}>Administrator</div>
+              </div>
+              <i className="fas fa-ellipsis-v text-muted flex-shrink-0"></i>
+            </button>
+            <ul className="dropdown-menu dropdown-menu-end shadow border-0 mb-2" style={{ width: '100%' }}>
+              <li>
+                <button className="dropdown-item py-2" onClick={() => router.push('/settings')}>
+                  <i className="fas fa-cog me-2"></i>Settings
+                </button>
+              </li>
+              <li><hr className="dropdown-divider my-1" /></li>
+              <li>
+                <button className="dropdown-item text-danger py-2" onClick={() => {
+                  localStorage.removeItem('access_token');
+                  localStorage.removeItem('refresh_token');
+                  router.push('/login');
+                }}>
+                  <i className="fas fa-sign-out-alt me-2"></i>Logout
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-grow-1" style={{ marginLeft: '280px' }}>
+        {/* Top Bar */}
+        <div className="bg-white shadow-sm sticky-top" style={{ zIndex: 1020 }}>
+          <div className="px-4 py-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+              <h4 className="mb-1 fw-bold text-dark">
+                {activeTab === 'overview' && 'Dashboard Overview'}
+                {activeTab === 'users' && 'User Management'}
+                {activeTab === 'health-providers' && 'Health Providers'}
+                {activeTab === 'content' && 'Content Review'}
+                {activeTab === 'courses' && 'Course Management'}
+                {activeTab === 'appointments' && 'Appointments'}
+                {activeTab === 'logs' && 'System Logs'}
+                {activeTab === 'analytics' && 'Analytics'}
+              </h4>
+              <p className="text-muted small mb-0 d-none d-md-block">
+                {activeTab === 'overview' && 'Welcome back! Here\'s what\'s happening with your platform today.'}
+                {activeTab === 'users' && 'Manage and monitor all users across the platform'}
+                {activeTab === 'health-providers' && 'Manage health care providers and their availability'}
+                {activeTab === 'content' && 'Review and approve pending content submissions'}
+                {activeTab === 'courses' && 'Manage educational courses and modules'}
+                {activeTab === 'appointments' && 'View and manage appointment requests'}
+                {activeTab === 'logs' && 'Monitor system activities and user actions'}
+                {activeTab === 'analytics' && 'View platform analytics and insights'}
+              </p>
+            </div>
+            
+            <div className="d-flex align-items-center gap-2">
+              {/* Notification Bell */}
+              <button className="btn btn-light position-relative" style={{ borderRadius: '10px', width: '40px', height: '40px', padding: 0 }}>
+                <i className="fas fa-bell"></i>
+                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style={{ fontSize: '9px' }}>
+                  3
+                </span>
+              </button>
+              
+              {/* Refresh Button */}
               <button 
-                className="btn btn-outline-primary btn-sm flex-fill flex-md-grow-0"
+                className="btn btn-primary d-flex align-items-center gap-2"
                 onClick={loadDashboardData}
                 disabled={loading}
+                style={{ borderRadius: '10px' }}
               >
-                <i className="fas fa-sync-alt me-1"></i>
-                <span className="d-none d-sm-inline">Refresh</span>
+                <i className="fas fa-sync-alt"></i>
+                <span className="d-none d-md-inline">Refresh</span>
               </button>
-              <button 
-                className="btn btn-outline-secondary btn-sm dropdown-toggle flex-fill flex-md-grow-0"
-                data-bs-toggle="dropdown"
-              >
-                <i className="fas fa-user-circle me-1"></i>
-                <span className="d-none d-sm-inline">{user?.name}</span>
-              </button>
-              <ul className="dropdown-menu dropdown-menu-end">
-                <li>
-                  <button 
-                    className="dropdown-item"
-                    onClick={() => {
-                      localStorage.removeItem('access_token');
-                      router.push('/login');
-                    }}
-                  >
-                    <i className="fas fa-sign-out-alt me-2"></i>
-                    Logout
-                  </button>
-                </li>
-              </ul>
             </div>
           </div>
         </div>
 
-        {/* Enhanced Navigation - Responsive with horizontal scroll on mobile */}
-        <div className="card shadow-sm mb-3 mb-md-4">
-          <div className="card-body p-0">
-            <div className="overflow-auto">
-              <nav className="nav nav-tabs border-0 flex-nowrap" style={{ borderRadius: '0.375rem 0.375rem 0 0', minWidth: 'max-content' }}>
-                {[
-                  { id: 'overview', label: 'Overview', icon: 'fas fa-chart-line', shortLabel: 'Overview' },
-                  { id: 'users', label: 'User Management', icon: 'fas fa-users', shortLabel: 'Users' },
-                  { id: 'health-providers', label: 'Health Providers', icon: 'fas fa-user-md', shortLabel: 'Providers' },
-                  { id: 'content', label: 'Content Review', icon: 'fas fa-file-alt', shortLabel: 'Content' },
-                  { id: 'courses', label: 'Course Management', icon: 'fas fa-graduation-cap', shortLabel: 'Courses' },
-                  { id: 'appointments', label: 'Appointments', icon: 'fas fa-calendar-check', shortLabel: 'Appts' },
-                  { id: 'logs', label: 'System Logs', icon: 'fas fa-list-alt', shortLabel: 'Logs' },
-                  { id: 'analytics', label: 'Analytics', icon: 'fas fa-chart-bar', shortLabel: 'Stats' }
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    className={`nav-link border-0 px-3 px-md-4 py-2 py-md-3 ${activeTab === tab.id ? 'active' : ''}`}
-                    onClick={() => handleTabChange(tab.id)}
-                    style={{ 
-                      backgroundColor: activeTab === tab.id ? '#0d6efd' : 'transparent',
-                      color: activeTab === tab.id ? 'white' : '#6c757d',
-                      borderRadius: activeTab === tab.id ? '0.375rem 0.375rem 0 0' : '0',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    <i className={`${tab.icon} me-1 me-md-2`}></i>
-                    <span className="d-none d-md-inline">{tab.label}</span>
-                    <span className="d-inline d-md-none">{tab.shortLabel}</span>
-                  </button>
-                ))}
-              </nav>
-            </div>
-          </div>
-        </div>
-
+        {/* Content Area */}
+        <div className="p-3 p-lg-4">
         {/* Tab Loading Indicator */}
         {tabLoading && (
-          <div className="text-center mb-3">
-            <LoadingSpinner />
-            <span className="ms-2 text-muted">Loading {activeTab}...</span>
+          <div className="text-center mb-4">
+            <LoadingSpinner size="large" text={`Loading ${activeTab}...`} />
           </div>
         )}
 
         {/* Enhanced Overview Tab */}
         {activeTab === 'overview' && stats && (
           <div>
-            {/* Enhanced Statistics Cards - Fully Responsive */}
-            <div className="row g-3 g-md-4 mb-3 mb-md-4">
-              <div className="col-12 col-sm-6 col-lg-3">
-                <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                  <div className="card-body text-white p-3 p-md-4">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
-                        <h2 className="mb-1 h3">{stats.users.total.toLocaleString()}</h2>
-                        <p className="mb-0 opacity-75 small">Total Users</p>
-                        <small className="opacity-75">
-                          <i className="fas fa-arrow-up me-1"></i>
-                          +{stats.users.new_today} today
-                        </small>
-                      </div>
-                      <div className="opacity-75">
-                        <i className="fas fa-users fa-2x"></i>
-                      </div>
+          {/* Enhanced Statistics Cards - Modern Design */}
+          <div className="row g-3 g-lg-4 mb-4">
+            <div className="col-12 col-sm-6 col-lg-3">
+              <div 
+                className="card border-0 shadow-sm h-100 cursor-pointer" 
+                onClick={() => handleTabChange('users')}
+                style={{ 
+                  borderRadius: '16px', 
+                  overflow: 'hidden',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-5px)';
+                  e.currentTarget.style.boxShadow = '0 12px 24px rgba(102, 126, 234, 0.25)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '';
+                }}
+              >
+                <div className="card-body p-4 text-white">
+                  <div className="d-flex justify-content-between align-items-start mb-3">
+                    <div className="bg-white bg-opacity-25 p-3" style={{ borderRadius: '12px' }}>
+                      <i className="fas fa-users fa-lg"></i>
                     </div>
+                    <span className="badge bg-white bg-opacity-25 text-white">+{stats.users.new_today} today</span>
                   </div>
-                </div>
-              </div>
-              
-              <div className="col-12 col-sm-6 col-lg-3">
-                <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
-                  <div className="card-body text-white p-3 p-md-4">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
-                        <h2 className="mb-1 h3">{stats.content.published.toLocaleString()}</h2>
-                        <p className="mb-0 opacity-75 small">Published Content</p>
-                        <small className="opacity-75">
-                          <i className="fas fa-clock me-1"></i>
-                          {stats.content.draft} pending
-                        </small>
-                      </div>
-                      <div className="opacity-75">
-                        <i className="fas fa-file-alt fa-2x"></i>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="col-12 col-sm-6 col-lg-3">
-                <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }}>
-                  <div className="card-body text-white p-3 p-md-4">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
-                        <h2 className="mb-1 h3">{stats.appointments.pending.toLocaleString()}</h2>
-                        <p className="mb-0 opacity-75 small">Pending Appointments</p>
-                        <small className="opacity-75">
-                          <i className="fas fa-calendar me-1"></i>
-                          {stats.appointments.total} total
-                        </small>
-                      </div>
-                      <div className="opacity-75">
-                        <i className="fas fa-calendar-check fa-2x"></i>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="col-12 col-sm-6 col-lg-3">
-                <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' }}>
-                  <div className="card-body text-white p-3 p-md-4">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
-                        <h2 className="mb-1">{stats.users.active.toLocaleString()}</h2>
-                        <p className="mb-0 opacity-75">Active Users</p>
-                        <small className="opacity-75">
-                          <i className="fas fa-percentage me-1"></i>
-                          {((stats.users.active / stats.users.total) * 100).toFixed(1)}% active
-                        </small>
-                      </div>
-                      <div className="opacity-75">
-                        <i className="fas fa-user-check fa-2x"></i>
-                      </div>
-                    </div>
-                  </div>
+                  <h3 className="fw-bold mb-1">{stats.users.total.toLocaleString()}</h3>
+                  <p className="mb-0 opacity-90">Total Users</p>
                 </div>
               </div>
             </div>
-
-            {/* Enhanced Charts Section - Responsive */}
-            <div className="row g-3 g-md-4 mb-3 mb-md-4">
-              <div className="col-12 col-lg-8">
-                <div className="card shadow-sm">
-                  <div className="card-header bg-transparent border-0 pb-0">
-                    <h5 className="card-title mb-0 small-md">
-                      <i className="fas fa-chart-line text-primary me-2"></i>
-                      User Growth Trend
-                    </h5>
+            
+            <div className="col-12 col-sm-6 col-lg-3">
+              <div 
+                className="card border-0 shadow-sm h-100 cursor-pointer" 
+                onClick={() => handleTabChange('content')}
+                style={{ 
+                  borderRadius: '16px', 
+                  overflow: 'hidden',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-5px)';
+                  e.currentTarget.style.boxShadow = '0 12px 24px rgba(240, 147, 251, 0.25)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '';
+                }}
+              >
+                <div className="card-body p-4 text-white">
+                  <div className="d-flex justify-content-between align-items-start mb-3">
+                    <div className="bg-white bg-opacity-25 p-3" style={{ borderRadius: '12px' }}>
+                      <i className="fas fa-file-alt fa-lg"></i>
+                    </div>
+                    <span className="badge bg-white bg-opacity-25 text-white">{stats.content.draft} pending</span>
                   </div>
-                  <div className="card-body p-2 p-md-3">
+                  <h3 className="fw-bold mb-1">{stats.content.published.toLocaleString()}</h3>
+                  <p className="mb-0 opacity-90">Published Content</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="col-12 col-sm-6 col-lg-3">
+              <div 
+                className="card border-0 shadow-sm h-100 cursor-pointer" 
+                onClick={() => handleTabChange('appointments')}
+                style={{ 
+                  borderRadius: '16px', 
+                  overflow: 'hidden',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-5px)';
+                  e.currentTarget.style.boxShadow = '0 12px 24px rgba(79, 172, 254, 0.25)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '';
+                }}
+              >
+                <div className="card-body p-4 text-white">
+                  <div className="d-flex justify-content-between align-items-start mb-3">
+                    <div className="bg-white bg-opacity-25 p-3" style={{ borderRadius: '12px' }}>
+                      <i className="fas fa-calendar-check fa-lg"></i>
+                    </div>
+                    <span className="badge bg-white bg-opacity-25 text-white">{stats.appointments.total} total</span>
+                  </div>
+                  <h3 className="fw-bold mb-1">{stats.appointments.pending.toLocaleString()}</h3>
+                  <p className="mb-0 opacity-90">Pending Appointments</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="col-12 col-sm-6 col-lg-3">
+              <div 
+                className="card border-0 shadow-sm h-100" 
+                style={{ 
+                  borderRadius: '16px', 
+                  overflow: 'hidden',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-5px)';
+                  e.currentTarget.style.boxShadow = '0 12px 24px rgba(67, 233, 123, 0.25)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '';
+                }}
+              >
+                <div className="card-body p-4 text-white">
+                  <div className="d-flex justify-content-between align-items-start mb-3">
+                    <div className="bg-white bg-opacity-25 p-3" style={{ borderRadius: '12px' }}>
+                      <i className="fas fa-user-check fa-lg"></i>
+                    </div>
+                    <span className="badge bg-white bg-opacity-25 text-white">{((stats.users.active / stats.users.total) * 100).toFixed(1)}% rate</span>
+                  </div>
+                  <h3 className="fw-bold mb-1">{stats.users.active.toLocaleString()}</h3>
+                  <p className="mb-0 opacity-90">Active Users</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* User Breakdown Cards */}
+          <div className="row g-3 g-lg-4 mb-4">
+            <div className="col-12 col-sm-6 col-lg-3">
+              <div className="card border-0 shadow-sm" style={{ borderRadius: '16px', borderLeft: '4px solid #667eea' }}>
+                <div className="card-body p-3 p-lg-4">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <i className="fas fa-users" style={{ color: '#667eea', fontSize: '24px' }}></i>
+                    <span className="badge" style={{ backgroundColor: '#667eea20', color: '#667eea' }}>Parents</span>
+                  </div>
+                  <h4 className="fw-bold mb-0">{stats.users.parents.toLocaleString()}</h4>
+                  <p className="text-muted small mb-0">{((stats.users.parents / stats.users.total) * 100).toFixed(1)}% of total</p>
+                </div>
+              </div>
+            </div>
+            <div className="col-12 col-sm-6 col-lg-3">
+              <div className="card border-0 shadow-sm" style={{ borderRadius: '16px', borderLeft: '4px solid #198754' }}>
+                <div className="card-body p-3 p-lg-4">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <i className="fas fa-user-friends" style={{ color: '#198754', fontSize: '24px' }}></i>
+                    <span className="badge" style={{ backgroundColor: '#19875420', color: '#198754' }}>Adolescents</span>
+                  </div>
+                  <h4 className="fw-bold mb-0">{stats.users.adolescents.toLocaleString()}</h4>
+                  <p className="text-muted small mb-0">{((stats.users.adolescents / stats.users.total) * 100).toFixed(1)}% of total</p>
+                </div>
+              </div>
+            </div>
+            <div className="col-12 col-sm-6 col-lg-3">
+              <div className="card border-0 shadow-sm" style={{ borderRadius: '16px', borderLeft: '4px solid #0dcaf0' }}>
+                <div className="card-body p-3 p-lg-4">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <i className="fas fa-pen" style={{ color: '#0dcaf0', fontSize: '24px' }}></i>
+                    <span className="badge" style={{ backgroundColor: '#0dcaf020', color: '#0dcaf0' }}>Writers</span>
+                  </div>
+                  <h4 className="fw-bold mb-0">{stats.users.content_writers.toLocaleString()}</h4>
+                  <p className="text-muted small mb-0">Content creators</p>
+                </div>
+              </div>
+            </div>
+            <div className="col-12 col-sm-6 col-lg-3">
+              <div className="card border-0 shadow-sm" style={{ borderRadius: '16px', borderLeft: '4px solid #ffc107' }}>
+                <div className="card-body p-3 p-lg-4">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <i className="fas fa-user-md" style={{ color: '#ffc107', fontSize: '24px' }}></i>
+                    <span className="badge" style={{ backgroundColor: '#ffc10720', color: '#ffc107' }}>Providers</span>
+                  </div>
+                  <h4 className="fw-bold mb-0">{stats.users.health_providers.toLocaleString()}</h4>
+                  <p className="text-muted small mb-0">Health professionals</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Charts Section - Modern Design */}
+          <div className="row g-3 g-lg-4 mb-4">
+            <div className="col-12 col-lg-8">
+              <div className="card border-0 shadow-sm" style={{ borderRadius: '16px' }}>
+                <div className="card-body p-4">
+                  <div className="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                      <h5 className="fw-bold mb-1">User Growth Trend</h5>
+                      <p className="text-muted small mb-0">Monthly registration statistics</p>
+                    </div>
+                    <span className="badge" style={{ backgroundColor: '#667eea20', color: '#667eea', padding: '8px 12px' }}>
+                      Last 6 Months
+                    </span>
+                  </div>
+                  <div className="py-3">
                     <div className="overflow-auto">
-                      <div className="d-flex justify-content-around text-center" style={{ minWidth: '400px' }}>
-                        {stats.monthly_growth.reverse().map((month, index) => (
-                          <div key={index} className="flex-fill">
-                            <div className="mb-2">
-                              <div 
-                                className="bg-primary rounded-top mx-auto" 
-                                style={{ 
-                                  height: `${Math.max(20, (month.users / Math.max(...stats.monthly_growth.map(m => m.users))) * 100)}px`,
-                                  width: '30px'
-                                }}
-                              ></div>
-                              <div className="bg-light p-1 p-md-2 rounded-bottom">
-                                <div className="fw-bold text-primary small">{month.users}</div>
-                                <small className="text-muted" style={{ fontSize: '0.7rem' }}>{month.month}</small>
+                      <div className="d-flex justify-content-around align-items-end gap-2" style={{ minWidth: '500px', minHeight: '200px' }}>
+                        {stats.monthly_growth.reverse().map((month, index) => {
+                          const maxUsers = Math.max(...stats.monthly_growth.map(m => m.users));
+                          const heightPercent = (month.users / maxUsers) * 100;
+                          return (
+                            <div key={index} className="flex-fill text-center">
+                              <div className="position-relative" style={{ height: '180px' }}>
+                                <div 
+                                  className="position-absolute bottom-0 w-100 rounded-top d-flex align-items-end justify-content-center pb-2" 
+                                  style={{ 
+                                    height: `${Math.max(30, heightPercent)}%`,
+                                    background: 'linear-gradient(180deg, #667eea 0%, #764ba2 100%)',
+                                    transition: 'height 0.3s ease'
+                                  }}
+                                >
+                                  <span className="text-white fw-bold small">{month.users}</span>
+                                </div>
+                              </div>
+                              <div className="mt-2">
+                                <small className="text-muted fw-semibold">{month.month}</small>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
               
-              <div className="col-12 col-lg-4">
-                <div className="card shadow-sm">
-                  <div className="card-header bg-transparent border-0 pb-0">
-                    <h5 className="card-title mb-0 small-md">
-                      <i className="fas fa-chart-pie text-success me-2"></i>
-                      User Distribution
-                    </h5>
-                  </div>
-                  <div className="card-body p-2 p-md-3">
-                    <div className="d-grid gap-3">
-                      {[
-                        { type: 'Parents', count: stats.users.parents, color: '#0d6efd' },
-                        { type: 'Adolescents', count: stats.users.adolescents, color: '#198754' },
-                        { type: 'Content Writers', count: stats.users.content_writers, color: '#0dcaf0' },
-                        { type: 'Health Providers', count: stats.users.health_providers, color: '#ffc107' }
-                      ].map(item => (
-                        <div key={item.type} className="d-flex align-items-center">
+            <div className="col-12 col-lg-4">
+              <div className="card border-0 shadow-sm h-100" style={{ borderRadius: '16px' }}>
+                <div className="card-body p-4">
+                  <h5 className="fw-bold mb-1">User Distribution</h5>
+                  <p className="text-muted small mb-4">Users by role</p>
+                  <div className="d-grid gap-3">
+                    {[
+                      { type: 'Parents', count: stats.users.parents, color: '#667eea', icon: 'fa-users' },
+                      { type: 'Adolescents', count: stats.users.adolescents, color: '#198754', icon: 'fa-user-friends' },
+                      { type: 'Writers', count: stats.users.content_writers, color: '#0dcaf0', icon: 'fa-pen' },
+                      { type: 'Providers', count: stats.users.health_providers, color: '#ffc107', icon: 'fa-user-md' }
+                    ].map(item => (
+                      <div key={item.type}>
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                          <div className="d-flex align-items-center gap-2">
+                            <i className={`fas ${item.icon}`} style={{ color: item.color, width: '16px' }}></i>
+                            <span className="small fw-semibold">{item.type}</span>
+                          </div>
+                          <span className="fw-bold" style={{ color: item.color }}>{item.count}</span>
+                        </div>
+                        <div className="progress" style={{ height: '6px', borderRadius: '10px' }}>
                           <div 
-                            className="rounded me-3" 
+                            className="progress-bar" 
                             style={{ 
-                              width: '12px', 
-                              height: '12px', 
-                              backgroundColor: item.color 
+                              width: `${(item.count / stats.users.total) * 100}%`,
+                              backgroundColor: item.color,
+                              borderRadius: '10px'
                             }}
                           ></div>
-                          <div className="flex-grow-1">
-                            <div className="d-flex justify-content-between">
-                              <span className="text-muted small">{item.type}</span>
-                              <span className="fw-bold">{item.count}</span>
-                            </div>
-                            <div className="progress" style={{ height: '4px' }}>
-                              <div 
-                                className="progress-bar" 
-                                style={{ 
-                                  width: `${(item.count / stats.users.total) * 100}%`,
-                                  backgroundColor: item.color
-                                }}
-                              ></div>
-                            </div>
-                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div className="row g-4">
-              <div className="col-lg-6">
-                <div className="card shadow-sm">
-                  <div className="card-header bg-transparent border-0 pb-0">
-                    <h5 className="card-title mb-0">
-                      <i className="fas fa-user-plus text-info me-2"></i>
-                      Recent Users
-                    </h5>
-                  </div>
-                  <div className="card-body">
-                    <div className="list-group list-group-flush">
-                      {stats.recent_users.map(user => (
-                        <div key={user.id} className="list-group-item border-0 px-0 d-flex align-items-center">
-                          <div className="avatar me-3">
-                            <div className="bg-primary rounded-circle d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
-                              <i className="fas fa-user text-white"></i>
-                            </div>
-                          </div>
-                          <div className="flex-grow-1">
-                            <h6 className="mb-0">{user.name}</h6>
-                            <small className="text-muted">
-                              <span className={`badge badge-sm bg-${user.user_type === 'admin' ? 'danger' : 'primary'} me-2`}>
-                                {formatUserType(user.user_type)}
-                              </span>
-                              {formatDate(user.created_at)}
-                            </small>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="col-lg-6">
-                <div className="card shadow-sm">
-                  <div className="card-header bg-transparent border-0 pb-0">
-                    <h5 className="card-title mb-0">
-                      <i className="fas fa-newspaper text-warning me-2"></i>
-                      Recent Content
-                    </h5>
-                  </div>
-                  <div className="card-body">
-                    <div className="list-group list-group-flush">
-                      {stats.recent_content.map(content => (
-                        <div key={content.id} className="list-group-item border-0 px-0 d-flex align-items-center">
-                          <div className="avatar me-3">
-                            <div className="bg-warning rounded-circle d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
-                              <i className="fas fa-file-alt text-white"></i>
-                            </div>
-                          </div>
-                          <div className="flex-grow-1">
-                            <h6 className="mb-0">{content.title}</h6>
-                            <small className="text-muted">
-                              <span className={`badge badge-sm bg-${content.status === 'published' ? 'success' : 'secondary'} me-2`}>
-                                {content.status}
-                              </span>
-                              {formatDate(content.created_at)}
-                            </small>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Enhanced Users Tab */}
-        {activeTab === 'users' && (
-          <div>
-            {/* User Statistics Cards - Responsive */}
-            {userStatistics && (
-              <div className="row g-3 g-md-4 mb-3 mb-md-4">
-                <div className="col-12 col-sm-6 col-lg-3">
-                  <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                    <div className="card-body text-white p-3 p-md-4">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h2 className="mb-1 h3">{userStatistics.overview.total_users}</h2>
-                          <p className="mb-0 opacity-75 small">Total Users</p>
-                          <small className="opacity-75">
-                            <i className="fas fa-user-check me-1"></i>
-                            {userStatistics.overview.active_users} active
-                          </small>
+          {/* Recent Activity - Modern Cards */}
+          <div className="row g-3 g-lg-4">
+            <div className="col-12 col-lg-6">
+              <div className="card border-0 shadow-sm" style={{ borderRadius: '16px' }}>
+                <div className="card-body p-4">
+                  <div className="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                      <h5 className="fw-bold mb-1">Recent Users</h5>
+                      <p className="text-muted small mb-0">Latest registrations</p>
+                    </div>
+                    <button 
+                      className="btn btn-sm"
+                      onClick={() => handleTabChange('users')}
+                      style={{ 
+                        backgroundColor: '#667eea20', 
+                        color: '#667eea',
+                        borderRadius: '8px',
+                        border: 'none'
+                      }}
+                    >
+                      View All <i className="fas fa-arrow-right ms-1"></i>
+                    </button>
+                  </div>
+                  <div className="d-grid gap-3">
+                    {stats.recent_users.map(user => (
+                      <div key={user.id} className="d-flex align-items-center p-2 rounded" style={{ background: '#f8f9fa' }}>
+                        <div 
+                          className="d-flex align-items-center justify-content-center flex-shrink-0 me-3"
+                          style={{
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '12px',
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            color: 'white',
+                            fontWeight: '600',
+                            fontSize: '18px'
+                          }}
+                        >
+                          {user.name.charAt(0).toUpperCase()}
                         </div>
-                        <div className="opacity-75">
-                          <i className="fas fa-users fa-2x"></i>
+                        <div className="flex-grow-1 min-w-0">
+                          <h6 className="mb-1 fw-semibold text-truncate" style={{ fontSize: '14px' }}>{user.name}</h6>
+                          <div className="d-flex align-items-center gap-2 flex-wrap">
+                            <span className={`badge ${
+                              user.user_type === 'admin' ? 'bg-danger' :
+                              user.user_type === 'content_writer' ? 'bg-success' :
+                              user.user_type === 'health_provider' ? 'bg-primary' :
+                              user.user_type === 'parent' ? 'bg-warning' : 'bg-info'
+                            }`} style={{ fontSize: '10px', padding: '4px 8px' }}>
+                              {formatUserType(user.user_type)}
+                            </span>
+                            <small className="text-muted">
+                              <i className="far fa-clock me-1"></i>
+                              {formatDate(user.created_at)}
+                            </small>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
-                
-                <div className="col-12 col-sm-6 col-lg-3">
-                  <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
-                    <div className="card-body text-white p-3 p-md-4">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h2 className="mb-1 h3">{userStatistics.overview.active_users}</h2>
-                          <p className="mb-0 opacity-75 small">Active Users</p>
-                          <small className="opacity-75">
-                            <i className="fas fa-chart-line me-1"></i>
-                            {((userStatistics.overview.active_users / userStatistics.overview.total_users) * 100).toFixed(1)}% active rate
-                          </small>
+              </div>
+            </div>
+            
+            <div className="col-12 col-lg-6">
+              <div className="card border-0 shadow-sm" style={{ borderRadius: '16px' }}>
+                <div className="card-body p-4">
+                  <div className="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                      <h5 className="fw-bold mb-1">Recent Content</h5>
+                      <p className="text-muted small mb-0">Latest publications</p>
+                    </div>
+                    <button 
+                      className="btn btn-sm"
+                      onClick={() => handleTabChange('content')}
+                      style={{ 
+                        backgroundColor: '#f093fb20', 
+                        color: '#f093fb',
+                        borderRadius: '8px',
+                        border: 'none'
+                      }}
+                    >
+                      View All <i className="fas fa-arrow-right ms-1"></i>
+                    </button>
+                  </div>
+                  <div className="d-grid gap-3">
+                    {stats.recent_content.map(content => (
+                      <div key={content.id} className="d-flex align-items-center p-2 rounded" style={{ background: '#f8f9fa' }}>
+                        <div 
+                          className="d-flex align-items-center justify-content-center flex-shrink-0 me-3"
+                          style={{
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '12px',
+                            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                            color: 'white'
+                          }}
+                        >
+                          <i className="fas fa-file-alt"></i>
                         </div>
-                        <div className="opacity-75">
-                          <i className="fas fa-user-check fa-2x"></i>
+                        <div className="flex-grow-1 min-w-0">
+                          <h6 className="mb-1 fw-semibold text-truncate" style={{ fontSize: '14px' }}>{content.title}</h6>
+                          <div className="d-flex align-items-center gap-2 flex-wrap">
+                            <span className={`badge ${
+                              content.status === 'published' ? 'bg-success' :
+                              content.status === 'draft' ? 'bg-secondary' : 'bg-warning'
+                            }`} style={{ fontSize: '10px', padding: '4px 8px' }}>
+                              {content.status}
+                            </span>
+                            <small className="text-muted">
+                              <i className="far fa-clock me-1"></i>
+                              {formatDate(content.created_at)}
+                            </small>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Users Tab */}
+      {activeTab === 'users' && (
+        <div>
+          <SectionHeader
+            title="User Management"
+            subtitle="Manage and monitor all users across the platform"
+            icon="fas fa-users"
+            color="#667eea"
+            actions={
+              <>
+                <button 
+                  className="btn btn-outline-primary"
+                  onClick={() => setShowCreateUserModal(true)}
+                >
+                  <i className="fas fa-user-plus me-2"></i>
+                  Add User
+                </button>
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => loadUsers(1)}
+                  disabled={actionLoading.load_users}
+                >
+                  <i className="fas fa-sync-alt me-2"></i>
+                  Refresh
+                </button>
+              </>
+            }
+          />
+
+          {/* User Statistics Cards - Responsive */}
+          {userStatistics && (
+            <div className="row g-4 mb-4">
+              <div className="col-12 col-sm-6 col-lg-3">
+                <StatsCard
+                  title="Total Users"
+                  value={userStatistics.overview.total_users}
+                  subtitle={`${userStatistics.overview.active_users} active`}
+                  icon="fas fa-users"
+                  gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                />
+              </div>
+              
+              <div className="col-12 col-sm-6 col-lg-3">
+                <StatsCard
+                  title="Active Users"
+                  value={userStatistics.overview.active_users}
+                  subtitle={`${((userStatistics.overview.active_users / userStatistics.overview.total_users) * 100).toFixed(1)}% active rate`}
+                  icon="fas fa-user-check"
+                  gradient="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+                />
+              </div>
                 
                 <div className="col-12 col-sm-6 col-lg-3">
                   <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }}>
@@ -2351,27 +2642,49 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Health Providers Tab */}
-        {activeTab === 'health-providers' && (
-          <div>
-            <HealthProviderManagement />
-          </div>
-        )}
+      {/* Health Providers Tab */}
+      {activeTab === 'health-providers' && (
+        <div>
+          <SectionHeader
+            title="Health Provider Management"
+            subtitle="Manage healthcare providers and their availability"
+            icon="fas fa-user-md"
+            color="#4facfe"
+          />
+          <HealthProviderManagement />
+        </div>
+      )}
 
-        {/* Enhanced Content Review Tab */}
-        {activeTab === 'content' && (
-          <div>
-            <div className="card shadow-sm">
-              <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-file-alt text-warning me-2"></i>
-                  Content Pending Review
-                </h5>
-                <span className="badge bg-warning">
+      {/* Enhanced Content Review Tab */}
+      {activeTab === 'content' && (
+        <div>
+          <SectionHeader
+            title="Content Review"
+            subtitle="Review and manage pending content submissions"
+            icon="fas fa-file-alt"
+            color="#f093fb"
+            actions={
+              <div className="d-flex align-items-center gap-2">
+                <span className="badge bg-warning fs-6 px-3 py-2">
                   {pendingContent.length} pending
                 </span>
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => loadPendingContent()}
+                  disabled={actionLoading.load_content}
+                >
+                  <i className="fas fa-sync-alt me-2"></i>
+                  Refresh
+                </button>
               </div>
-              <div className="card-body p-0">
+            }
+          />
+
+          <ContentCard noPadding>
+            <div className="px-4 py-3 border-bottom bg-light">
+              <h6 className="mb-0 text-muted">Pending Approvals</h6>
+            </div>
+            <div>
                 {pendingContent.length > 0 ? (
                   <div className="table-responsive">
                     <table className="table table-hover mb-0">
@@ -2477,101 +2790,78 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-        )}
+          </ContentCard>
+        </div>
+      )}
 
-        {/* Course Management Tab */}
-        {activeTab === 'courses' && (
-          <div>
-            {/* Course Statistics Cards */}
-            {courseStats && courseStats.overview && (
-              <div className="row g-4 mb-4">
-                <div className="col-lg-3 col-md-6">
-                  <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-                    <div className="card-body text-white">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h2 className="mb-1">{courseStats.overview.total_courses || 0}</h2>
-                          <p className="mb-0 opacity-75">Total Courses</p>
-                          <small className="opacity-75">
-                            <i className="fas fa-clock me-1"></i>
-                            {courseStats.overview.draft_courses || 0} draft courses
-                          </small>
-                        </div>
-                        <div className="opacity-75">
-                          <i className="fas fa-graduation-cap fa-2x"></i>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="col-lg-3 col-md-6">
-                  <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
-                    <div className="card-body text-white">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h2 className="mb-1">{courseStats.overview.published_courses || 0}</h2>
-                          <p className="mb-0 opacity-75">Published</p>
-                          <small className="opacity-75">
-                            <i className="fas fa-chart-line me-1"></i>
-                            Active courses
-                          </small>
-                        </div>
-                        <div className="opacity-75">
-                          <i className="fas fa-check-circle fa-2x"></i>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="col-lg-3 col-md-6">
-                  <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }}>
-                    <div className="card-body text-white">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h2 className="mb-1">{courseStats.overview.total_modules || 0}</h2>
-                          <p className="mb-0 opacity-75">Total Modules</p>
-                          <small className="opacity-75">
-                            <i className="fas fa-book me-1"></i>
-                            Course modules
-                          </small>
-                        </div>
-                        <div className="opacity-75">
-                          <i className="fas fa-book fa-2x"></i>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="col-lg-3 col-md-6">
-                  <div className="card border-0 shadow-sm h-100" style={{ background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' }}>
-                    <div className="card-body text-white">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h2 className="mb-1">{courseStats.overview.total_chapters || 0}</h2>
-                          <p className="mb-0 opacity-75">Total Chapters</p>
-                          <small className="opacity-75">
-                            <i className="fas fa-layer-group me-1"></i>
-                            Course chapters
-                          </small>
-                        </div>
-                        <div className="opacity-75">
-                          <i className="fas fa-layer-group fa-2x"></i>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+      {/* Course Management Tab */}
+      {activeTab === 'courses' && (
+        <div>
+          <SectionHeader
+            title="Course Management"
+            subtitle="Manage educational courses and learning content"
+            icon="fas fa-graduation-cap"
+            color="#fa709a"
+            actions={
+              <button 
+                className="btn btn-primary"
+                onClick={() => loadCourses(1)}
+                disabled={actionLoading.load_courses}
+              >
+                <i className="fas fa-sync-alt me-2"></i>
+                Refresh
+              </button>
+            }
+          />
+
+          {/* Course Statistics Cards */}
+          {courseStats && courseStats.overview && (
+            <div className="row g-4 mb-4">
+              <div className="col-lg-3 col-md-6">
+                <StatsCard
+                  title="Total Courses"
+                  value={courseStats.overview.total_courses || 0}
+                  subtitle={`${courseStats.overview.draft_courses || 0} draft courses`}
+                  icon="fas fa-graduation-cap"
+                  gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                />
               </div>
-            )}
+              
+              <div className="col-lg-3 col-md-6">
+                <StatsCard
+                  title="Published"
+                  value={courseStats.overview.published_courses || 0}
+                  subtitle="Active courses"
+                  icon="fas fa-check-circle"
+                  gradient="linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
+                />
+              </div>
+              
+              <div className="col-lg-3 col-md-6">
+                <StatsCard
+                  title="Total Modules"
+                  value={courseStats.overview.total_modules || 0}
+                  subtitle="Course modules"
+                  icon="fas fa-book"
+                  gradient="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+                />
+              </div>
+                
+              <div className="col-lg-3 col-md-6">
+                <StatsCard
+                  title="Total Chapters"
+                  value={courseStats.overview.total_chapters || 0}
+                  subtitle="Course chapters"
+                  icon="fas fa-layer-group"
+                  gradient="linear-gradient(135deg, #fa709a 0%, #fee140 100%)"
+                />
+              </div>
+            </div>
+          )}
 
-            {/* Course Filters and Search */}
-            <div className="card shadow-sm mb-4">
-              <div className="card-body">
+          {/* Course Filters and Search */}
+          <ContentCard>
+            <div>
                 <div className="row g-3">
                   <div className="col-md-4">
                     <div className="input-group">
@@ -2635,21 +2925,20 @@ export default function AdminDashboard() {
                     </button>
                   </div>
                 </div>
-              </div>
             </div>
+          </ContentCard>
 
-            {/* Courses Table */}
-            <div className="card shadow-sm">
-              <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-graduation-cap text-primary me-2"></i>
-                  Course Management
-                </h5>
-                <span className="badge bg-primary">
-                  {coursesPagination.total} courses
-                </span>
+          {/* Courses Table */}
+          <ContentCard noPadding>
+              <div className="px-4 py-3 border-bottom bg-light">
+                <div className="d-flex justify-content-between align-items-center">
+                  <h6 className="mb-0 text-muted">All Courses</h6>
+                  <span className="badge bg-primary">
+                    {coursesPagination.total} courses
+                  </span>
+                </div>
               </div>
-              <div className="card-body p-0">
+              <div>
                 {courses.length > 0 ? (
                   <div className="table-responsive">
                     <table className="table table-hover mb-0">
@@ -2802,53 +3091,70 @@ export default function AdminDashboard() {
                   </nav>
                 </div>
               )}
-            </div>
-          </div>
-        )}
+          </ContentCard>
+        </div>
+      )}
 
-        {/* Enhanced Appointments Tab */}
-        {activeTab === 'appointments' && (
-          <div>
-            {/* Filter Controls */}
-            <div className="card shadow-sm mb-4">
-              <div className="card-body">
-                <div className="row g-3 align-items-center">
-                  <div className="col-md-6">
-                    <div className="input-group">
-                      <span className="input-group-text">
-                        <i className="fas fa-filter"></i>
-                      </span>
-                      <select
-                        className="form-select"
-                        value={filters.status}
-                        onChange={(e) => handleFilterChange('status', e.target.value)}
-                      >
-                        <option value="">All Appointments</option>
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="cancelled">Cancelled</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="col-md-6 text-end">
-                    <span className="badge bg-secondary">
-                      {appointmentsPagination.total} total appointments
+      {/* Enhanced Appointments Tab */}
+      {activeTab === 'appointments' && (
+        <div>
+          <SectionHeader
+            title="Appointment Management"
+            subtitle="Monitor and manage all appointment bookings"
+            icon="fas fa-calendar-check"
+            color="#4facfe"
+            actions={
+              <div className="d-flex align-items-center gap-2">
+                <span className="badge bg-info fs-6 px-3 py-2">
+                  {appointmentsPagination.total} total
+                </span>
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => loadAppointments(1)}
+                  disabled={actionLoading.load_appointments}
+                >
+                  <i className="fas fa-sync-alt me-2"></i>
+                  Refresh
+                </button>
+              </div>
+            }
+          />
+
+          {/* Filter Controls */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-body">
+              <div className="row g-3 align-items-center">
+                <div className="col-md-6">
+                  <div className="input-group">
+                    <span className="input-group-text bg-light border-0">
+                      <i className="fas fa-filter text-primary"></i>
                     </span>
+                    <select
+                      className="form-select border-0 bg-light"
+                      value={filters.status}
+                      onChange={(e) => handleFilterChange('status', e.target.value)}
+                    >
+                      <option value="">All Appointments</option>
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="completed">Completed</option>
+                    </select>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Appointments Table */}
-            <div className="card shadow-sm">
-              <div className="card-header bg-transparent border-0">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-calendar-check text-primary me-2"></i>
-                  Appointment Management
-                </h5>
-              </div>
-              <div className="card-body p-0">
+          {/* Appointments Table */}
+          <ContentCard noPadding>
+            <div className="px-4 py-3 border-bottom bg-light">
+              <h6 className="mb-0 text-muted">
+                <i className="fas fa-list me-2"></i>
+                Appointment List
+              </h6>
+            </div>
+            <div>
                 <div className="table-responsive">
                   <table className="table table-hover mb-0">
                     <thead className="table-light">
@@ -2950,25 +3256,42 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
-            </div>
             
             {/* Pagination */}
-            <div className="mt-4">
+            <div className="px-4 pb-4">
               <Pagination 
                 pagination={appointmentsPagination}
                 onPageChange={(page) => handlePageChange(page, 'appointments')}
                 type="appointments"
               />
             </div>
-          </div>
-        )}
+          </ContentCard>
+        </div>
+      )}
 
-        {/* Enhanced System Logs Tab */}
-        {activeTab === 'logs' && (
-          <div>
-            {/* Search Controls */}
-            <div className="card shadow-sm mb-4">
-              <div className="card-body">
+      {/* Enhanced System Logs Tab */}
+      {activeTab === 'logs' && (
+        <div>
+          <SectionHeader
+            title="System Logs"
+            subtitle="Monitor system activities and audit trails"
+            icon="fas fa-list-alt"
+            color="#ff6b6b"
+            actions={
+              <button 
+                className="btn btn-primary"
+                onClick={() => loadSystemLogs(1)}
+                disabled={actionLoading.load_logs}
+              >
+                <i className="fas fa-sync-alt me-2"></i>
+                Refresh
+              </button>
+            }
+          />
+
+          {/* Search Controls */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-body">
                 <div className="row g-3 align-items-center">
                   <div className="col-md-8">
                     <div className="input-group">
@@ -2994,14 +3317,11 @@ export default function AdminDashboard() {
             </div>
 
             {/* System Logs Table */}
-            <div className="card shadow-sm">
-              <div className="card-header bg-transparent border-0">
-                <h5 className="card-title mb-0">
-                  <i className="fas fa-list-alt text-info me-2"></i>
-                  System Activity Logs
-                </h5>
+            <ContentCard noPadding>
+              <div className="px-4 py-3 border-bottom bg-light">
+                <h6 className="mb-0 text-muted">System Activity Logs</h6>
               </div>
-              <div className="card-body p-0">
+              <div>
                 <div className="table-responsive">
                   <table className="table table-hover mb-0">
                     <thead className="table-light">
@@ -3050,25 +3370,42 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
-            </div>
             
             {/* Pagination */}
-            <div className="mt-4">
+            <div className="px-4 pb-4">
               <Pagination 
                 pagination={logsPagination}
                 onPageChange={(page) => handlePageChange(page, 'logs')}
                 type="logs"
               />
             </div>
-          </div>
-        )}
+          </ContentCard>
+        </div>
+      )}
 
-        {/* Enhanced Analytics Tab */}
-        {activeTab === 'analytics' && (
-          <div>
-            {/* Analytics Controls */}
-            <div className="card shadow-sm mb-4">
-              <div className="card-body">
+      {/* Enhanced Analytics Tab */}
+      {activeTab === 'analytics' && (
+        <div>
+          <SectionHeader
+            title="Analytics & Insights"
+            subtitle="Comprehensive platform analytics and performance metrics"
+            icon="fas fa-chart-bar"
+            color="#4834d4"
+            actions={
+              <button 
+                className="btn btn-primary"
+                onClick={() => loadAnalytics('overview')}
+                disabled={actionLoading.load_analytics}
+              >
+                <i className="fas fa-sync-alt me-2"></i>
+                Refresh Data
+              </button>
+            }
+          />
+
+          {/* Analytics Controls */}
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-body">
                 <div className="row g-3 align-items-center">
                   <div className="col-md-4">
                     <label className="form-label small mb-1">Report Type</label>
@@ -3523,7 +3860,6 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
-      </div>
 
       {/* Course Modals */}
       {showCourseModal && selectedCourse && (
@@ -4028,6 +4364,9 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+          </div>
+        </div>
+      </div>
     </>
   );
 }
