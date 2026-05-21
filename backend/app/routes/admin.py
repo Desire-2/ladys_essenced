@@ -12,6 +12,12 @@ from app.auth.middleware import (
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc, or_, and_
 import json
+from app.services.admin_notifications import (
+    notify_provider_verified,
+    notify_provider_verification_revoked,
+    notify_content_approved,
+    notify_content_rejected,
+)
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -1265,7 +1271,14 @@ def verify_health_provider(provider_id):
         provider.is_verified = verify
         db.session.commit()
         
-        # Create notification for provider
+        # 🔔 Call the new admin notification helpers
+        if provider.user:
+            if verify:
+                notify_provider_verified(provider_id)
+            else:
+                notify_provider_verification_revoked(provider_id)
+        
+        # Create notification for provider (backward compatibility)
         if provider.user:
             notification_message = (
                 f"Your health provider account has been {'verified' if verify else 'unverified'}. "
@@ -1590,6 +1603,10 @@ def approve_content(content_id):
         
         db.session.commit()
         
+        # 🔔 Call the new admin notification helper
+        if content.author_id:
+            notify_content_approved(content_id, content.author_id)
+        
         log_user_activity('approve_content', {'content_id': content_id})
         
         return jsonify({'message': 'Content approved and published successfully'}), 200
@@ -1613,6 +1630,10 @@ def reject_content(content_id):
         content.rejection_reason = reason
         
         db.session.commit()
+        
+        # 🔔 Call the new admin notification helper
+        if content.author_id:
+            notify_content_rejected(content_id, content.author_id, reason)
         
         log_user_activity('reject_content', {
             'content_id': content_id,

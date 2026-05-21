@@ -32,9 +32,13 @@ def _initialize_test_data():
     """Initialize the database - no test data, only existing data will be used"""
     from app.models import User
     
-    # Check if data already exists
-    if User.query.first():
-        print("✅ Database already has data, skipping initialization")
+    # Check if data already exists (guard against missing columns during migration)
+    try:
+        if User.query.first():
+            print("✅ Database already has data, skipping initialization")
+            return
+    except Exception as e:
+        print(f"ℹ️  Skipping data check (schema may be pending migration): {e}")
         return
     
     print("🌱 Database is empty, waiting for user registration...")
@@ -102,6 +106,16 @@ def create_app():
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', jwt_secret)
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)  # 1 hour
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)  # 30 days
+
+    # Gemini / Umwari — loaded from backend/.env (GEMINI_API_KEY, GOOGLE_API_KEY, or API_KEY)
+    from app.utils.gemini_config import get_gemini_api_key_from_env
+    gemini_key = get_gemini_api_key_from_env()
+    app.config['GEMINI_API_KEY'] = gemini_key
+    app.config['GOOGLE_API_KEY'] = gemini_key
+    if gemini_key:
+        print(f"[Umwari] Gemini API key loaded from .env ({gemini_key[:8]}…)")
+    else:
+        print("[Umwari] No Gemini API key in .env — set GEMINI_API_KEY in backend/.env or use Settings > Secrets")
     
     # Environment-specific configuration
     app.config['ENV'] = os.environ.get('FLASK_ENV', 'development')
@@ -137,7 +151,14 @@ def create_app():
         return jsonify({'message': 'Authorization token is required'}), 401
     
     # Enable CORS with environment-specific origins
-    allowed_origins = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002,http://localhost:3003,http://127.0.0.1:3003,http://localhost:3004,http://127.0.0.1:3004,http://localhost:3005,http://127.0.0.1:3005,https://ladys-essenced.vercel.app,https://ladys-essence.afritechbridge.online').split(',')
+    allowed_origins = os.environ.get(
+        'ALLOWED_ORIGINS',
+        'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,'
+        'http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002,'
+        'http://localhost:3003,http://127.0.0.1:3003,http://localhost:3004,http://127.0.0.1:3004,'
+        'http://localhost:3005,http://127.0.0.1:3005,https://ladys-essenced.vercel.app,'
+        'https://ladys-essence.afritechbridge.online',
+    ).split(',')
     
     # Debug CORS configuration
     print(f"[CORS] Allowed origins: {allowed_origins}")
@@ -207,6 +228,7 @@ def create_app():
     from app.routes.content_writer import content_writer_bp
     from app.routes.health_provider import health_provider_bp
     from app.routes.parent_appointments import parent_appointments_bp
+    from app.routes.umwari import umwari_bp
     
     # Import insights blueprint with error handling
     try:
@@ -240,16 +262,12 @@ def create_app():
     app.register_blueprint(content_writer_bp, url_prefix='/api/content-writer')
     app.register_blueprint(health_provider_bp, url_prefix='/api/health-provider')
     app.register_blueprint(parent_appointments_bp, url_prefix='/api')
+    app.register_blueprint(umwari_bp, url_prefix='/api/umwari')
     
-    # Register settings blueprint
-    try:
-        from app.routes.settings import settings_bp
-        app.register_blueprint(settings_bp, url_prefix='/api/settings')
-        print("✅ Settings blueprint registered successfully")
-    except ImportError as e:
-        print(f"❌ Failed to import settings blueprint: {e}")
-    except Exception as e:
-        print(f"❌ Failed to register settings blueprint: {e}")
+    # Register settings blueprint (account, privacy, bundle)
+    from app.routes.settings import settings_bp
+    app.register_blueprint(settings_bp, url_prefix='/api/settings')
+    print("✅ Settings blueprint registered successfully")
     
     # Register insights blueprint with error handling
     if insights_bp:
@@ -298,6 +316,14 @@ def create_app():
             
             # Initialize database with test data
             _initialize_test_data()
+            
+            # Seed notification templates
+            try:
+                from app.services.notification_templates_seed import seed_notification_templates
+                seed_notification_templates()
+                print("✅ Notification templates seeded successfully")
+            except Exception as e:
+                print(f"⚠️  Failed to seed notification templates: {e}")
             
             print("✅ Database initialization completed successfully")
         except Exception as e:

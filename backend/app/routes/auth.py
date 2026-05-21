@@ -111,8 +111,18 @@ def check_rate_limit(phone_number, ip_address=None):
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    data = request.get_json()
-    
+    data = request.get_json(silent=True)
+
+    # Guard against missing or malformed JSON body
+    if not data:
+        return jsonify({'message': 'Request body must be valid JSON'}), 400
+
+    # Rate-limit registrations by IP to deter bot account creation
+    ip = request.remote_addr
+    is_allowed, rate_limit_error = check_rate_limit(data.get('phone_number', ip), ip_address=ip)
+    if not is_allowed:
+        return jsonify({'message': rate_limit_error}), 429
+
     # Validate required fields
     required_fields = ['name', 'phone_number', 'password', 'user_type']
     for field in required_fields:
@@ -127,8 +137,14 @@ def register():
     # Check if phone number already exists
     if User.query.filter_by(phone_number=data['phone_number'].strip()).first():
         return jsonify({'message': 'Phone number already registered'}), 409
-    
-    # Validate user type
+
+    # Check email uniqueness if provided
+    if data.get('email'):
+        if User.query.filter_by(email=data['email'].strip().lower()).first():
+            return jsonify({'message': 'Email address already registered'}), 409
+
+    # Validate user type — only public roles allowed; admin/health_provider/content_writer
+    # accounts are created by admins through the management UI, not self-registration.
     if data['user_type'] not in ['parent', 'adolescent']:
         return jsonify({'message': 'Invalid user type. Must be "parent" or "adolescent"'}), 400
     
@@ -175,10 +191,27 @@ def register():
         db.session.add(new_adolescent)
     
     db.session.commit()
-    
+
+    # Issue tokens immediately so the frontend can auto-login after registration
+    user_identity = str(new_user.id)
+    access_token = create_access_token(identity=user_identity)
+    refresh_token = create_refresh_token(identity=user_identity)
+    log_login_attempt(new_user.phone_number, True)
+
     return jsonify({
         'message': 'User registered successfully',
+        'access_token': access_token,
+        'refresh_token': refresh_token,
         'user_id': new_user.id,
+        'user_type': new_user.user_type,
+        'user': {
+            'id': new_user.id,
+            'name': new_user.name,
+            'first_name': new_user.name.split()[0] if new_user.name else 'User',
+            'phone_number': new_user.phone_number,
+            'email': new_user.email,
+            'user_type': new_user.user_type
+        },
         'pin_enabled': enable_pin_auth
     }), 201
 
@@ -235,10 +268,18 @@ def login():
                 
                 return jsonify({
                     'message': 'Login successful',
-                    'user_id': user.id,
-                    'user_type': user.user_type,
                     'access_token': access_token,
                     'refresh_token': refresh_token,
+                    'user_id': user.id,
+                    'user_type': user.user_type,
+                    'user': {
+                        'id': user.id,
+                        'name': user.name,
+                        'first_name': user.name.split()[0] if user.name else 'User',
+                        'phone_number': user.phone_number,
+                        'email': user.email,
+                        'user_type': user.user_type
+                    },
                     'auth_method': 'pin'
                 }), 200
             else:
@@ -260,10 +301,18 @@ def login():
                 
                 return jsonify({
                     'message': 'Login successful',
-                    'user_id': user.id,
-                    'user_type': user.user_type,
                     'access_token': access_token,
                     'refresh_token': refresh_token,
+                    'user_id': user.id,
+                    'user_type': user.user_type,
+                    'user': {
+                        'id': user.id,
+                        'name': user.name,
+                        'first_name': user.name.split()[0] if user.name else 'User',
+                        'phone_number': user.phone_number,
+                        'email': user.email,
+                        'user_type': user.user_type
+                    },
                     'auth_method': 'password'
                 }), 200
             else:
@@ -438,6 +487,33 @@ def update_profile():
         'message': 'Profile updated successfully',
         'pin_enabled': user.enable_pin_auth
     }), 200
+
+@auth_bp.route('/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    """
+    Logout endpoint — logs the event for audit purposes.
+    JWT tokens are stateless so we rely on the client to discard them.
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        # Log as a distinct logout action rather than a login attempt
+        try:
+            from app.models import SystemLog
+            log_entry = SystemLog(
+                user_id=int(current_user_id),
+                action='logout',
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+            db.session.add(log_entry)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()  # Don't fail logout due to audit issues
+        return jsonify({'message': 'Logged out successfully'}), 200
+    except Exception:
+        return jsonify({'message': 'Logout recorded'}), 200
+
 
 @auth_bp.route('/test-jwt', methods=['GET'])
 @jwt_required()

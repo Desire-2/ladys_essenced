@@ -44,26 +44,38 @@ def get_providers():
     try:
         current_user_id = get_jwt_identity()
         current_app.logger.info(f"User {current_user_id} fetching providers list")
-        providers = HealthProvider.query.filter_by(is_verified=True).all()
-        
+
+        include_unverified = request.args.get('include_unverified', 'false').lower() == 'true'
+        query = HealthProvider.query
+        if not include_unverified:
+            query = query.filter_by(is_verified=True)
+
+        providers = query.order_by(HealthProvider.id.asc()).all()
+
         providers_list = []
         for provider in providers:
+            full_name = provider.user.name if provider.user else 'Unknown Provider'
+            name_parts = full_name.split(' ', 1) if full_name else ['Unknown', '']
             providers_list.append({
                 'id': provider.id,
-                'name': provider.user.name if provider.user else 'Unknown Provider',
+                'user_id': provider.user_id,
+                'name': full_name,
+                'first_name': name_parts[0],
+                'last_name': name_parts[1] if len(name_parts) > 1 else '',
                 'specialization': provider.specialization or 'General Practice',
                 'is_verified': provider.is_verified,
-                'clinic_name': provider.clinic_name,
+                'clinic_name': provider.clinic_name or 'Community Health Center',
+                'workplace_clinic': provider.clinic_name or 'Community Health Center',
                 'clinic_address': provider.clinic_address,
-                'phone': provider.phone,
-                'email': provider.email
+                'phone': provider.phone or (provider.user.phone_number if provider.user else None),
+                'email': provider.email or (provider.user.email if provider.user else None),
             })
-        
+
         return jsonify({
             'providers': providers_list,
-            'total_count': len(providers_list)
+            'total_count': len(providers_list),
         }), 200
-        
+
     except Exception as e:
         current_app.logger.error(f"Error getting providers: {str(e)}")
         return jsonify({'error': 'Failed to fetch providers', 'message': str(e)}), 500

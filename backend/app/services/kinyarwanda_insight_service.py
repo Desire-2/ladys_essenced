@@ -18,12 +18,17 @@ class KinyarwandaInsightService:
     """
     
     def __init__(self):
-        self.google_api_key = os.environ.get('GOOGLE_API_KEY')
-        self.gemini_endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        from app.utils.gemini_config import get_gemini_api_key_from_env
+        self.google_api_key = get_gemini_api_key_from_env()
+        self.gemini_endpoint = (
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+        )
         self.cache_duration_hours = 6
-        
+
         if not self.google_api_key:
-            logger.warning("GOOGLE_API_KEY not found in environment variables")
+            logger.warning(
+                "No Gemini API key in .env (set GEMINI_API_KEY, GOOGLE_API_KEY, or API_KEY in backend/.env)"
+            )
     
     def generate_insight(self, user_id: int, language: str = 'kinyarwanda') -> Dict[str, Any]:
         """
@@ -202,31 +207,25 @@ class KinyarwandaInsightService:
             
             # Extract cycle data using robust method
             cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(cycle_logs)
+            cycle_lengths = cycle_data.get('lengths', [])
+            filtered_cycle_data = CyclePredictionEngine.detect_outliers(cycle_data) if cycle_lengths else []
             
-            # Detect outliers
-            filtered_cycle_data = CyclePredictionEngine.detect_outliers(cycle_data) if cycle_data else []
-            
-            # Analyze trends
             trend_analysis = CyclePredictionEngine.analyze_trend(filtered_cycle_data) if filtered_cycle_data else {}
             
-            # ML Pattern Recognition
             ml_patterns = CyclePredictionEngine.ml_pattern_recognition(filtered_cycle_data, str(user_id))
             
-            # Anomaly Detection
             anomaly_analysis = CyclePredictionEngine.anomaly_detection(filtered_cycle_data)
             
-            # Generate predictions
-            predictions = CyclePredictionEngine.predict_next_cycles(cycle_logs, num_predictions=3, user_id=str(user_id))
+            prediction_result = CyclePredictionEngine.predict_next_cycles(cycle_logs, num_predictions=3, user_id=str(user_id))
+            predictions = CyclePredictionEngine._predictions_from_result(prediction_result)
             
-            # Calculate statistics
-            cycle_lengths = [c['length'] for c in cycle_data] if cycle_data else []
             avg_cycle_length = statistics.mean(cycle_lengths) if cycle_lengths else None
             
-            # Calculate weighted average using enhanced method
-            weighted_avg = CyclePredictionEngine.calculate_adaptive_weighted_average(filtered_cycle_data) if filtered_cycle_data else None
+            baseline = CyclePredictionEngine.build_personal_baseline(cycle_data) if len(cycle_lengths) >= 2 else {}
+            weighted_avg = baseline.get('prediction_base') if baseline.get('prediction_base') else avg_cycle_length
             
-            # Calculate confidence
-            confidence_level = CyclePredictionEngine.calculate_enhanced_confidence(filtered_cycle_data, trend_analysis) if filtered_cycle_data else 'no_data'
+            confidence_data = CyclePredictionEngine.compute_confidence_score(cycle_data) if cycle_lengths else {}
+            confidence_level = confidence_data.get('level', 'no_data')
             
             # Analyze symptoms patterns
             symptom_analysis = CyclePredictionEngine.analyze_symptoms_patterns(cycle_logs)
@@ -248,7 +247,7 @@ class KinyarwandaInsightService:
                 'symptom_patterns': symptom_analysis,
                 'health_insights': health_insights,
                 'outliers_detected': sum(1 for c in filtered_cycle_data if c.get('is_outlier', False)),
-                'regularity_score': CyclePredictionEngine.calculate_cycle_variability(cycle_lengths) if len(cycle_lengths) >= 2 else None
+                'regularity_score': CyclePredictionEngine.compute_regularity_index(cycle_lengths) if len(cycle_lengths) >= 2 else None
             }
             
         except Exception as e:

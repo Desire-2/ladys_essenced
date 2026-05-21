@@ -11,6 +11,7 @@ from app.auth.middleware import (
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc
 import json
+from app.services.content_writer_notifications import notify_content_submitted
 
 content_writer_bp = Blueprint('content_writer', __name__)
 
@@ -296,7 +297,10 @@ def submit_for_review(content_id):
         content_item.updated_at = datetime.utcnow()
         db.session.commit()
         
-        # Create notification for admins
+        # 🔔 Call the new content writer notification helper
+        notify_content_submitted(content_id, writer.user_id)
+        
+        # Create notification for admins (backward compatibility)
         # Note: In a real system, you'd notify all admins
         admin_notification = Notification(
             user_id=1,  # Admin user ID

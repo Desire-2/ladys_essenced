@@ -426,6 +426,28 @@ def get_period_analytics():
         # Calculate patterns
         patterns = PeriodAnalyticsEngine.calculate_period_patterns(period_logs)
         
+        # ── Fallback: derive basic stats from CycleLog when no period logs ──
+        cycle_logs = CycleLog.query.filter_by(user_id=current_user_id)\
+            .order_by(CycleLog.start_date.desc())\
+            .all()
+        
+        if not patterns and cycle_logs:
+            period_lengths_from_cycles = [c.period_length for c in cycle_logs if c.period_length and 2 <= c.period_length <= 10]
+            flow_intensities_from_cycles = [c.flow_intensity for c in cycle_logs if c.flow_intensity]
+            flow_counts = {}
+            for fi in flow_intensities_from_cycles:
+                flow_counts[fi] = flow_counts.get(fi, 0) + 1
+            patterns = {
+                'average_duration': round(statistics.mean(period_lengths_from_cycles), 1) if period_lengths_from_cycles else None,
+                'average_pain_level': None,
+                'most_common_symptoms': [],
+                'flow_patterns': flow_counts,
+                'product_usage_trends': {},
+                'derived_from_cycle_logs': True,
+                'note': 'Analytics derived from cycle log data. Create detailed period logs for richer insights.'
+            }
+        # ────────────────────────────────────────────────────────────────────
+
         # Get recent statistics
         recent_logs = period_logs[:6]  # Last 6 periods
         current_period = None
@@ -438,17 +460,23 @@ def get_period_analytics():
         
         analytics = {
             'total_periods_tracked': len(period_logs),
+            'total_cycle_logs': len(cycle_logs),
             'patterns': patterns,
             'current_period': current_period.to_dict() if current_period else None,
             'recent_periods_count': len(recent_logs),
             'tracking_duration_months': None
         }
         
-        # Calculate tracking duration
+        # Calculate tracking duration from cycle logs if period logs don't span enough
         if period_logs and len(period_logs) > 1:
             first_period = period_logs[-1].start_date
             latest_period = period_logs[0].start_date
-            duration = (latest_period - first_period).days / 30.44  # Average days per month
+            duration = (latest_period - first_period).days / 30.44
+            analytics['tracking_duration_months'] = round(duration, 1)
+        elif cycle_logs and len(cycle_logs) > 1:
+            first_cycle = cycle_logs[-1].start_date
+            latest_cycle = cycle_logs[0].start_date
+            duration = (latest_cycle - first_cycle).days / 30.44
             analytics['tracking_duration_months'] = round(duration, 1)
         
         return jsonify(analytics), 200

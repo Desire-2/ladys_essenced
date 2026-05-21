@@ -535,17 +535,10 @@ def get_child_appointments(adolescent_id):
         .order_by(Appointment.appointment_date)\
         .paginate(page=page, per_page=per_page)
     
-    # Format the response
+    from app.routes.appointments import _appointment_to_dict
+
     result = {
-        'items': [{
-            'id': appointment.id,
-            'appointment_for': appointment.appointment_for,
-            'appointment_date': appointment.appointment_date.isoformat(),
-            'issue': appointment.issue,
-            'status': appointment.status,
-            'notes': appointment.notes,
-            'created_at': appointment.created_at.isoformat()
-        } for appointment in appointments.items],
+        'items': [_appointment_to_dict(appointment) for appointment in appointments.items],
         'total': appointments.total,
         'pages': appointments.pages,
         'current_page': page

@@ -1,0 +1,6 @@
+{
+  "name": "Lady's Essence",
+  "description": "A women's health application serving adolescent girls and their parents, with cycle tracking, meal logging, and clinic appointment scheduling.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

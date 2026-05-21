@@ -2,6 +2,12 @@ from app.models import Appointment, User, HealthProvider, Adolescent, Parent
 from app.models.notification import Notification
 from app import db
 from app.services.notification_manager import NotificationManager
+from app.services.appointment_notifications import (
+    notify_appointment_created,
+    notify_appointment_confirmed,
+    notify_appointment_cancelled,
+    notify_appointment_rescheduled,
+)
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
@@ -11,6 +17,31 @@ appointments_bp = Blueprint('appointments', __name__)
 
 # Initialize notification manager
 notification_manager = NotificationManager()
+
+
+def _appointment_to_dict(appointment):
+    """Serialize appointment for API responses with optional provider details."""
+    item = {
+        'id': appointment.id,
+        'user_id': appointment.user_id,
+        'appointment_for': appointment.appointment_for,
+        'appointment_date': appointment.appointment_date.isoformat(),
+        'scheduled_datetime': appointment.appointment_date.isoformat(),
+        'issue': appointment.issue,
+        'status': appointment.status,
+        'notes': appointment.notes,
+        'provider_id': appointment.provider_id,
+        'created_at': appointment.created_at.isoformat(),
+    }
+    provider = appointment.health_provider if appointment.provider_id else None
+    if provider:
+        provider_name = provider.user.name if provider.user else None
+        item['provider_name'] = provider_name
+        item['health_provider_name'] = provider_name
+        item['health_provider_id'] = provider.id
+        item['specialization'] = provider.specialization
+        item['clinic_name'] = provider.clinic_name
+    return item
 
 def create_simple_notification(user_id: int, message: str, notification_type: str = 'system', priority: str = 'normal'):
     """Helper function to create simple notifications"""
@@ -63,17 +94,8 @@ def get_appointments():
     # Order by appointment date and paginate
     appointments = query.order_by(Appointment.appointment_date).paginate(page=page, per_page=per_page)
     
-    # Format the response
     result = {
-        'items': [{
-            'id': appointment.id,
-            'appointment_for': appointment.appointment_for,
-            'appointment_date': appointment.appointment_date.isoformat(),
-            'issue': appointment.issue,
-            'status': appointment.status,
-            'notes': appointment.notes,
-            'created_at': appointment.created_at.isoformat()
-        } for appointment in appointments.items],
+        'items': [_appointment_to_dict(appointment) for appointment in appointments.items],
         'total': appointments.total,
         'pages': appointments.pages,
         'current_page': page
@@ -92,18 +114,8 @@ def get_appointment(appointment_id):
     if not appointment:
         return jsonify({'message': 'Appointment not found'}), 404
     
-    # Format the response
-    result = {
-        'id': appointment.id,
-        'appointment_for': appointment.appointment_for,
-        'appointment_date': appointment.appointment_date.isoformat(),
-        'issue': appointment.issue,
-        'status': appointment.status,
-        'notes': appointment.notes,
-        'created_at': appointment.created_at.isoformat(),
-        'updated_at': appointment.updated_at.isoformat()
-    }
-    
+    result = _appointment_to_dict(appointment)
+    result['updated_at'] = appointment.updated_at.isoformat()
     return jsonify(result), 200
 
 @appointments_bp.route('/', methods=['POST'])
@@ -205,18 +217,30 @@ def create_appointment():
         # Parse appointment date
         appointment_date = datetime.fromisoformat(data['appointment_date'].replace('Z', '+00:00'))
         
-        # Create new appointment
+        preferred_provider_id = data.get('provider_id')
+        if preferred_provider_id is not None:
+            preferred_provider_id = int(preferred_provider_id)
+            provider = HealthProvider.query.get(preferred_provider_id)
+            if not provider:
+                return jsonify({'message': 'Selected health provider not found'}), 404
+            if not provider.is_verified:
+                return jsonify({'message': 'Selected health provider is not verified yet'}), 400
+
         new_appointment = Appointment(
-            user_id=target_user_id,  # Use target user ID (child or self)
+            user_id=target_user_id,
             appointment_for=data.get('appointment_for', 'child' if target_user_id != current_user_id else 'self'),
             appointment_date=appointment_date,
             issue=data['issue'],
             status=data.get('status', 'pending'),
-            notes=data.get('notes')
+            notes=data.get('notes'),
+            provider_id=preferred_provider_id if preferred_provider_id else None,
         )
-        
+
         db.session.add(new_appointment)
         db.session.commit()
+        
+        # 🔔 Call the new notification helper for appointment creation
+        notify_appointment_created(new_appointment, current_user_id)
         
         # Create comprehensive notifications for appointment creation
         try:
@@ -322,6 +346,9 @@ def update_appointment(appointment_id):
             
             # Notify about date change
             if old_date != appointment.appointment_date:
+                # 🔔 Call the new notification helper for rescheduled appointments
+                notify_appointment_rescheduled(appointment, old_date)
+                
                 create_simple_notification(
                     user_id=current_user_id,
                     message=f"📅 Your appointment has been rescheduled from {old_date.strftime('%B %d, %Y at %I:%M %p')} to {appointment.appointment_date.strftime('%B %d, %Y at %I:%M %p')}.",
@@ -433,6 +460,9 @@ def delete_appointment(appointment_id):
         return jsonify({'message': 'Appointment not found'}), 404
     
     try:
+        # 🔔 Call the new notification helper for appointment cancellation
+        notify_appointment_cancelled(appointment)
+        
         # Create notification for appointment deletion
         create_simple_notification(
             user_id=current_user_id,
@@ -500,19 +530,12 @@ def get_upcoming_appointments():
     
     print(f"📋 Found {len(appointments)} upcoming appointments for user {target_user_id}")
     
-    # Format the response
-    result = [{
-        'id': appointment.id,
-        'date': appointment.appointment_date.isoformat(),
-        'appointment_date': appointment.appointment_date.isoformat(),
-        'issue': appointment.issue,
-        'status': appointment.status,
-        'for_user': appointment.appointment_for,
-        'user_id': appointment.user_id,
-        'for_user_id': appointment.user_id,  # Include for frontend filtering
-        'notes': appointment.notes
-    } for appointment in appointments]
-    
+    result = [_appointment_to_dict(appointment) for appointment in appointments]
+    for item in result:
+        item['for_user'] = item.get('appointment_for')
+        item['for_user_id'] = item.get('user_id')
+        item['date'] = item.get('appointment_date')
+
     return jsonify(result), 200
 
 

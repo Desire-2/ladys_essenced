@@ -37,6 +37,8 @@ class User(db.Model):
     
     # Privacy and parent access control
     allow_parent_access = db.Column(db.Boolean, default=True)  # Whether parents can access this user's data
+    data_sharing_consent = db.Column(db.Boolean, default=False)  # Consent to share anonymised research data
+    notification_preferences = db.Column(db.Text, nullable=True)  # JSON: per-channel/category preferences
     
     # Relationships
     cycle_logs = db.relationship('CycleLog', backref='user', lazy=True)
@@ -650,7 +652,11 @@ class Chapter(db.Model):
 class LoginAttempt(db.Model):
     """Model to track login attempts for rate limiting and audit logging"""
     __tablename__ = 'login_attempts'
-    
+    __table_args__ = (
+        # Composite index for rate-limit query: filter by phone+ip within a time window
+        db.Index('ix_login_attempts_phone_ip_created', 'phone_number', 'ip_address', 'created_at'),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     phone_number = db.Column(db.String(20), nullable=False, index=True)
     success = db.Column(db.Boolean, default=False, index=True)

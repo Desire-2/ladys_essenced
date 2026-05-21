@@ -1,6 +1,6 @@
 from app.models import CycleLog
 from app import db
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
 import statistics
@@ -11,6 +11,11 @@ import math
 from typing import List, Dict, Tuple, Optional, Any
 import warnings
 warnings.filterwarnings('ignore')
+from app.services.cycle_notifications import (
+    notify_cycle_prediction_updated,
+    notify_period_late,
+    notify_cycle_anomaly,
+)
 
 cycle_logs_bp = Blueprint('cycle_logs', __name__)
 
@@ -36,74 +41,480 @@ class CyclePredictionEngine:
     """
     
     @staticmethod
-    def extract_cycle_lengths_robust(logs):
-        """Extract cycle lengths with improved accuracy and outlier handling"""
-        if not logs or len(logs) < 2:
-            return []
-        
-        # Sort logs by date to ensure proper calculation
-        sorted_logs = sorted(logs, key=lambda x: x.start_date)
-        
-        # Calculate cycle lengths from consecutive periods
-        calculated_lengths = []
+    def _to_date(value):
+        """Normalize datetime/date values for day-difference math."""
+        if value is None:
+            return None
+        return value.date() if hasattr(value, 'date') else value
+
+    @staticmethod
+    def _predictions_from_result(result):
+        """Unwrap predict_next_cycles return value (dict or legacy list)."""
+        if isinstance(result, dict):
+            return result.get('predictions', [])
+        return result or []
+
+    @staticmethod
+    def extract_cycle_lengths_robust(cycle_logs: list) -> dict:
+        """
+        ALWAYS compute cycle length from consecutive start_date differences.
+        NEVER use the stored cycle_length field as the primary source.
+        """
+        if not cycle_logs:
+            return {'lengths': [], 'dates': [], 'raw_logs': [], 'error': 'no_data'}
+
+        sorted_logs = sorted(
+            [log for log in cycle_logs if log.start_date is not None],
+            key=lambda x: x.start_date
+        )
+
+        if len(sorted_logs) < 2:
+            return {
+                'lengths': [],
+                'dates': [sorted_logs[0].start_date] if sorted_logs else [],
+                'raw_logs': sorted_logs,
+                'error': 'insufficient_logs',
+                'message': 'Need at least 2 period start dates to compute cycle length'
+            }
+
+        computed_lengths = []
         for i in range(len(sorted_logs) - 1):
-            days_between = (sorted_logs[i + 1].start_date - sorted_logs[i].start_date).days
-            if 15 <= days_between <= 60:  # Only include reasonable cycle lengths
-                calculated_lengths.append({
-                    'length': days_between,
-                    'date': sorted_logs[i].start_date,
-                    'source': 'calculated',
-                    'reliability': 'high'
+            current_start = CyclePredictionEngine._to_date(sorted_logs[i].start_date)
+            next_start = CyclePredictionEngine._to_date(sorted_logs[i + 1].start_date)
+            gap = (next_start - current_start).days
+
+            entry = {
+                'length': gap,
+                'start_date': current_start,
+                'next_start_date': next_start,
+                'log_id': getattr(sorted_logs[i], 'id', None),
+                'is_valid': 15 <= gap <= 90,
+                'is_outlier': False,
+                'flow_intensity': getattr(sorted_logs[i], 'flow_intensity', None),
+                'symptoms': getattr(sorted_logs[i], 'symptoms', None),
+                'mood': getattr(sorted_logs[i], 'mood', None),
+                'stress_level': getattr(sorted_logs[i], 'stress_level', None),
+            }
+            computed_lengths.append(entry)
+
+        valid_lengths = [e['length'] for e in computed_lengths if e['is_valid']]
+
+        return {
+            'lengths': valid_lengths,
+            'all_entries': computed_lengths,
+            'dates': [sorted_logs[i].start_date for i in range(len(sorted_logs))],
+            'raw_logs': sorted_logs,
+            'total_logs': len(sorted_logs),
+            'computable_cycles': len(computed_lengths),
+            'valid_cycles': len(valid_lengths),
+            'invalid_cycles': len([e for e in computed_lengths if not e['is_valid']]),
+        }
+
+    @staticmethod
+    def compute_period_lengths(cycle_logs: list) -> list:
+        """Period duration from explicit start/end dates only (inclusive end day, no +1)."""
+        lengths = []
+        for log in cycle_logs:
+            if log.start_date and log.end_date:
+                start = CyclePredictionEngine._to_date(log.start_date)
+                end = CyclePredictionEngine._to_date(log.end_date)
+                duration = (end - start).days
+                if 1 <= duration <= 10:
+                    lengths.append(duration)
+        return lengths
+
+    @staticmethod
+    def _legacy_entries_from_cycle_data(cycle_data) -> list:
+        """Convert robust extraction dict to legacy list entries for ML helpers."""
+        if not cycle_data:
+            return []
+        if isinstance(cycle_data, dict):
+            entries = []
+            for e in cycle_data.get('all_entries', []):
+                entries.append({
+                    'length': e['length'],
+                    'date': e.get('start_date'),
+                    'source': 'computed',
+                    'reliability': 'outlier' if e.get('is_outlier') else ('high' if e.get('is_valid', True) else 'low'),
+                    'is_outlier': e.get('is_outlier', False),
                 })
-        
-        # Add stored cycle lengths (with lower reliability if they differ significantly)
-        for log in sorted_logs:
-            if log.cycle_length and 15 <= log.cycle_length <= 60:
-                # Check if this differs significantly from calculated values
-                reliability = 'medium'
-                if calculated_lengths:
-                    avg_calculated = statistics.mean([c['length'] for c in calculated_lengths])
-                    if abs(log.cycle_length - avg_calculated) > 7:  # More than 7 days difference
-                        reliability = 'low'
-                
-                calculated_lengths.append({
-                    'length': log.cycle_length,
-                    'date': log.start_date,
-                    'source': 'stored',
-                    'reliability': reliability
-                })
-        
-        return calculated_lengths
-    
+            return entries
+        return cycle_data
+
+    @staticmethod
+    def detect_outliers_adaptive(lengths: list, user_baseline: dict = None) -> dict:
+        """Adaptive IQR outlier detection with clinical bounds for short cycles."""
+        if len(lengths) < 4:
+            return {
+                'clean_lengths': lengths,
+                'outliers': [],
+                'outlier_indices': [],
+                'method': 'skipped_insufficient_data',
+            }
+
+        sorted_l = sorted(lengths)
+        n = len(sorted_l)
+        q1 = sorted_l[n // 4]
+        q3 = sorted_l[(3 * n) // 4]
+        iqr = q3 - q1
+
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        lower_bound = max(lower_bound, 15)
+        upper_bound = min(upper_bound, 90)
+
+        median = statistics.median(lengths)
+        lower_bound = min(lower_bound, median - 4)
+        upper_bound = max(upper_bound, median + 4)
+
+        clean = []
+        outliers = []
+        outlier_indices = []
+
+        for i, length in enumerate(lengths):
+            if lower_bound <= length <= upper_bound:
+                clean.append(length)
+            else:
+                outliers.append(length)
+                outlier_indices.append(i)
+
+        return {
+            'clean_lengths': clean,
+            'outliers': outliers,
+            'outlier_indices': outlier_indices,
+            'bounds': {'lower': round(lower_bound, 1), 'upper': round(upper_bound, 1)},
+            'method': 'adaptive_iqr',
+            'iqr': round(iqr, 2),
+            'q1': q1,
+            'q3': q3,
+        }
+
     @staticmethod
     def detect_outliers(cycle_data, method='iqr'):
-        """Detect and handle outlier cycles using statistical methods"""
+        """Backward-compatible wrapper; marks outliers on robust extraction output."""
+        if isinstance(cycle_data, dict):
+            lengths = cycle_data.get('lengths', [])
+            outlier_result = CyclePredictionEngine.detect_outliers_adaptive(lengths)
+            outlier_set = set(outlier_result.get('outliers', []))
+            for entry in cycle_data.get('all_entries', []):
+                if entry['length'] in outlier_set and entry['length'] in outlier_result.get('outliers', []):
+                    entry['is_outlier'] = True
+            if outlier_result.get('outlier_indices'):
+                valid_entries = [e for e in cycle_data.get('all_entries', []) if e.get('is_valid', True)]
+                for idx in outlier_result['outlier_indices']:
+                    if idx < len(valid_entries):
+                        valid_entries[idx]['is_outlier'] = True
+            cycle_data['lengths'] = outlier_result.get('clean_lengths', lengths) or lengths
+            return CyclePredictionEngine._legacy_entries_from_cycle_data(cycle_data)
+
         if len(cycle_data) < 4:
-            return cycle_data  # Need at least 4 data points for outlier detection
-        
+            return cycle_data
+
         lengths = [c['length'] for c in cycle_data]
-        
-        if method == 'iqr':
-            # Interquartile Range method
-            q1 = statistics.quantiles(lengths, n=4)[0]
-            q3 = statistics.quantiles(lengths, n=4)[2]
-            iqr = q3 - q1
-            lower_bound = q1 - 1.5 * iqr
-            upper_bound = q3 + 1.5 * iqr
-            
-            filtered_data = []
-            for cycle in cycle_data:
-                if lower_bound <= cycle['length'] <= upper_bound:
-                    filtered_data.append(cycle)
-                else:
-                    # Mark as outlier but don't remove completely
-                    cycle['is_outlier'] = True
-                    cycle['reliability'] = 'outlier'
-                    filtered_data.append(cycle)
-            
-            return filtered_data
-        
-        return cycle_data
+        outlier_result = CyclePredictionEngine.detect_outliers_adaptive(lengths)
+        outlier_values = set(outlier_result.get('outliers', []))
+
+        filtered_data = []
+        for cycle in cycle_data:
+            entry = dict(cycle)
+            if entry['length'] in outlier_values:
+                entry['is_outlier'] = True
+                entry['reliability'] = 'outlier'
+            filtered_data.append(entry)
+
+        return filtered_data
+
+    @staticmethod
+    def compute_regularity_index(cycle_lengths: list) -> dict:
+        """Clinician-style regularity score from computed cycle gaps."""
+        if len(cycle_lengths) < 2:
+            return {
+                'score': None,
+                'label': 'insufficient_data',
+                'std_dev': None,
+                'cv_percent': None,
+                'interpretation': 'Need at least 2 cycles to assess regularity'
+            }
+
+        mean = statistics.mean(cycle_lengths)
+        std = statistics.stdev(cycle_lengths)
+        cv = (std / mean) * 100 if mean > 0 else 100
+        max_deviation = max(abs(length - mean) for length in cycle_lengths)
+
+        if std <= 1.0:
+            score = 95 + min(5, (1 - std) * 5)
+        elif std <= 2.0:
+            score = 85 + (2.0 - std) * 10
+        elif std <= 4.0:
+            score = 70 + (4.0 - std) * 7.5
+        elif std <= 7.0:
+            score = 50 + (7.0 - std) * (20 / 3)
+        else:
+            score = max(0, 50 - (std - 7) * 5)
+
+        score = round(min(100, max(0, score)), 1)
+
+        if score >= 90:
+            label = 'ultra_regular'
+            interpretation = 'Cycles are extremely consistent — highly predictable'
+        elif score >= 75:
+            label = 'regular'
+            interpretation = 'Cycles are within normal regular range'
+        elif score >= 55:
+            label = 'mostly_regular'
+            interpretation = 'Minor variation — clinically normal, worth monitoring'
+        elif score >= 35:
+            label = 'somewhat_irregular'
+            interpretation = 'Noticeable variation — lifestyle or hormonal factors possible'
+        else:
+            label = 'irregular'
+            interpretation = 'Significant variation — recommend healthcare consultation'
+
+        return {
+            'score': score,
+            'label': label,
+            'std_dev': round(std, 2),
+            'cv_percent': round(cv, 1),
+            'max_deviation_days': round(max_deviation, 1),
+            'mean_cycle_length': round(mean, 1),
+            'interpretation': interpretation,
+        }
+
+    @staticmethod
+    def build_personal_baseline(cycle_data: dict) -> dict:
+        """Personalized cycle profile from computed start_date gaps."""
+        lengths = cycle_data.get('lengths', [])
+
+        if len(lengths) < 2:
+            return {'error': 'insufficient_data', 'minimum_cycles_needed': 2}
+
+        mean = statistics.mean(lengths)
+        median = statistics.median(lengths)
+        std = statistics.stdev(lengths) if len(lengths) >= 2 else 0
+
+        recent = lengths[-3:] if len(lengths) >= 3 else lengths
+        recent_mean = statistics.mean(recent)
+
+        if len(lengths) >= 4:
+            first_half_mean = statistics.mean(lengths[:len(lengths) // 2])
+            second_half_mean = statistics.mean(lengths[len(lengths) // 2:])
+            trend_delta = second_half_mean - first_half_mean
+        else:
+            trend_delta = 0
+
+        sorted_lengths = sorted(lengths)
+        q1 = sorted_lengths[len(lengths) // 4] if len(lengths) >= 4 else min(lengths)
+        q3 = sorted_lengths[3 * len(lengths) // 4] if len(lengths) >= 4 else max(lengths)
+
+        prediction_base = (recent_mean * 0.6) + (median * 0.4)
+        if abs(trend_delta) > 1.5:
+            prediction_base += trend_delta * 0.15
+
+        return {
+            'mean': round(mean, 2),
+            'median': round(median, 2),
+            'std_dev': round(std, 2),
+            'recent_mean': round(recent_mean, 2),
+            'prediction_base': round(prediction_base, 2),
+            'trend_delta': round(trend_delta, 2),
+            'trend_direction': 'shortening' if trend_delta < -1 else 'lengthening' if trend_delta > 1 else 'stable',
+            'typical_range_days': [round(q1, 1), round(q3, 1)],
+            'shortest_cycle': min(lengths),
+            'longest_cycle': max(lengths),
+            'cycles_analyzed': len(lengths),
+        }
+
+    @staticmethod
+    def compute_confidence_score(cycle_data: dict) -> dict:
+        """Confidence score based on computed cycle length data."""
+        lengths = cycle_data.get('lengths', [])
+        n = len(lengths)
+
+        if n == 0:
+            return {'score': 0, 'level': 'no_data', 'factors': {}}
+
+        mean = statistics.mean(lengths)
+        std = statistics.stdev(lengths) if n >= 2 else 10
+        cv = (std / mean * 100) if mean > 0 else 100
+
+        if n >= 12:
+            volume_score = 1.0
+        elif n >= 6:
+            volume_score = 0.6 + (n - 6) * (0.4 / 6)
+        elif n >= 2:
+            volume_score = 0.2 + (n - 2) * (0.4 / 4)
+        else:
+            volume_score = 0.1
+
+        if cv < 5:
+            consistency_score = 1.0
+        elif cv < 10:
+            consistency_score = 0.85
+        elif cv < 15:
+            consistency_score = 0.65
+        elif cv < 25:
+            consistency_score = 0.40
+        else:
+            consistency_score = 0.15
+
+        last_dates = cycle_data.get('dates', [])
+        recency_score = 0.5
+        if last_dates:
+            last_date = CyclePredictionEngine._to_date(max(last_dates))
+            days_since = (datetime.now().date() - last_date).days
+            if days_since <= 35:
+                recency_score = 1.0
+            elif days_since <= 60:
+                recency_score = 0.75
+            elif days_since <= 90:
+                recency_score = 0.50
+            else:
+                recency_score = 0.25
+
+        all_entries = cycle_data.get('all_entries', [])
+        if all_entries:
+            invalid_count = len([e for e in all_entries if not e.get('is_valid', True)])
+            outlier_ratio = invalid_count / len(all_entries)
+            outlier_score = 1.0 - min(1.0, outlier_ratio * 2)
+        else:
+            outlier_score = 0.8
+
+        if n >= 4:
+            first_half = statistics.mean(lengths[:n // 2])
+            second_half = statistics.mean(lengths[n // 2:])
+            trend_change = abs(second_half - first_half)
+            stability_score = max(0, 1.0 - (trend_change / 5))
+        else:
+            stability_score = 0.6
+
+        total = (
+            volume_score * 0.30 +
+            consistency_score * 0.25 +
+            recency_score * 0.15 +
+            outlier_score * 0.15 +
+            stability_score * 0.15
+        )
+
+        if total >= 0.82:
+            level = 'very_high'
+        elif total >= 0.65:
+            level = 'high'
+        elif total >= 0.45:
+            level = 'medium'
+        elif total >= 0.25:
+            level = 'low'
+        else:
+            level = 'very_low'
+
+        return {
+            'score': round(total, 3),
+            'level': level,
+            'factors': {
+                'data_volume': round(volume_score, 3),
+                'consistency': round(consistency_score, 3),
+                'recency': round(recency_score, 3),
+                'outlier_ratio': round(outlier_score, 3),
+                'trend_stability': round(stability_score, 3),
+            },
+            'cycles_analyzed': n,
+            'cv_percent': round(cv, 1),
+            'std_dev': round(std, 2),
+        }
+
+    @staticmethod
+    def detect_health_anomalies(cycle_data: dict, period_lengths: list) -> dict:
+        """Clinically grounded anomaly detection from computed patterns."""
+        lengths = cycle_data.get('lengths', [])
+
+        if not lengths:
+            return {'anomalies': [], 'risk_level': 'unknown', 'risk_score': 0}
+
+        mean = statistics.mean(lengths)
+        std = statistics.stdev(lengths) if len(lengths) >= 2 else 0
+        anomalies = []
+
+        dates = cycle_data.get('dates', [])
+        if dates:
+            last_start = CyclePredictionEngine._to_date(max(dates))
+            days_since_last = (datetime.now().date() - last_start).days
+            if days_since_last > 90:
+                anomalies.append({
+                    'type': 'amenorrhea_risk',
+                    'severity': 'high',
+                    'days_since_last_period': days_since_last,
+                    'message': f'No period logged for {days_since_last} days. If not pregnant, consult a healthcare provider.',
+                    'action': 'urgent_consultation',
+                })
+            elif days_since_last > (mean + 2 * std) and days_since_last > mean + 7:
+                anomalies.append({
+                    'type': 'late_period',
+                    'severity': 'medium',
+                    'days_late': round(days_since_last - mean),
+                    'message': f'Period is approximately {round(days_since_last - mean)} days later than your typical cycle.',
+                    'action': 'monitor',
+                })
+
+        if period_lengths:
+            avg_period = statistics.mean(period_lengths)
+            if avg_period > 7:
+                anomalies.append({
+                    'type': 'menorrhagia_pattern',
+                    'severity': 'medium',
+                    'average_period_days': round(avg_period, 1),
+                    'message': f'Average period length of {round(avg_period, 1)} days exceeds the typical 7-day maximum.',
+                    'action': 'consultation_recommended',
+                })
+
+        long_cycles = [length for length in lengths if length > 35]
+        if len(lengths) >= 4 and len(long_cycles) / len(lengths) > 0.5 and std > 5:
+            anomalies.append({
+                'type': 'pcos_pattern',
+                'severity': 'medium',
+                'percent_long_cycles': round(len(long_cycles) / len(lengths) * 100),
+                'message': 'Cycle pattern with frequent long cycles and variability may warrant evaluation for hormonal conditions.',
+                'action': 'consultation_recommended',
+                'note': 'Only a healthcare provider can diagnose PCOS.',
+            })
+
+        short_cycles = [length for length in lengths if length < 21]
+        if len(short_cycles) / len(lengths) > 0.3 and mean < 24:
+            anomalies.append({
+                'type': 'naturally_short_cycles',
+                'severity': 'low',
+                'average_length': round(mean, 1),
+                'message': f'Your cycles average {round(mean, 1)} days. Cycles under 21 days are worth tracking. Mention to your provider at next visit.',
+                'action': 'mention_at_next_visit',
+            })
+
+        if len(lengths) >= 5:
+            historical_mean = statistics.mean(lengths[:-3])
+            recent_mean = statistics.mean(lengths[-3:])
+            if abs(recent_mean - historical_mean) > (std * 1.5 + 3):
+                anomalies.append({
+                    'type': 'recent_pattern_shift',
+                    'severity': 'medium',
+                    'historical_mean': round(historical_mean, 1),
+                    'recent_mean': round(recent_mean, 1),
+                    'shift_days': round(recent_mean - historical_mean, 1),
+                    'message': f'Your recent cycles have shifted by {round(abs(recent_mean - historical_mean), 1)} days compared to your historical pattern.',
+                    'action': 'monitor_closely',
+                })
+
+        severity_weights = {'high': 5, 'medium': 3, 'low': 1}
+        raw_score = sum(severity_weights.get(a['severity'], 1) for a in anomalies)
+        risk_score = min(100, raw_score * 12)
+
+        risk_level = 'high' if risk_score >= 60 else \
+            'medium' if risk_score >= 30 else \
+            'low' if risk_score >= 10 else 'minimal'
+
+        return {
+            'anomalies': anomalies,
+            'anomaly_count': len(anomalies),
+            'risk_score': risk_score,
+            'risk_level': risk_level,
+            'cycles_analyzed': len(lengths),
+        }
     
     @staticmethod
     def analyze_trend(cycle_data):
@@ -213,8 +624,11 @@ class CyclePredictionEngine:
         
         # Factor 3: Recency of data
         if cycle_data:
-            latest_date = max(c['date'] for c in cycle_data)
-            days_since_latest = (datetime.now() - latest_date).days
+            latest_date = max(
+                CyclePredictionEngine._to_date(c['date']) for c in cycle_data if c.get('date')
+            )
+            today = CyclePredictionEngine._to_date(datetime.now())
+            days_since_latest = (today - latest_date).days
             recency_score = max(0, 1 - (days_since_latest / 90))  # 90 days = 0 score
         else:
             recency_score = 0
@@ -418,15 +832,9 @@ class CyclePredictionEngine:
     
     @staticmethod
     def _calculate_regularity_score(lengths: List[float]) -> float:
-        """Calculate overall regularity score (0-100)"""
-        if len(lengths) < 2:
-            return 0
-        
-        # Coefficient of variation inverted to regularity score
-        cv = (np.std(lengths) / np.mean(lengths)) * 100
-        regularity = max(0, 100 - cv * 5)  # Scale CV to 0-100 score
-        
-        return min(100, regularity)
+        """Calculate overall regularity score (0-100) from computed cycle gaps."""
+        result = CyclePredictionEngine.compute_regularity_index(lengths)
+        return result.get('score') or 0
     
     @staticmethod
     def _calculate_predictability_index(lengths: List[float]) -> float:
@@ -1291,157 +1699,104 @@ class CyclePredictionEngine:
         }
     
     @staticmethod
-    def predict_next_cycles(logs, num_predictions=3, user_id=None):
+    def predict_next_cycles(cycle_logs: list, num_predictions: int = 3, user_id=None) -> dict:
         """
-        ML-Enhanced prediction using advanced algorithms and machine learning
-        Returns predictions with detailed analysis and learning capabilities
+        Generate next N cycle predictions grounded in the user's personal history.
+        Returns a dict with predictions list and baseline metadata.
         """
-        if not logs:
-            return []
-        
-        # Extract cycle data using robust method
-        cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
-        
-        if not cycle_data:
-            # Fallback to default prediction
-            return CyclePredictionEngine._generate_default_predictions(logs, num_predictions)
-        
-        # Detect and handle outliers
-        filtered_cycle_data = CyclePredictionEngine.detect_outliers(cycle_data)
-        
-        # ML Pattern Recognition
-        ml_patterns = CyclePredictionEngine.ml_pattern_recognition(filtered_cycle_data, user_id)
-        
-        # Adaptive Learning Prediction
-        adaptive_prediction = CyclePredictionEngine.adaptive_learning_prediction(filtered_cycle_data, user_id)
-        
-        # Anomaly Detection
-        anomaly_analysis = CyclePredictionEngine.anomaly_detection(filtered_cycle_data)
-        
-        # Traditional trend analysis (enhanced with ML insights)
-        trend_analysis = CyclePredictionEngine.analyze_trend(filtered_cycle_data)
-        
-        # Calculate ML-enhanced confidence
-        confidence_level = CyclePredictionEngine._calculate_ml_enhanced_confidence(
-            adaptive_prediction, {'data_quality': len(filtered_cycle_data), 'patterns_found': True}, ml_patterns
-        )
-        
-        # Get period lengths with similar robust approach
-        period_lengths = []
-        for log in logs:
-            if log.period_length and 2 <= log.period_length <= 10:
-                period_lengths.append(log.period_length)
-        
-        if not period_lengths:
-            period_lengths = [5]  # Default
-        
-        # ML-Enhanced prediction calculation
-        if adaptive_prediction['learning_status'] == 'active':
-            # Use adaptive learning prediction as primary
-            predicted_cycle_length = adaptive_prediction['prediction']
-            ml_confidence_boost = 0.1  # Boost confidence when ML is active
+        from datetime import date
+
+        if not cycle_logs:
+            return {
+                'predictions': [],
+                'error': 'insufficient_data',
+                'message': 'No cycle logs available',
+            }
+
+        cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(cycle_logs)
+
+        if cycle_data.get('error') or len(cycle_data.get('lengths', [])) < 1:
+            default_preds = CyclePredictionEngine._generate_default_predictions(cycle_logs, num_predictions)
+            return {
+                'predictions': default_preds if isinstance(default_preds, list) else [],
+                'error': 'insufficient_data',
+                'message': 'Log at least 2 period start dates to generate predictions',
+                'cycles_available': cycle_data.get('valid_cycles', 0),
+            }
+
+        outlier_result = CyclePredictionEngine.detect_outliers_adaptive(cycle_data['lengths'])
+        if outlier_result.get('clean_lengths'):
+            cycle_data['lengths'] = outlier_result['clean_lengths']
+
+        lengths = cycle_data['lengths']
+        sorted_logs = cycle_data['raw_logs']
+
+        last_period_start = CyclePredictionEngine._to_date(sorted_logs[-1].start_date)
+
+        baseline = CyclePredictionEngine.build_personal_baseline(cycle_data)
+        if baseline.get('error'):
+            predicted_length = lengths[0] if lengths else 28
+            confidence = 'very_low'
         else:
-            # Fallback to traditional methods
-            predicted_cycle_length = CyclePredictionEngine.calculate_adaptive_weighted_average(filtered_cycle_data)
-            ml_confidence_boost = 0
-        
-        # Apply ML pattern-based adjustments - use days adjustment instead of date adjustment
-        pattern_adjustment_days = CyclePredictionEngine._calculate_pattern_adjustment_days(ml_patterns, user_id)
-        predicted_cycle_length += pattern_adjustment_days
-        
-        # Apply seasonal adjustments if detected
-        seasonal_patterns = CyclePredictionEngine._safe_get_seasonal_patterns_dict(ml_patterns)
-        seasonal_adjustment_days = CyclePredictionEngine._calculate_seasonal_adjustment_days(
-            seasonal_patterns, datetime.now().month
-        )
-        predicted_cycle_length += seasonal_adjustment_days
-        
-        # Traditional trend adjustment (enhanced with ML insights)
-        if trend_analysis['trend'] in ['lengthening', 'shortening'] and trend_analysis['confidence'] == 'high':
-            trend_adjustment = trend_analysis['rate']
-            # ML enhancement: adjust trend based on pattern stability
-            if ml_patterns['confidence'] in ['high', 'very_high']:
-                trend_adjustment *= 0.8  # Reduce trend impact if patterns are stable
-        else:
-            trend_adjustment = 0
-        
-        predicted_period_length = statistics.mean(period_lengths)
-        
-        # Generate predictions with trend consideration
+            predicted_length = baseline['prediction_base']
+            confidence = CyclePredictionEngine.compute_confidence_score(cycle_data)['level']
+
+        period_lengths = CyclePredictionEngine.compute_period_lengths(cycle_logs)
+        avg_period_length = round(sum(period_lengths) / len(period_lengths), 1) if period_lengths else 5
+
         predictions = []
-        sorted_logs = sorted(logs, key=lambda x: x.start_date)
-        last_period_start = sorted_logs[-1].start_date
-        
+        current_base_date = last_period_start
+
         for i in range(num_predictions):
-            # Apply trend adjustment for distant predictions
-            cycle_adjustment = trend_adjustment * i if abs(trend_adjustment) > 0.1 else 0
-            adjusted_cycle_length = predicted_cycle_length + cycle_adjustment
-            
-            # Ensure cycle length stays within reasonable bounds
-            adjusted_cycle_length = max(21, min(45, adjusted_cycle_length))
-            
-            next_period_start = last_period_start + timedelta(days=int(adjusted_cycle_length * (i + 1)))
-            next_period_end = next_period_start + timedelta(days=int(predicted_period_length))
-            
-            # Calculate ovulation (14 days before next period, adjusted for cycle length)
-            luteal_phase = min(14, adjusted_cycle_length / 2)  # Adjust for shorter cycles
-            ovulation_date = next_period_start - timedelta(days=int(luteal_phase))
-            fertile_window_start = ovulation_date - timedelta(days=5)
-            fertile_window_end = ovulation_date + timedelta(days=1)
-            
-            # Adjust confidence for distant predictions
-            prediction_confidence = confidence_level
-            if i >= 2:  # 3rd prediction and beyond
-                confidence_map = {
-                    'very_high': 'high',
-                    'high': 'medium',
-                    'medium': 'low',
-                    'low': 'very_low',
-                    'very_low': 'very_low'
-                }
-                prediction_confidence = confidence_map.get(confidence_level, 'low')
-            elif i >= 1:  # 2nd prediction
-                if confidence_level == 'very_high':
-                    prediction_confidence = 'high'
-            
+            cycle_adjustment = 0
+            if not baseline.get('error') and abs(baseline.get('trend_delta', 0)) > 1.5:
+                cycle_adjustment = baseline['trend_delta'] * 0.1 * (i + 1)
+                cycle_adjustment = max(-3, min(3, cycle_adjustment))
+
+            this_cycle_length = round(predicted_length + cycle_adjustment, 1)
+            this_cycle_length = max(15, min(90, this_cycle_length))
+
+            next_start = current_base_date + timedelta(days=round(this_cycle_length))
+            next_end = next_start + timedelta(days=round(avg_period_length) - 1)
+
+            next_next_start = next_start + timedelta(days=round(this_cycle_length))
+            ovulation_date = next_next_start - timedelta(days=14)
+            fertile_start = ovulation_date - timedelta(days=5)
+            fertile_end = ovulation_date + timedelta(days=1)
+
+            std = baseline.get('std_dev', 3) if not baseline.get('error') else 5
+            earliest_start = next_start - timedelta(days=round(std))
+            latest_start = next_start + timedelta(days=round(std))
+
             predictions.append({
                 'cycle_number': i + 1,
-                'predicted_start': next_period_start.isoformat(),
-                'predicted_end': next_period_end.isoformat(),
+                'predicted_start': next_start.isoformat(),
+                'predicted_end': next_end.isoformat(),
+                'predicted_cycle_length': this_cycle_length,
+                'predicted_period_length': avg_period_length,
                 'ovulation_date': ovulation_date.isoformat(),
-                'fertile_window_start': fertile_window_start.isoformat(),
-                'fertile_window_end': fertile_window_end.isoformat(),
-                'confidence': prediction_confidence,
-                'predicted_cycle_length': round(adjusted_cycle_length, 1),
-                'predicted_period_length': round(predicted_period_length, 1),
-                'trend_adjustment': round(cycle_adjustment, 1),
-                'ml_enhanced_data': {
-                    'total_cycles': len(cycle_data),
-                    'outliers_detected': sum(1 for c in filtered_cycle_data if c.get('is_outlier', False)),
-                    'ml_patterns_detected': CyclePredictionEngine._safe_get_patterns_count(ml_patterns, 'cycle_patterns'),
-                    'anomalies_detected': anomaly_analysis.get('anomalies_detected', False),
-                    'adaptive_learning_status': adaptive_prediction.get('learning_status', 'inactive'),
-                    'pattern_confidence': ml_patterns.get('confidence', 'unknown'),
-                    'seasonal_patterns': CyclePredictionEngine._safe_get_seasonal_pattern(ml_patterns, 'detected', False),
-                    'user_cycle_profile': ml_patterns.get('user_profile', {}),
-                    'prediction_accuracy_trend': adaptive_prediction.get('improvement_potential', {}),
-                    'confidence_factors': {
-                        'data_volume': len(cycle_data) >= 6,
-                        'ml_confidence': confidence_level in ['high', 'very_high'],
-                        'pattern_recognition': ml_patterns.get('confidence') in ['high', 'very_high'],
-                        'adaptive_learning': adaptive_prediction.get('learning_status') == 'active',
-                        'anomaly_free': not anomaly_analysis.get('anomalies_detected', False),
-                        'trend_stability': trend_analysis['trend'] == 'stable'
-                    },
-                    'health_insights': {
-                        'anomaly_risk': anomaly_analysis.get('risk_score', {'level': 'none'}),
-                        'pattern_health_score': CyclePredictionEngine._calculate_pattern_health_score(ml_patterns),
-                        'recommendations': anomaly_analysis.get('recommendations', [])
-                    }
-                }
+                'fertile_window_start': fertile_start.isoformat(),
+                'fertile_window_end': fertile_end.isoformat(),
+                'confidence': confidence,
+                'confidence_interval': {
+                    'earliest_start': earliest_start.isoformat(),
+                    'latest_start': latest_start.isoformat(),
+                    'range_days': round(std * 2, 1),
+                },
+                'days_until': (next_start - date.today()).days,
+                'trend_note': baseline.get('trend_direction', 'stable') if not baseline.get('error') else None,
             })
-        
-        return predictions
+
+            current_base_date = next_start
+
+        return {
+            'predictions': predictions,
+            'baseline': baseline,
+            'confidence': confidence,
+            'cycles_used_for_prediction': len(lengths),
+            'last_period_start': last_period_start.isoformat(),
+            'generated_at': date.today().isoformat(),
+        }
     
     @staticmethod
     def _generate_default_predictions(logs, num_predictions):
@@ -1524,8 +1879,46 @@ class CyclePredictionEngine:
         if not logs:
             return insights
         
-        # Analyze cycle regularity
-        cycle_lengths = [log.cycle_length for log in logs if log.cycle_length]
+        # ── Amenorrhea & late period detection ────────────────────────────────
+        sorted_by_date = sorted(logs, key=lambda x: x.start_date)
+        last_period_start = sorted_by_date[-1].start_date
+        days_since_last = (datetime.now() - last_period_start).days
+        computed_for_late = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
+        cycle_lengths_for_avg = computed_for_late.get('lengths', [])
+        avg_cycle_for_late = statistics.mean(cycle_lengths_for_avg) if cycle_lengths_for_avg else 28
+        days_late = days_since_last - int(avg_cycle_for_late)
+
+        if days_since_last >= 90:
+            insights.insert(0, {
+                'type': 'warning',
+                'category': 'amenorrhea_risk',
+                'message': (
+                    f'No period recorded for {days_since_last} days. '
+                    'Absence of menstruation for 3+ months (secondary amenorrhea) can indicate '
+                    'thyroid disorders, PCOS, excessive exercise, low body weight, or elevated stress. '
+                    'Please consult a healthcare provider promptly.'
+                ),
+                'detail': f"Last logged period: {last_period_start.strftime('%B %d, %Y')} | "
+                          f"Average cycle: {int(avg_cycle_for_late)} days",
+                'action_required': True,
+                'priority': 'high'
+            })
+        elif days_late >= 10:
+            insights.insert(0, {
+                'type': 'info',
+                'category': 'late_period',
+                'message': (
+                    f'Your period appears to be approximately {days_late} days late based on your '
+                    f'average cycle length of {int(avg_cycle_for_late)} days. '
+                    'Consider taking a pregnancy test if sexually active, and note any unusual symptoms.'
+                ),
+                'detail': f"Last logged period: {last_period_start.strftime('%B %d, %Y')}",
+                'priority': 'medium'
+            })
+        # ─────────────────────────────────────────────────────────────────────
+
+        computed_data = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
+        cycle_lengths = computed_data.get('lengths', [])
         if len(cycle_lengths) >= 3:
             variability = CyclePredictionEngine.calculate_cycle_variability(cycle_lengths)
             
@@ -1562,17 +1955,57 @@ class CyclePredictionEngine:
                     'detail': f"Average cycle length: {round(avg_length, 1)} days"
                 })
         
-        # Analyze period length
-        period_lengths = [log.period_length for log in logs if log.period_length]
+        period_lengths = CyclePredictionEngine.compute_period_lengths(logs)
         if period_lengths:
             avg_period = statistics.mean(period_lengths)
             if avg_period > 7:
                 insights.append({
+                    'type': 'warning',
+                    'category': 'menorrhagia_risk',
+                    'message': (
+                        f'Your periods average {round(avg_period, 1)} days, which is longer than the typical '
+                        '2–7 day range. Periods consistently lasting >7 days (menorrhagia) may indicate '
+                        'fibroids, polyps, hormonal imbalance, or a bleeding disorder. Discuss with your healthcare provider.'
+                    ),
+                    'detail': f"Average period length: {round(avg_period, 1)} days",
+                    'priority': 'medium'
+                })
+            elif avg_period < 2:
+                insights.append({
                     'type': 'info',
                     'category': 'period_length',
-                    'message': 'Your periods last longer than average. Monitor for heavy bleeding.',
-                    'detail': f"Average period length: {round(avg_period, 1)} days"
+                    'message': (
+                        f'Your periods average only {round(avg_period, 1)} day(s), which is shorter than typical. '
+                        'Hypomenorrhea can be caused by hormonal contraceptives, low body weight, or thyroid issues.'
+                    ),
+                    'detail': f"Average period length: {round(avg_period, 1)} days",
+                    'priority': 'low'
                 })
+
+        # ── PCOS-pattern detection ─────────────────────────────────────────
+        # PCOS often presents as: long irregular cycles (>35 days), high variability, or
+        # cycles absent for extended periods. We flag the pattern, not diagnose.
+        if cycle_lengths and len(cycle_lengths) >= 3:
+            long_cycle_count = sum(1 for cl in cycle_lengths if cl > 35)
+            long_cycle_fraction = long_cycle_count / len(cycle_lengths)
+            variability_for_pcos = CyclePredictionEngine.calculate_cycle_variability(cycle_lengths)
+            cv = variability_for_pcos.get('coefficient_of_variation', 0)
+
+            if long_cycle_fraction >= 0.5 and cv > 20:
+                insights.append({
+                    'type': 'info',
+                    'category': 'pcos_pattern',
+                    'message': (
+                        f'{int(long_cycle_fraction * 100)}% of your cycles are longer than 35 days '
+                        f'with high variability (CV {round(cv, 1)}%). This pattern can be associated with '
+                        'Polycystic Ovary Syndrome (PCOS). Only a healthcare provider can diagnose PCOS — '
+                        'consider a consultation if you have concerns.'
+                    ),
+                    'detail': f"Long cycles (>35 days): {long_cycle_count}/{len(cycle_lengths)}, CV: {round(cv, 1)}%",
+                    'priority': 'medium',
+                    'action_required': False
+                })
+        # ─────────────────────────────────────────────────────────────────
         
         # Analyze wellness patterns for enhanced predictions
         CyclePredictionEngine.analyze_wellness_patterns(logs, insights)
@@ -2043,6 +2476,25 @@ def get_cycle_logs():
         .paginate(page=page, per_page=per_page)
     
     # Format the response
+    def _fmt_symptoms(raw):
+        if not raw:
+            return []
+        if isinstance(raw, list):
+            return [s.strip() for s in raw if s and str(s).strip()]
+        return [s.strip() for s in str(raw).split(',') if s.strip()]
+
+    def _fmt_exercise(raw):
+        if not raw:
+            return []
+        if isinstance(raw, list):
+            return raw
+        try:
+            import json as _json
+            parsed = _json.loads(raw)
+            return parsed if isinstance(parsed, list) else [raw]
+        except Exception:
+            return [s.strip() for s in str(raw).split(',') if s.strip()]
+
     result = {
         'items': [{
             'id': log.id,
@@ -2051,14 +2503,14 @@ def get_cycle_logs():
             'cycle_length': log.cycle_length,
             'period_length': log.period_length,
             'flow_intensity': log.flow_intensity,
-            'symptoms': log.symptoms,
+            'symptoms': _fmt_symptoms(log.symptoms),
             'notes': log.notes,
             # Enhanced wellness data
             'mood': log.mood,
             'energy_level': log.energy_level,
             'sleep_quality': log.sleep_quality,
             'stress_level': log.stress_level,
-            'exercise_activities': log.exercise_activities,
+            'exercise_activities': _fmt_exercise(log.exercise_activities),
             'created_at': log.created_at.isoformat()
         } for log in logs.items],
         'total': logs.total,
@@ -2079,6 +2531,25 @@ def get_cycle_log(log_id):
     if not log:
         return jsonify({'message': 'Cycle log not found'}), 404
     
+    def _fmt_syms(raw):
+        if not raw:
+            return []
+        if isinstance(raw, list):
+            return [s.strip() for s in raw if s and str(s).strip()]
+        return [s.strip() for s in str(raw).split(',') if s.strip()]
+
+    def _fmt_ex(raw):
+        if not raw:
+            return []
+        if isinstance(raw, list):
+            return raw
+        try:
+            import json as _json
+            parsed = _json.loads(raw)
+            return parsed if isinstance(parsed, list) else [raw]
+        except Exception:
+            return [s.strip() for s in str(raw).split(',') if s.strip()]
+
     # Format the response
     result = {
         'id': log.id,
@@ -2087,14 +2558,14 @@ def get_cycle_log(log_id):
         'cycle_length': log.cycle_length,
         'period_length': log.period_length,
         'flow_intensity': log.flow_intensity,
-        'symptoms': log.symptoms,
+        'symptoms': _fmt_syms(log.symptoms),
         'notes': log.notes,
         # Enhanced wellness data
         'mood': log.mood,
         'energy_level': log.energy_level,
         'sleep_quality': log.sleep_quality,
         'stress_level': log.stress_level,
-        'exercise_activities': log.exercise_activities,
+        'exercise_activities': _fmt_ex(log.exercise_activities),
         'created_at': log.created_at.isoformat(),
         'updated_at': log.updated_at.isoformat()
     }
@@ -2154,7 +2625,7 @@ def create_cycle_log():
         # Calculate period length automatically if end_date is provided
         period_length = data.get('period_length')
         if end_date and not period_length:
-            period_length = (end_date - start_date).days + 1
+            period_length = (end_date - start_date).days
         
         # Get previous cycle to calculate cycle length
         previous_log = CycleLog.query.filter_by(user_id=target_user_id)\
@@ -2198,7 +2669,7 @@ def create_cycle_log():
             end_date=end_date,
             cycle_length=cycle_length,
             period_length=period_length,
-            flow_intensity=data.get('flow_intensity', 'medium'),
+            flow_intensity=data.get('flow_intensity') or data.get('flow_level', 'medium'),
             symptoms=symptoms_str,
             notes=data.get('notes'),
             # Enhanced wellness tracking
@@ -2217,36 +2688,31 @@ def create_cycle_log():
             .order_by(CycleLog.start_date).all()
         
         # Generate prediction using the intelligent engine
-        predictions = CyclePredictionEngine.predict_next_cycles(all_logs, num_predictions=1)
+        predictions = CyclePredictionEngine._predictions_from_result(
+            CyclePredictionEngine.predict_next_cycles(all_logs, num_predictions=1)
+        )
         
-        # Create enhanced notification
+        # Create enhanced notification using the new cycle notification helper
         if predictions:
-            from app.models import Notification
-            
             prediction = predictions[0]
             confidence = prediction['confidence']
             next_date = datetime.fromisoformat(prediction['predicted_start'])
             
-            confidence_text = {
-                'high': 'High confidence',
-                'medium': 'Moderate confidence',
-                'low': 'Low confidence (log more cycles for accuracy)'
-            }.get(confidence, '')
+            # Extract fertile window if available
+            fertile_start = prediction.get('fertile_start')
+            fertile_end = prediction.get('fertile_end')
             
-            message = f"📅 Next period predicted for {next_date.strftime('%B %d, %Y')}. {confidence_text}. Predicted cycle length: {prediction['predicted_cycle_length']:.0f} days."
-            
-            notification = Notification(
+            # 🔔 Call the new cycle notification helper
+            notify_cycle_prediction_updated(
                 user_id=target_user_id,
-                title='Cycle Prediction',
-                message=message,
-                type='cycle',
-                notification_type='cycle_prediction'
+                next_period_date=next_date,
+                fertile_start=fertile_start,
+                fertile_end=fertile_end,
+                confidence=confidence
             )
             
-            db.session.add(notification)
-            db.session.commit()
-            
             print(f"✅ Created cycle log with intelligent prediction notification")
+
         
         return jsonify({
             'message': 'Cycle log created successfully',
@@ -2320,8 +2786,8 @@ def update_cycle_log(log_id):
             log.notes = data['notes']
         
         # Handle wellness tracking fields
-        if 'flow_intensity' in data:
-            log.flow_intensity = data['flow_intensity']
+        if 'flow_intensity' in data or 'flow_level' in data:
+            log.flow_intensity = data.get('flow_intensity') or data.get('flow_level')
         
         if 'mood' in data:
             log.mood = data['mood']
@@ -2448,40 +2914,32 @@ def get_cycle_stats():
             'latest_period_start': None
         }), 200
     
-    # Extract cycle data using enhanced robust method
     cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
-    
-    # Detect and handle outliers
-    filtered_cycle_data = CyclePredictionEngine.detect_outliers(cycle_data) if cycle_data else []
-    
-    # Analyze trends
+    period_lengths = CyclePredictionEngine.compute_period_lengths(logs)
+    cycle_lengths = cycle_data.get('lengths', [])
+    outlier_result = {'outliers': [], 'outlier_indices': []}
+
+    if cycle_lengths:
+        outlier_result = CyclePredictionEngine.detect_outliers_adaptive(cycle_lengths)
+        if outlier_result.get('clean_lengths'):
+            cycle_lengths = outlier_result['clean_lengths']
+            cycle_data['lengths'] = cycle_lengths
+
+    filtered_cycle_data = CyclePredictionEngine._legacy_entries_from_cycle_data(cycle_data)
     trend_analysis = CyclePredictionEngine.analyze_trend(filtered_cycle_data) if filtered_cycle_data else {'trend': 'insufficient_data'}
-    
-    # Extract cycle lengths for backward compatibility
-    cycle_lengths = [c['length'] for c in cycle_data] if cycle_data else []
-    period_lengths = [log.period_length for log in logs if log.period_length and 2 <= log.period_length <= 10]
-    
-    print(f"📈 Enhanced cycle data: {len(cycle_lengths)} cycles, {sum(1 for c in filtered_cycle_data if c.get('is_outlier', False))} outliers")
-    print(f"📈 Period lengths: {period_lengths}")
-    print(f"📈 Trend analysis: {trend_analysis}")
-    
-    # Calculate advanced statistics using enhanced methods
-    avg_cycle_length = statistics.mean(cycle_lengths) if cycle_lengths else None
-    avg_period_length = statistics.mean(period_lengths) if period_lengths else None
-    
-    # Calculate enhanced weighted average
-    weighted_cycle_avg = CyclePredictionEngine.calculate_adaptive_weighted_average(
-        filtered_cycle_data
-    ) if filtered_cycle_data else None
-    
-    # Calculate enhanced confidence
-    confidence_level = CyclePredictionEngine.calculate_enhanced_confidence(filtered_cycle_data, trend_analysis) if filtered_cycle_data else 'no_data'
-    
-    # Calculate cycle variability (backward compatibility)
+
+    print(f"📈 Computed cycle gaps: {cycle_lengths}, period lengths: {period_lengths}")
+
+    avg_cycle_length = round(statistics.mean(cycle_lengths), 1) if cycle_lengths else None
+    avg_period_length = round(statistics.mean(period_lengths), 1) if period_lengths else None
+    weighted_cycle_avg = cycle_data.get('lengths') and round(statistics.median(cycle_lengths), 1)
+    regularity = CyclePredictionEngine.compute_regularity_index(cycle_lengths) if cycle_lengths else None
+    confidence = CyclePredictionEngine.compute_confidence_score(cycle_data) if cycle_lengths else None
+    confidence_level = confidence['level'] if confidence else 'no_data'
     variability_info = CyclePredictionEngine.calculate_cycle_variability(cycle_lengths) if len(cycle_lengths) >= 2 else None
-    
-    # Generate enhanced predictions
-    predictions = CyclePredictionEngine.predict_next_cycles(logs, num_predictions=3, user_id=str(current_user_id))
+
+    prediction_result = CyclePredictionEngine.predict_next_cycles(logs, num_predictions=3, user_id=str(current_user_id))
+    predictions = CyclePredictionEngine._predictions_from_result(prediction_result)
     
     # Analyze symptom patterns
     symptom_analysis = CyclePredictionEngine.analyze_symptoms_patterns(logs)
@@ -2496,34 +2954,47 @@ def get_cycle_stats():
     # Calculate days since last period
     days_since_period = (datetime.now() - latest_log.start_date).days
     
-    # Determine current cycle phase
+    # Determine current cycle phase with correct boundaries
     current_phase = None
     if weighted_cycle_avg:
-        if days_since_period <= (latest_log.period_length or 5):
+        avg_period_len = avg_period_length or 5
+        if days_since_period >= int(weighted_cycle_avg) + 14:
+            # More than one full cycle overdue — flag as overdue, not luteal
+            current_phase = 'overdue'
+        elif days_since_period <= avg_period_len:
             current_phase = 'menstrual'
-        elif days_since_period <= (weighted_cycle_avg - 14):
+        elif days_since_period <= int(weighted_cycle_avg) - 16:
             current_phase = 'follicular'
-        elif days_since_period <= (weighted_cycle_avg - 12):
+        elif days_since_period <= int(weighted_cycle_avg) - 11:
+            # Biologically, ovulation window spans ~5 days (LH surge + ±2 days around O-day)
             current_phase = 'ovulation'
         else:
             current_phase = 'luteal'
     
     stats = {
         'basic_stats': {
-            'average_cycle_length': round(avg_cycle_length, 1) if avg_cycle_length else None,
-            'average_period_length': round(avg_period_length, 1) if avg_period_length else None,
-            'weighted_cycle_length': round(weighted_cycle_avg, 1) if weighted_cycle_avg else None,
+            'average_cycle_length': avg_cycle_length,
+            'average_period_length': avg_period_length,
+            'weighted_cycle_length': weighted_cycle_avg,
+            'median_cycle_length': round(statistics.median(cycle_lengths), 1) if cycle_lengths else None,
             'total_logs': len(logs),
             'data_points': len(cycle_lengths),
+            'computable_cycles': cycle_data.get('computable_cycles', 0),
+            'valid_cycles': cycle_data.get('valid_cycles', 0),
             'latest_period_start': latest_log.start_date.isoformat(),
             'days_since_period': days_since_period,
-            'current_cycle_phase': current_phase
+            'current_cycle_phase': current_phase,
+            'shortest_cycle': min(cycle_lengths) if cycle_lengths else None,
+            'longest_cycle': max(cycle_lengths) if cycle_lengths else None,
+            'std_deviation': round(statistics.stdev(cycle_lengths), 2) if len(cycle_lengths) >= 2 else 0,
         },
+        'regularity': regularity,
+        'confidence': confidence,
         'enhanced_analysis': {
             'confidence_level': confidence_level,
             'trend_analysis': trend_analysis,
-            'outliers_detected': sum(1 for c in filtered_cycle_data if c.get('is_outlier', False)),
-            'data_quality_score': min(100, (len(cycle_data) / 12) * 100) if cycle_data else 0
+            'outliers_detected': len(outlier_result.get('outliers', [])),
+            'data_quality_score': regularity['score'] if regularity and regularity.get('score') is not None else 0
         },
         'predictions': predictions,
         'variability': variability_info,
@@ -2538,10 +3009,48 @@ def get_cycle_stats():
 
     # Provide legacy flattened fields for backward compatibility with older dashboard code
     primary_prediction = predictions[0] if predictions else None
+    
+    # Determine if the primary prediction is stale (i.e. the predicted date is already in the past)
+    prediction_outdated = False
+    if primary_prediction:
+        try:
+            pred_date = datetime.fromisoformat(primary_prediction['predicted_start'])
+            prediction_outdated = pred_date < datetime.now()
+            # If the first prediction is already in the past, find the next future one
+            if prediction_outdated:
+                for pred in predictions:
+                    if datetime.fromisoformat(pred['predicted_start']) >= datetime.now():
+                        primary_prediction = pred
+                        prediction_outdated = False
+                        break
+        except Exception:
+            pass
+
+    flow_counts = {'light': 0, 'medium': 0, 'heavy': 0}
+    for log in logs:
+        if log.flow_intensity in flow_counts:
+            flow_counts[log.flow_intensity] += 1
+
     legacy_summary = {
         'average_cycle_length': stats['basic_stats'].get('average_cycle_length'),
         'average_period_length': stats['basic_stats'].get('average_period_length'),
         'weighted_cycle_length': stats['basic_stats'].get('weighted_cycle_length'),
+        'median_cycle_length': stats['basic_stats'].get('median_cycle_length'),
+        'regularity_status': regularity.get('label') if regularity else None,
+        'regularity_interpretation': regularity.get('interpretation') if regularity else None,
+        'flow_breakdown': flow_counts,
+        'dominant_flow': max(flow_counts, key=flow_counts.get) if any(flow_counts.values()) else None,
+        'cycle_history': [
+            {
+                'cycle_number': i + 1,
+                'length': e['length'],
+                'start_date': e['start_date'].isoformat() if hasattr(e['start_date'], 'isoformat') else str(e['start_date']),
+                'is_valid': e['is_valid'],
+                'flow_intensity': e.get('flow_intensity'),
+                'symptoms': e.get('symptoms'),
+            }
+            for i, e in enumerate(cycle_data.get('all_entries', []))
+        ],
         'latest_period_start': stats['basic_stats'].get('latest_period_start'),
         'days_since_period': stats['basic_stats'].get('days_since_period'),
         'current_cycle_phase': stats['basic_stats'].get('current_cycle_phase'),
@@ -2549,8 +3058,30 @@ def get_cycle_stats():
         'next_period_prediction': primary_prediction.get('predicted_start') if primary_prediction else None,
         'next_period_end': primary_prediction.get('predicted_end') if primary_prediction else None,
         'next_period_confidence': primary_prediction.get('confidence') if primary_prediction else None,
-        'next_cycle_number': primary_prediction.get('cycle_number') if primary_prediction else None
+        'next_cycle_number': primary_prediction.get('cycle_number') if primary_prediction else None,
+        'prediction_is_outdated': prediction_outdated,
+        'fertile_window_start': primary_prediction.get('fertile_window_start') if primary_prediction else None,
+        'fertile_window_end': primary_prediction.get('fertile_window_end') if primary_prediction else None,
+        'ovulation_date': primary_prediction.get('ovulation_date') if primary_prediction else None,
     }
+
+    # Regularity score drives dashboard "cycle regularity index"
+    health_score = regularity['score'] if regularity and regularity.get('score') is not None else 0
+    _days = days_since_period
+    if _days >= 90:
+        health_score = max(0, health_score - 20)
+    elif avg_cycle_length and _days >= int(avg_cycle_length) + 10:
+        health_score = max(0, health_score - 10)
+    legacy_summary['health_score'] = health_score
+    legacy_summary['health_score_label'] = (
+        regularity.get('label', '').replace('_', ' ').title() if regularity and regularity.get('label') else (
+            'Excellent' if health_score >= 80 else
+            'Good' if health_score >= 65 else
+            'Fair' if health_score >= 50 else
+            'Needs Attention'
+        )
+    )
+
     stats.update(legacy_summary)
     
     print(f"✅ Returning enhanced stats with {len(predictions)} predictions")
@@ -2632,19 +3163,21 @@ def get_calendar_data():
             }
         }), 200
     
-    # Extract cycle data using enhanced robust method
     cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
+    cycle_lengths = cycle_data.get('lengths', [])
+    if cycle_lengths:
+        outlier_result = CyclePredictionEngine.detect_outliers_adaptive(cycle_lengths)
+        cycle_lengths = outlier_result.get('clean_lengths', cycle_lengths)
+    avg_cycle_length = statistics.mean(cycle_lengths) if cycle_lengths else 28
+    baseline = CyclePredictionEngine.build_personal_baseline(cycle_data) if len(cycle_lengths) >= 2 else {}
+    if baseline.get('prediction_base'):
+        avg_cycle_length = baseline['prediction_base']
+
+    predictions = CyclePredictionEngine._predictions_from_result(
+        CyclePredictionEngine.predict_next_cycles(logs, num_predictions=6)
+    )
     
-    # Detect and handle outliers
-    filtered_cycle_data = CyclePredictionEngine.detect_outliers(cycle_data) if cycle_data else []
-    
-    # Calculate enhanced weighted average for better predictions
-    avg_cycle_length = CyclePredictionEngine.calculate_adaptive_weighted_average(filtered_cycle_data) if filtered_cycle_data else 28
-    
-    # Get enhanced predictions using the intelligent engine
-    predictions = CyclePredictionEngine.predict_next_cycles(logs, num_predictions=6)
-    
-    print(f"📊 Enhanced calendar: {len(logs)} logs, {len(cycle_data)} cycles, avg: {avg_cycle_length:.1f}")
+    print(f"📊 Enhanced calendar: {len(logs)} logs, {len(cycle_lengths)} cycles, avg: {avg_cycle_length:.1f}")
     
     # Build calendar data with enhanced intelligence
     calendar_days = []
@@ -2685,16 +3218,19 @@ def get_calendar_data():
                 if current_date == log_end:
                     day_data['is_period_end'] = True
                 
-                # Flow intensity based on day of period
-                days_into_period = (current_date - log_start).days
-                if days_into_period <= 1:
-                    day_data['flow_intensity'] = log.flow_intensity or 'medium'
-                elif days_into_period <= 2:
-                    day_data['flow_intensity'] = 'heavy'
-                elif days_into_period <= 4:
-                    day_data['flow_intensity'] = 'medium'
+                # Flow intensity: prefer stored value; fall back to day-based heuristic
+                if log.flow_intensity:
+                    day_data['flow_intensity'] = log.flow_intensity
                 else:
-                    day_data['flow_intensity'] = 'light'
+                    days_into_period = (current_date - log_start).days
+                    if days_into_period == 0:
+                        day_data['flow_intensity'] = 'medium'   # start day
+                    elif days_into_period <= 2:
+                        day_data['flow_intensity'] = 'heavy'
+                    elif days_into_period <= 4:
+                        day_data['flow_intensity'] = 'medium'
+                    else:
+                        day_data['flow_intensity'] = 'light'
                 
                 # Symptoms
                 if log.symptoms:
@@ -2717,10 +3253,11 @@ def get_calendar_data():
                     day_data['cycle_day'] = cycle_day
                     
                     # Determine phase if not period
+                    # Ovulation window spans 5 days (LH surge ±2 days around O-day = cycle day cycle_length-16 to cycle_length-11)
                     if not day_data['is_period_day']:
-                        if cycle_day <= cycle_length - 14:
+                        if cycle_day <= cycle_length - 16:
                             day_data['phase'] = 'follicular'
-                        elif cycle_day <= cycle_length - 12:
+                        elif cycle_day <= cycle_length - 11:
                             day_data['phase'] = 'ovulation'
                         else:
                             day_data['phase'] = 'luteal'
@@ -2800,8 +3337,7 @@ def get_calendar_data():
         calendar_days.append(day_data)
         current_date += timedelta(days=1)
     
-    # Calculate cycle variability using extracted cycle data
-    cycle_lengths = [c['length'] for c in cycle_data] if cycle_data else []
+    cycle_lengths = cycle_data.get('lengths', [])
     variability_info = CyclePredictionEngine.calculate_cycle_variability(cycle_lengths) if len(cycle_lengths) >= 2 else None
     
     result = {
@@ -2839,6 +3375,18 @@ def get_cycle_insights():
     """
     Get personalized cycle insights, health recommendations, and pattern analysis
     """
+    try:
+        return _build_cycle_insights_response()
+    except Exception as e:
+        current_app.logger.error(f"Failed to build cycle insights: {e}", exc_info=True)
+        return jsonify({
+            'message': 'Unable to generate insights right now',
+            'insights': [],
+            'recommendations': [],
+        }), 500
+
+
+def _build_cycle_insights_response():
     current_user_id = int(get_jwt_identity())  # Convert to int for comparison
     
     # Get optional user_id parameter for parent viewing child's data
@@ -2887,13 +3435,10 @@ def get_cycle_insights():
     # Analyze symptom patterns
     symptom_analysis = CyclePredictionEngine.analyze_symptoms_patterns(logs)
     
-    # Calculate enhanced cycle characteristics
     cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
-    filtered_cycle_data = CyclePredictionEngine.detect_outliers(cycle_data) if cycle_data else []
+    cycle_lengths = cycle_data.get('lengths', [])
+    filtered_cycle_data = CyclePredictionEngine._legacy_entries_from_cycle_data(cycle_data)
     trend_analysis = CyclePredictionEngine.analyze_trend(filtered_cycle_data) if filtered_cycle_data else {'trend': 'insufficient_data'}
-    
-    # Extract cycle lengths for backward compatibility
-    cycle_lengths = [c['length'] for c in cycle_data] if cycle_data else []
     
     variability = CyclePredictionEngine.calculate_cycle_variability(cycle_lengths) if len(cycle_lengths) >= 2 else None
     confidence_level = CyclePredictionEngine.calculate_enhanced_confidence(filtered_cycle_data, trend_analysis) if filtered_cycle_data else 'no_data'
@@ -2943,10 +3488,28 @@ def get_cycle_insights():
     # Cycle-phase specific recommendations
     if logs:
         latest_log = logs[-1]
-        days_since_period = (datetime.now() - latest_log.start_date).days
+        days_since_period = (
+            CyclePredictionEngine._to_date(datetime.now())
+            - CyclePredictionEngine._to_date(latest_log.start_date)
+        ).days
         avg_cycle = statistics.mean(cycle_lengths) if cycle_lengths else 28
+        period_len = latest_log.period_length or 5
         
-        if days_since_period <= 5:
+        if days_since_period >= int(avg_cycle) + 14:
+            # Significantly overdue — skip generic phase tip, amenorrhea alert handled above
+            phase_rec = {
+                'priority': 'high',
+                'category': 'current_phase',
+                'title': 'Cycle Overdue — Consult a Provider',
+                'phase': 'overdue',
+                'tips': [
+                    'Your period is significantly overdue.',
+                    'Consider taking a pregnancy test if sexually active.',
+                    'Track any symptoms (nausea, fatigue, unusual discharge).',
+                    'Consult a healthcare provider for evaluation.'
+                ]
+            }
+        elif days_since_period <= period_len:
             phase_rec = {
                 'priority': 'low',
                 'category': 'current_phase',
@@ -2960,7 +3523,7 @@ def get_cycle_insights():
                     'Use heating pad for cramps'
                 ]
             }
-        elif days_since_period <= avg_cycle - 14:
+        elif days_since_period <= avg_cycle - 16:
             phase_rec = {
                 'priority': 'low',
                 'category': 'current_phase',
@@ -2973,7 +3536,7 @@ def get_cycle_insights():
                     'Good time for important conversations'
                 ]
             }
-        elif days_since_period <= avg_cycle - 12:
+        elif days_since_period <= avg_cycle - 11:  # 5-day ovulation window
             phase_rec = {
                 'priority': 'low',
                 'category': 'current_phase',
@@ -3097,8 +3660,8 @@ def get_cycle_predictions():
     # Calculate number of cycles to predict (roughly 1 per month)
     num_predictions = months_ahead
     
-    # Generate predictions
-    predictions = CyclePredictionEngine.predict_next_cycles(logs, num_predictions=num_predictions)
+    prediction_result = CyclePredictionEngine.predict_next_cycles(logs, num_predictions=num_predictions)
+    predictions = CyclePredictionEngine._predictions_from_result(prediction_result)
     
     # Group predictions by month
     predictions_by_month = defaultdict(list)
@@ -3190,20 +3753,21 @@ def get_ml_insights():
     
     # Perform ML analysis
     cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
+    legacy_cycle_entries = CyclePredictionEngine._legacy_entries_from_cycle_data(cycle_data)
     try:
-        ml_patterns = CyclePredictionEngine.ml_pattern_recognition(cycle_data, str(target_user_id))
+        ml_patterns = CyclePredictionEngine.ml_pattern_recognition(legacy_cycle_entries, str(target_user_id))
     except Exception as e:
         print(f"ML Pattern Recognition Error: {str(e)}")
         ml_patterns = {'patterns': [], 'confidence': 'error', 'recommendations': []}
     
     try:
-        anomaly_analysis = CyclePredictionEngine.anomaly_detection(cycle_data)
+        anomaly_analysis = CyclePredictionEngine.anomaly_detection(legacy_cycle_entries)
     except Exception as e:
         print(f"Anomaly Detection Error: {str(e)}")
         anomaly_analysis = {'anomalies': [], 'score': 0.0}
     
     try:
-        adaptive_prediction = CyclePredictionEngine.adaptive_learning_prediction(cycle_data, str(target_user_id))
+        adaptive_prediction = CyclePredictionEngine.adaptive_learning_prediction(legacy_cycle_entries, str(target_user_id))
     except Exception as e:
         print(f"Adaptive Learning Error: {str(e)}")
         adaptive_prediction = {'confidence': 'low', 'prediction_accuracy': 0.5}
@@ -3220,7 +3784,7 @@ def get_ml_insights():
     
     # Calculate regularity score directly from cycle data if not in profile
     if 'regularity_score' not in user_profile_data:
-        lengths = [c['length'] for c in cycle_data] if cycle_data else []
+        lengths = cycle_data.get('lengths', []) if isinstance(cycle_data, dict) else [c['length'] for c in cycle_data]
         regularity_score = CyclePredictionEngine._calculate_regularity_score(lengths) / 100 if lengths else 0.5
         predictability_index = CyclePredictionEngine._calculate_predictability_index(lengths) if lengths else 0.5
         
@@ -3297,8 +3861,9 @@ def get_pattern_analysis():
         }), 200
     
     cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
+    legacy_entries = CyclePredictionEngine._legacy_entries_from_cycle_data(cycle_data)
     try:
-        ml_patterns = CyclePredictionEngine.ml_pattern_recognition(cycle_data, str(target_user_id))
+        ml_patterns = CyclePredictionEngine.ml_pattern_recognition(legacy_entries, str(target_user_id))
     except Exception as e:
         print(f"ML Pattern Recognition Error: {str(e)}")
         ml_patterns = {'patterns': [], 'confidence': 'error', 'recommendations': []}
@@ -3368,7 +3933,8 @@ def get_anomaly_detection():
         }), 200
     
     cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
-    anomaly_analysis = CyclePredictionEngine.anomaly_detection(cycle_data)
+    legacy_entries = CyclePredictionEngine._legacy_entries_from_cycle_data(cycle_data)
+    anomaly_analysis = CyclePredictionEngine.anomaly_detection(legacy_entries)
     
     return jsonify({
         'anomalies_found': anomaly_analysis.get('anomalies_detected', False),
@@ -3525,3 +4091,321 @@ def get_test_calendar_data():
     except Exception as e:
         print(f"Error in test calendar endpoint: {str(e)}")
         return jsonify({'error': 'Failed to load calendar data', 'message': str(e)}), 500
+
+
+# ============================================================================
+# FERTILE WINDOW ENDPOINT
+# ============================================================================
+
+@cycle_logs_bp.route('/fertile-window', methods=['GET'])
+@jwt_required()
+def get_fertile_window():
+    """
+    Return the current or upcoming fertile window for the authenticated user.
+    Ovulation = 14 days before next predicted period (luteal phase is constant).
+    Fertile window = ovulation - 5 days to ovulation + 1 day (6 days total).
+    """
+    try:
+        current_user_id = int(get_jwt_identity())
+
+        # Parent viewing child data
+        requested_user_id = request.args.get('user_id', type=int)
+        target_user_id = current_user_id
+        if requested_user_id and requested_user_id != current_user_id:
+            from app.models import User, ParentChild, Parent, Adolescent
+            user = User.query.get(current_user_id)
+            if not user or user.user_type != 'parent':
+                return jsonify({'message': 'Only parents can view child data'}), 403
+            parent = Parent.query.filter_by(user_id=current_user_id).first()
+            adolescent = Adolescent.query.filter_by(user_id=requested_user_id).first()
+            if not parent or not adolescent:
+                return jsonify({'message': 'Parent or child record not found'}), 404
+            parent_child = ParentChild.query.filter_by(
+                parent_id=parent.id, adolescent_id=adolescent.id
+            ).first()
+            if not parent_child:
+                return jsonify({'message': 'Access denied'}), 403
+            target_user_id = requested_user_id
+
+        logs = CycleLog.query.filter_by(user_id=target_user_id)\
+            .order_by(CycleLog.start_date).all()
+
+        if not logs:
+            return jsonify({
+                'has_data': False,
+                'message': 'No cycle data available. Log your first period to get fertile window predictions.',
+                'fertile_window': None
+            }), 200
+
+        predictions = CyclePredictionEngine._predictions_from_result(
+            CyclePredictionEngine.predict_next_cycles(logs, num_predictions=3)
+        )
+        today = datetime.now().date()
+
+        # Find the first future ovulation/fertile window
+        for pred in predictions:
+            ovulation_date = datetime.fromisoformat(pred['ovulation_date']).date()
+            fertile_start = datetime.fromisoformat(pred['fertile_window_start']).date()
+            fertile_end = datetime.fromisoformat(pred['fertile_window_end']).date()
+            next_period = datetime.fromisoformat(pred['predicted_start']).date()
+
+            # Is the fertile window upcoming or currently active?
+            if fertile_end >= today:
+                is_in_window = fertile_start <= today <= fertile_end
+                days_until_window = max(0, (fertile_start - today).days)
+                days_until_ovulation = (ovulation_date - today).days
+
+                return jsonify({
+                    'has_data': True,
+                    'is_currently_fertile': is_in_window,
+                    'fertile_window': {
+                        'start': fertile_start.isoformat(),
+                        'end': fertile_end.isoformat(),
+                        'ovulation_date': ovulation_date.isoformat(),
+                        'next_period_date': next_period.isoformat(),
+                        'confidence': pred['confidence'],
+                        'predicted_cycle_length': pred['predicted_cycle_length']
+                    },
+                    'days_until_fertile_window': days_until_window,
+                    'days_until_ovulation': days_until_ovulation,
+                    'fertility_tip': (
+                        'You are currently in your fertile window! '
+                        'This is the best time to conceive if trying to get pregnant.'
+                        if is_in_window else
+                        f'Your next fertile window starts in {days_until_window} day(s). '
+                        'Sperm can survive 3-5 days, so the window starts before ovulation.'
+                    )
+                }), 200
+
+        return jsonify({
+            'has_data': True,
+            'is_currently_fertile': False,
+            'message': 'No upcoming fertile window found in the next 3 predictions.',
+            'fertile_window': None
+        }), 200
+
+    except Exception as e:
+        return jsonify({'message': f'Error calculating fertile window: {str(e)}'}), 500
+
+
+# ============================================================================
+# HEALTH SUMMARY ENDPOINT
+# ============================================================================
+
+@cycle_logs_bp.route('/health-summary', methods=['GET'])
+@jwt_required()
+def get_health_summary():
+    """
+    Comprehensive women's health summary combining cycle regularity,
+    predicted fertile window, current phase, health alerts, and data completeness.
+    Designed to surface the most clinically meaningful information at a glance.
+    """
+    try:
+        current_user_id = int(get_jwt_identity())
+
+        # Parent viewing child data
+        requested_user_id = request.args.get('user_id', type=int)
+        target_user_id = current_user_id
+        if requested_user_id and requested_user_id != current_user_id:
+            from app.models import User, ParentChild, Parent, Adolescent
+            user = User.query.get(current_user_id)
+            if not user or user.user_type != 'parent':
+                return jsonify({'message': 'Only parents can view child data'}), 403
+            parent = Parent.query.filter_by(user_id=current_user_id).first()
+            adolescent = Adolescent.query.filter_by(user_id=requested_user_id).first()
+            if not parent or not adolescent:
+                return jsonify({'message': 'Parent or child record not found'}), 404
+            parent_child = ParentChild.query.filter_by(
+                parent_id=parent.id, adolescent_id=adolescent.id
+            ).first()
+            if not parent_child:
+                return jsonify({'message': 'Access denied'}), 403
+            target_user_id = requested_user_id
+
+        logs = CycleLog.query.filter_by(user_id=target_user_id)\
+            .order_by(CycleLog.start_date).all()
+
+        today = datetime.now().date()
+
+        if not logs:
+            return jsonify({
+                'has_data': False,
+                'health_score': None,
+                'data_completeness_pct': 0,
+                'current_phase': None,
+                'days_since_period': None,
+                'next_period_prediction': None,
+                'fertile_window': None,
+                'health_alerts': [],
+                'recommendations': [
+                    'Start logging your cycle to receive personalised health insights.',
+                    'Track at least 3 periods for basic predictions.',
+                    'Track 6+ periods for high-confidence predictions.'
+                ],
+                'last_updated': datetime.utcnow().isoformat()
+            }), 200
+
+        cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
+        cycle_lengths = cycle_data.get('lengths', [])
+        if cycle_lengths:
+            outlier_result = CyclePredictionEngine.detect_outliers_adaptive(cycle_lengths)
+            cycle_lengths = outlier_result.get('clean_lengths', cycle_lengths)
+        period_lengths = CyclePredictionEngine.compute_period_lengths(logs)
+        filtered = CyclePredictionEngine._legacy_entries_from_cycle_data(cycle_data)
+
+        avg_cycle = statistics.mean(cycle_lengths) if cycle_lengths else 28.0
+        avg_period = statistics.mean(period_lengths) if period_lengths else 5.0
+        variability = CyclePredictionEngine.calculate_cycle_variability(cycle_lengths) if len(cycle_lengths) >= 2 else None
+        trend = CyclePredictionEngine.analyze_trend(filtered) if filtered else {'trend': 'insufficient_data'}
+
+        latest_log = logs[-1]
+        days_since = (datetime.now() - latest_log.start_date).days
+
+        # Cycle phase — ovulation window = 5 days (LH surge ±2 around O-day)
+        period_len_used = latest_log.period_length or int(avg_period)
+        if days_since >= int(avg_cycle) + 14:
+            current_phase = 'overdue'
+        elif days_since <= period_len_used:
+            current_phase = 'menstrual'
+        elif days_since <= int(avg_cycle) - 16:
+            current_phase = 'follicular'
+        elif days_since <= int(avg_cycle) - 11:
+            current_phase = 'ovulation'
+        else:
+            current_phase = 'luteal'
+
+        predictions = CyclePredictionEngine._predictions_from_result(
+            CyclePredictionEngine.predict_next_cycles(logs, num_predictions=3)
+        )
+        next_future_pred = None
+        for pred in predictions:
+            if datetime.fromisoformat(pred['predicted_start']).date() >= today:
+                next_future_pred = pred
+                break
+        if not next_future_pred and predictions:
+            next_future_pred = predictions[0]  # Show last even if past
+
+        # Health alerts
+        health_alerts = []
+        if days_since >= 90:
+            health_alerts.append({
+                'type': 'critical',
+                'category': 'amenorrhea',
+                'title': 'Prolonged Absence of Period',
+                'message': (
+                    f'No period logged for {days_since} days. '
+                    'This may indicate amenorrhea. Please consult a healthcare provider.'
+                ),
+                'action': 'Schedule a healthcare appointment'
+            })
+        elif days_since >= int(avg_cycle) + 10:
+            health_alerts.append({
+                'type': 'warning',
+                'category': 'late_period',
+                'title': 'Period May Be Late',
+                'message': f'Your period appears to be {days_since - int(avg_cycle)} days late.',
+                'action': 'Consider taking a pregnancy test if sexually active'
+            })
+
+        if avg_cycle < 21:
+            health_alerts.append({
+                'type': 'warning',
+                'category': 'short_cycles',
+                'title': 'Unusually Short Cycles',
+                'message': f'Average cycle length of {round(avg_cycle, 1)} days is below the normal range (21–35 days).',
+                'action': 'Discuss with a healthcare provider'
+            })
+        elif avg_cycle > 35:
+            health_alerts.append({
+                'type': 'info',
+                'category': 'long_cycles',
+                'title': 'Longer-than-Typical Cycles',
+                'message': f'Average cycle length of {round(avg_cycle, 1)} days is above the typical range (21–35 days).',
+                'action': 'Track additional symptoms; consult a provider if persistent'
+            })
+
+        if avg_period > 7:
+            health_alerts.append({
+                'type': 'warning',
+                'category': 'prolonged_period',
+                'title': 'Prolonged Periods',
+                'message': f'Average period length of {round(avg_period, 1)} days exceeds 7 days (menorrhagia risk).',
+                'action': 'Discuss with a healthcare provider; track iron intake'
+            })
+
+        if variability and variability['variability'] in ['irregular', 'somewhat_irregular'] and (variability.get('coefficient_of_variation') or 0) > 20:
+            health_alerts.append({
+                'type': 'info',
+                'category': 'irregular_cycles',
+                'title': 'Cycle Irregularity Detected',
+                'message': f"Cycle variability: {variability.get('coefficient_of_variation', 0):.1f}% (CV). Irregular cycles may indicate hormonal imbalances, stress, or thyroid issues.",
+                'action': 'Consider tracking stress, sleep, and diet factors'
+            })
+
+        # Health score (0-100)
+        score = 80  # Start optimistic
+        if days_since >= 90: score -= 30
+        elif days_since >= int(avg_cycle) + 10: score -= 15
+        if avg_cycle < 21 or avg_cycle > 35: score -= 10
+        if avg_period > 7: score -= 10
+        if variability and (variability.get('coefficient_of_variation') or 0) > 20: score -= 10
+        if len(logs) < 3: score -= 10
+        score = max(0, min(100, score))
+
+        # Data completeness
+        has_period_len = sum(1 for l in logs if l.period_length) / max(len(logs), 1)
+        has_symptoms = sum(1 for l in logs if l.symptoms) / max(len(logs), 1)
+        has_mood = sum(1 for l in logs if l.mood) / max(len(logs), 1)
+        data_completeness = round(
+            (len(logs) / max(len(logs), 6) * 40 + has_period_len * 20 + has_symptoms * 20 + has_mood * 20),
+            1
+        )
+        data_completeness = min(100, data_completeness)
+
+        # Fertile window summary
+        fertile_summary = None
+        if next_future_pred:
+            ovul_date = datetime.fromisoformat(next_future_pred['ovulation_date']).date()
+            fert_start = datetime.fromisoformat(next_future_pred['fertile_window_start']).date()
+            fert_end = datetime.fromisoformat(next_future_pred['fertile_window_end']).date()
+            fertile_summary = {
+                'start': fert_start.isoformat(),
+                'end': fert_end.isoformat(),
+                'ovulation_date': ovul_date.isoformat(),
+                'is_currently_active': fert_start <= today <= fert_end,
+                'days_until': max(0, (fert_start - today).days),
+                'confidence': next_future_pred['confidence']
+            }
+
+        return jsonify({
+            'has_data': True,
+            'health_score': score,
+            'health_score_label': (
+                'Excellent' if score >= 80 else
+                'Good' if score >= 65 else
+                'Fair' if score >= 50 else
+                'Needs Attention'
+            ),
+            'data_completeness_pct': data_completeness,
+            'current_phase': current_phase,
+            'days_since_period': days_since,
+            'average_cycle_length': round(avg_cycle, 1),
+            'average_period_length': round(avg_period, 1),
+            'cycle_regularity': variability['variability'] if variability else 'insufficient_data',
+            'trend': trend.get('trend', 'unknown'),
+            'total_cycles_logged': len(logs),
+            'next_period_prediction': next_future_pred.get('predicted_start') if next_future_pred else None,
+            'next_period_confidence': next_future_pred.get('confidence') if next_future_pred else None,
+            'fertile_window': fertile_summary,
+            'health_alerts': health_alerts,
+            'health_insights_count': len(CyclePredictionEngine.calculate_health_insights(logs)),
+            'last_updated': datetime.utcnow().isoformat(),
+            'recommendations': [
+                'Log period dates consistently every month for best accuracy.',
+                'Add symptoms, mood, and flow intensity for deeper insights.',
+                'Use the calendar view to visualise your cycle phases.',
+            ]
+        }), 200
+
+    except Exception as e:
+        return jsonify({'message': f'Error generating health summary: {str(e)}'}), 500
