@@ -14,6 +14,8 @@ interface TopBarProps {
 
 export const TopBar: React.FC<TopBarProps> = ({ onNavigate }) => {
   const { user } = useAuthStore();
+  const notificationsPath =
+    user?.user_type === 'parent' ? '/dashboard/parent/notifications' : '/dashboard/notifications';
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -42,7 +44,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onNavigate }) => {
       await api.put(`/notifications/${notifId}/read`);
       setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, is_read: true } : n));
       setIsDropdownOpen(false);
-      onNavigate('/dashboard/notifications');
+      onNavigate(notificationsPath);
     } catch {}
   };
 
@@ -124,7 +126,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onNavigate }) => {
               <button
                 onClick={() => {
                   setIsDropdownOpen(false);
-                  onNavigate('/dashboard/notifications');
+                  onNavigate(notificationsPath);
                 }}
                 className="w-full mt-3 pt-2 text-center text-xs font-semibold text-terracotta border-t border-border hover:underline hover:text-terracotta/85 cursor-pointer block"
               >

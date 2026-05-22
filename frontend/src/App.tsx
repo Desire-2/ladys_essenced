@@ -59,7 +59,7 @@ import {
 import { HealthProviderCard } from './components/features/HealthProviderCard';
 import { 
   User as UserType, CycleLog, MealLog, Appointment, 
-  Notification, ContentItem, Course, Child, SystemLog, 
+  Notification, ContentItem, Course, 
   ProviderAvailability 
 } from './types';
 
@@ -81,21 +81,20 @@ import { CycleRing } from './components/features/CycleRing';
 import { CycleCalendar } from './components/features/CycleCalendar';
 import { NutritionDonut } from './components/features/NutritionDonut';
 import { AppointmentCard } from './components/features/AppointmentCard';
-import { ChildCard } from './components/features/ChildCard';
 import { InsightCard } from './components/features/InsightCard';
 
 // Forms
 import { CycleLogForm } from './components/forms/CycleLogForm';
 import { MealLogForm } from './components/forms/MealLogForm';
 import { AppointmentForm } from './components/forms/AppointmentForm';
-import { ChildForm } from './components/forms/ChildForm';
-
 // Umwari AI Companion Components & Stores
 import { useUmwariStore } from './stores/umwariStore';
 import { UmwariFab } from './components/umwari/UmwariFab';
 import { UmwariChat } from './components/umwari/UmwariChat';
 import { UmwariFullPage } from './components/umwari/UmwariFullPage';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { AdminShell } from './pages/admin/AdminShell';
+import { ParentShell } from './pages/parent/ParentShell';
 
 export default function App() {
   const { user, accessToken, setUser, setAccessToken, logout } = useAuthStore();
@@ -150,6 +149,18 @@ export default function App() {
 
     if (isAuthenticated && user && isPublicPath(currentPath)) {
       navigate(dashboardPathForUserType(user.user_type));
+    }
+
+    // Parents use the Family Health Hub — not adolescent dashboard routes
+    if (isAuthenticated && user?.user_type === 'parent') {
+      const parentOnly = currentPath.startsWith('/dashboard/parent') || currentPath === '/settings' || currentPath === '/dashboard/umwari';
+      if (!parentOnly) {
+        if (currentPath === '/dashboard/notifications') {
+          navigate('/dashboard/parent/notifications');
+        } else {
+          navigate('/dashboard/parent');
+        }
+      }
     }
   }, [isAuthHydrating, isAuthenticated, currentPath, user?.user_type]);
 
@@ -1466,233 +1477,6 @@ export default function App() {
   };
 
   // ==========================================
-  // PARENT DESK STATES
-  // ==========================================
-  const [childrenList, setChildrenList] = useState<Child[]>([]);
-  const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
-  const [childCycleLogs, setChildCycleLogs] = useState<CycleLog[]>([]);
-  const [childMealLogs, setChildMealLogs] = useState<MealLog[]>([]);
-  const [childAppointments, setChildAppointments] = useState<Appointment[]>([]);
-
-  const [isAddChildOpen, setIsAddChildOpen] = useState(false);
-  const [isParentBookOpen, setIsParentBookOpen] = useState(false);
-
-  const syncParentDashboard = async () => {
-    if (!user || user.user_type !== 'parent') return;
-    try {
-      const { data: children } = await api.get<Record<string, unknown>[]>('/parents/children');
-      setChildrenList(
-        (Array.isArray(children) ? children : []).map((c) => {
-          const name = String(c.name ?? '');
-          const parts = name.split(' ').filter(Boolean);
-          return {
-            id: Number(c.id),
-            user_id: c.user_id != null ? Number(c.user_id) : undefined,
-            first_name: parts[0] ?? name,
-            last_name: parts.slice(1).join(' ') || '',
-            age: c.date_of_birth
-              ? Math.max(0, new Date().getFullYear() - new Date(String(c.date_of_birth)).getFullYear())
-              : 0,
-            allow_parent_access: Boolean(c.parent_access_enabled ?? c.allow_parent_access ?? true),
-            gender: 'female' as const,
-          };
-        })
-      );
-      
-      // Auto expand first child log details if privacy allows
-      if (children.length > 0 && selectedChildId === null) {
-        const first = children[0];
-        if (first.allow_parent_access) {
-          setSelectedChildId(first.id);
-        }
-      }
-    } catch {}
-  };
-
-  useEffect(() => {
-    if (user && user.user_type === 'parent' && selectedChildId !== null) {
-      api.get(`/parents/children/${selectedChildId}/cycle-logs`)
-        .then(res => {
-          const raw = asArray(res.data);
-          setChildCycleLogs(raw.map((l) => mapCycleLog(l as Record<string, unknown>)));
-        })
-        .catch(() => setChildCycleLogs([]));
-
-      api.get(`/parents/children/${selectedChildId}/meal-logs`)
-        .then(res => {
-          const raw = asArray(res.data);
-          setChildMealLogs(raw.map((m) => mapMealLog(m as Record<string, unknown>)));
-        })
-        .catch(() => setChildMealLogs([]));
-
-      api.get(`/parents/children/${selectedChildId}/appointments`, { params: { per_page: 50 } })
-        .then((res) => {
-          const raw = asArray<Record<string, unknown>>(res.data);
-          setChildAppointments(raw.map((row) => mapAppointment(row)));
-        })
-        .catch(() => setChildAppointments([]));
-    }
-  }, [user, selectedChildId]);
-
-  useEffect(() => {
-    if (user && user.user_type === 'parent' && accessToken) {
-      syncParentDashboard();
-      fetchHealthProviders()
-        .then(setHealthProviders)
-        .catch(() => setHealthProviders([]));
-    }
-  }, [user, accessToken, currentPath]);
-
-  const handleCreateChild = async (data: any) => {
-    try {
-      const { data: newChild } = await api.post('/parents/children', data);
-      setIsAddChildOpen(false);
-      toast.success('Child profile registered successfully!');
-      syncParentDashboard();
-    } catch {
-      toast.error('Failed to create child.');
-    }
-  };
-
-  const handleParentBookForChild = async (data: AppointmentFormData) => {
-    const child = childrenList.find((c) => c.id === selectedChildId);
-    if (!child?.user_id) {
-      toast.error('Could not resolve child account. Please re-select your child.');
-      return;
-    }
-    setAppointmentSaving(true);
-    try {
-      await createAppointment(data, { forUserId: child.user_id });
-      setIsParentBookOpen(false);
-      toast.success('Consultation booked for your daughter.');
-      if (selectedChildId !== null) {
-        const res = await api.get(`/parents/children/${selectedChildId}/appointments`, {
-          params: { per_page: 50 },
-        });
-        const raw = asArray<Record<string, unknown>>(res.data);
-        setChildAppointments(raw.map((row) => mapAppointment(row)));
-      }
-    } catch (err) {
-      toast.error(getApiErrorMessage(err));
-    } finally {
-      setAppointmentSaving(false);
-    }
-  };
-
-  // ==========================================
-  // VIEW: Parent Dashboard
-  // ==========================================
-  const ParentDashboardPage = () => {
-    const activeChild = childrenList.find(c => c.id === selectedChildId);
-
-    return (
-      <RoleRequired allowed={['parent']}>
-        <DashboardLayout currentPath="/dashboard/parent" onNavigate={navigate}>
-          <div className="space-y-6 text-left animate-[fadeInUp_0.15s_ease-out]">
-            
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border pb-4 select-none">
-              <div>
-                <h2 className="text-2xl font-extrabold font-heading text-ink">Parent workspace & oversight</h2>
-                <p className="text-xs text-muted mt-0.5">Stay aware, supportive, and advocate for your daughter’s health with comforting guidance.</p>
-              </div>
-              
-              <Button onClick={() => setIsAddChildOpen(true)} className="h-11">
-                + Add Teen daughter profile
-              </Button>
-            </div>
-
-            {/* List of registered kids */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {childrenList.map((child) => (
-                <ChildCard 
-                  key={child.id} 
-                  child={child} 
-                  onSelect={(id) => setSelectedChildId(id)}
-                  onBookAppointment={(id) => { setSelectedChildId(id); setIsParentBookOpen(true); }}
-                  selected={selectedChildId === child.id}
-                />
-              ))}
-
-              {childrenList.length === 0 && (
-                <div className="col-span-1 md:col-span-2">
-                  <EmptyState 
-                    title="No adolescent files connected"
-                    description="Support your teen daughters by adding their profile wrapper safely in accordance with privacy laws."
-                    actionText="Add child profile"
-                    onAction={() => setIsAddChildOpen(true)}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Expands details of the highlighted daughter */}
-            {activeChild && activeChild.allow_parent_access && (
-              <div className="space-y-6 pt-4 animate-[fadeInUp_0.15s_ease-out]">
-                <div className="flex items-center justify-between border-b border-border pb-2.5">
-                  <h3 className="text-lg font-bold font-heading text-ink flex items-center gap-2">
-                    📊 Tracking Insights: {activeChild.first_name} Uwase
-                  </h3>
-                  <Button 
-                    variant="secondary" 
-                    onClick={() => setIsParentBookOpen(true)}
-                    className="text-xs shrink-0 py-1.5 px-3"
-                  >
-                    Book clinic request for {activeChild.first_name}
-                  </Button>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  {/* Miniature Period history Calendar */}
-                  <div className="lg:col-span-6">
-                    <Card className="h-full">
-                      <h4 className="text-sm font-bold font-heading text-ink mb-3 uppercase tracking-wider text-muted">Estimated flow days</h4>
-                      {childCycleLogs[0]?.start_date ? (
-                        <CycleCalendar
-                          lastPeriodStart={childCycleLogs[0].start_date}
-                          cycleLength={28}
-                          periodLength={5}
-                        />
-                      ) : (
-                        <p className="text-xs text-muted py-6 text-center">No cycle logs for this child yet.</p>
-                      )}
-                    </Card>
-                  </div>
-
-                  {/* Daughter nutrition logs */}
-                  <div className="lg:col-span-6">
-                    <Card className="h-full text-left">
-                      <h4 className="text-sm font-bold font-heading text-ink border-b border-border pb-2 mb-3 uppercase tracking-wider text-muted">Nutritional meals logged</h4>
-                      
-                      <div className="space-y-3 max-h-80 overflow-y-auto">
-                        {childMealLogs.map((meal) => (
-                          <div key={meal.id} className="p-3 border border-border bg-surface/50 rounded-xl">
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[10px] uppercase font-bold text-sage bg-sage/5 border border-sage/10 px-2 py-0.5 rounded-full">{meal.meal_type}</span>
-                              <span className="text-[10px] text-muted">{new Date(meal.created_at).toLocaleDateString()}</span>
-                            </div>
-                            <p className="text-xs font-bold text-ink mb-1">{meal.food_items.join(', ')}</p>
-                            {meal.mood_after && <p className="text-[10px] text-muted">Daughter mood: {meal.mood_after}</p>}
-                          </div>
-                        ))}
-
-                        {childMealLogs.length === 0 && (
-                          <div className="p-6 text-center text-xs text-muted">No historic nutrition logged by {activeChild.first_name}.</div>
-                        )}
-                      </div>
-                    </Card>
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-          </div>
-        </DashboardLayout>
-      </RoleRequired>
-    );
-  };
-
-  // ==========================================
   // CLINIC WORKER STATES
   // ==========================================
   const [providerApps, setProviderApps] = useState<Appointment[]>([]);
@@ -1853,224 +1637,6 @@ export default function App() {
                         </div>
                       </div>
                     ))}
-                  </div>
-                </Card>
-              </div>
-
-            </div>
-
-          </div>
-        </DashboardLayout>
-      </RoleRequired>
-    );
-  };
-
-  // ==========================================
-  // ADMIN DASHBOARD STATES
-  // ==========================================
-  const [adminStats, setAdminStats] = useState({ total_users: 18, active_providers: 2, pending_content: 1, appointments_today: 2 });
-  const [allUsersList, setAllUsersList] = useState<UserType[]>([]);
-  const [systemLogsList, setSystemLogsList] = useState<SystemLog[]>([]);
-  const [pendingArticles, setPendingArticles] = useState<ContentItem[]>([]);
-
-  const syncAdminDashboard = async () => {
-    if (!user || user.user_type !== 'admin') return;
-    try {
-      const { data: stats } = await api.get('/admin/dashboard/stats');
-      setAdminStats(stats);
-
-      const { data: usrs } = await api.get<UserType[]>('/admin/users');
-      setAllUsersList(usrs);
-
-      const { data: logs } = await api.get<SystemLog[]>('/admin/system/logs');
-      setSystemLogsList(logs);
-
-      const { data: pend } = await api.get<ContentItem[]>('/admin/content/pending');
-      setPendingArticles(pend);
-    } catch {}
-  };
-
-  useEffect(() => {
-    if (user && user.user_type === 'admin' && accessToken) {
-      syncAdminDashboard();
-    }
-  }, [user, accessToken, currentPath]);
-
-  const handleToggleUserStatus = async (id: number) => {
-    try {
-      await api.patch(`/admin/users/${id}/toggle-status`);
-      toast.success('Account state toggled.');
-      syncAdminDashboard();
-    } catch {
-      toast.error('System toggle failed.');
-    }
-  };
-
-  const handleChangeUserRole = async (id: number, role: string) => {
-    try {
-      await api.patch(`/admin/users/${id}/change-role`, { user_type: role });
-      toast.success('User type changed successfully.');
-      syncAdminDashboard();
-    } catch {
-       toast.error('Role update error.');
-    }
-  };
-
-  const handleApproveContent = async (id: number) => {
-    try {
-      await api.patch(`/admin/content/${id}/approve`);
-      toast.success('Course article verified and approved for Rwandan adolescent grids!');
-      syncAdminDashboard();
-    } catch {
-       toast.error('Moderation failed.');
-    }
-  };
-
-  const handleRejectContent = async (id: number) => {
-    try {
-      await api.patch(`/admin/content/${id}/reject`);
-      toast.success('Article rejected. Returned to authors draft space.');
-      syncAdminDashboard();
-    } catch {
-      toast.error('Rejection audit failed.');
-    }
-  };
-
-  // ==========================================
-  // VIEW: Admin Panel
-  // ==========================================
-  const AdminDashboardPage = () => {
-    return (
-      <RoleRequired allowed={['admin']}>
-        <DashboardLayout currentPath="/dashboard/admin" onNavigate={navigate}>
-          <div className="space-y-6 text-left animate-[fadeInUp_0.15s_ease-out]">
-            
-            <div className="border-b border-border pb-4 select-none">
-              <h2 className="text-2xl font-extrabold font-heading text-ink">Administrative control panel</h2>
-              <p className="text-xs text-muted mt-0.5">Control regional database profiles, verify workspace providers, approve publications & review audit telemetry.</p>
-            </div>
-
-            {/* Administartive numbers */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 select-none">
-              <Card hoverable className="p-4 border-l-4 border-l-terracotta bg-surface shadow-sm">
-                <span className="text-[10px] font-bold text-muted uppercase">Total users</span>
-                <p className="text-3xl font-extrabold text-ink font-heading mt-1">{adminStats.total_users}</p>
-              </Card>
-              <Card hoverable className="p-4 border-l-4 border-l-sage bg-surface shadow-sm">
-                <span className="text-[10px] font-bold text-muted uppercase">Active Specialists</span>
-                <p className="text-3xl font-extrabold text-ink font-heading mt-1">{adminStats.active_providers}</p>
-              </Card>
-              <Card hoverable className="p-4 border-l-4 border-l-mauve bg-surface shadow-sm">
-                <span className="text-[10px] font-bold text-muted uppercase">Pending Moderation</span>
-                <p className="text-3xl font-extrabold text-ink font-heading mt-1">{adminStats.pending_content}</p>
-              </Card>
-              <Card hoverable className="p-4 border-l-4 border-l-muted bg-surface shadow-sm">
-                <span className="text-[10px] font-bold text-muted uppercase">Reservations today</span>
-                <p className="text-3xl font-extrabold text-ink font-heading mt-1">{adminStats.appointments_today}</p>
-              </Card>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Accounts Moderation queues */}
-              <div className="lg:col-span-8 space-y-6">
-                
-                {/* Users Table list */}
-                <Card className="p-4">
-                  <h3 className="text-base font-bold font-heading text-ink border-b border-border pb-2.5 mb-4 flex items-center justify-between">
-                    👥 Regional Account Directory Directory
-                  </h3>
-
-                  <div className="overflow-x-auto text-xs">
-                    <table className="w-full text-left font-sans border-collapse">
-                      <thead>
-                        <tr className="border-b border-border text-muted font-bold text-[10px] uppercase">
-                          <th className="pb-2">Full name</th>
-                          <th className="pb-2">Role path</th>
-                          <th className="pb-2">Contact</th>
-                          <th className="pb-2">Registration</th>
-                          <th className="pb-2 text-right">Settings</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {allUsersList.map((usr) => (
-                          <tr key={usr.id} className="hover:bg-cream/10">
-                            <td className="py-2.5 font-bold text-ink">{usr.first_name} {usr.last_name}</td>
-                            <td className="py-2.5">
-                              <Badge variant={usr.user_type === 'health_provider' ? 'sage' : usr.user_type === 'adolescent' ? 'terracotta' : 'muted'} className="text-[9px]">
-                                {usr.user_type.toUpperCase()}
-                              </Badge>
-                            </td>
-                            <td className="py-2.5 font-mono text-muted">{usr.phone_number}</td>
-                            <td className="py-2.5 text-muted">{new Date(usr.created_at).toLocaleDateString()}</td>
-                            <td className="py-2.5 text-right space-x-1.5 whitespace-nowrap">
-                              <button 
-                                onClick={() => handleToggleUserStatus(usr.id)}
-                                className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer border ${usr.is_active ? 'bg-sage/10 text-sage border-sage/20' : 'bg-mauve/10 text-mauve border-mauve/20'}`}
-                              >
-                                {usr.is_active ? 'Block account' : 'Unlock'}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-
-                {/* Moderation section */}
-                <Card className="p-4">
-                  <h3 className="text-base font-bold font-heading text-ink border-b border-border pb-2.5 mb-4">
-                    📝 Literature approval queue
-                  </h3>
-
-                  <div className="space-y-3.5">
-                    {pendingArticles.map((art) => (
-                      <div key={art.id} className="p-3.5 border border-border bg-surface rounded-xl text-left space-y-2">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <h4 className="text-sm font-bold text-ink">{art.title}</h4>
-                          <Badge variant="muted">{art.category} • {art.language}</Badge>
-                        </div>
-                        <p className="text-[11px] text-muted line-clamp-2 leading-relaxed">{art.body}</p>
-                        
-                        <div className="flex justify-end gap-2 pt-1">
-                          <Button onClick={() => handleRejectContent(art.id)} variant="ghost" className="text-[10px] py-1 px-2 border border-mauve/20 text-mauve">
-                            Reject
-                          </Button>
-                          <Button onClick={() => handleApproveContent(art.id)} variant="primary" className="text-[10px] py-1 px-2 bg-sage">
-                            Approve & Publish
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-
-                    {pendingArticles.length === 0 && (
-                      <div className="p-6 text-center text-xs text-muted">No pending articles requiring approval. Curation queue clear!</div>
-                    )}
-                  </div>
-                </Card>
-              </div>
-
-              {/* Audit systems telemetry logs */}
-              <div className="lg:col-span-4 space-y-4">
-                <Card className="p-4 h-full flex flex-col justify-between selection:bg-black overflow-hidden bg-cream/15">
-                  <div>
-                    <h3 className="text-xs font-extrabold uppercase text-muted tracking-wider border-b border-border pb-2 mb-3">System audit Terminal</h3>
-                    
-                    <div className="space-y-3.5 max-h-96 overflow-y-auto font-mono text-[10px]">
-                      {systemLogsList.map((log) => (
-                        <div 
-                          key={log.id} 
-                          className={`text-left border-b border-border/40 pb-2 last:border-0 ${
-                            log.level === 'error' ? 'text-mauve font-bold' : log.level === 'warn' ? 'text-terracotta' : 'text-neutral-700'
-                          }`}
-                        >
-                          <p className="text-[9px] text-muted">[{new Date(log.timestamp).toLocaleTimeString()}]</p>
-                          <p className="mt-0.5 leading-normal">{log.message}</p>
-                          {log.action_by && <span className="opacity-75 block text-[8px] mt-0.5">Executor: {log.action_by}</span>}
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 </Card>
               </div>
@@ -2459,21 +2025,25 @@ export default function App() {
       )}
 
       {/* Role dashboard routes */}
-      {currentPath === '/dashboard/parent' && (
-        <AuthRequired><ParentDashboardPage /></AuthRequired>
+      {currentPath.startsWith('/dashboard/parent') && (
+        <AuthRequired>
+          <ParentShell currentPath={currentPath} onNavigate={navigate} />
+        </AuthRequired>
       )}
       {currentPath === '/dashboard/provider' && (
         <AuthRequired><ProviderDashboardPage /></AuthRequired>
       )}
-      {currentPath === '/dashboard/admin' && (
-        <AuthRequired><AdminDashboardPage /></AuthRequired>
+      {currentPath.startsWith('/dashboard/admin') && (
+        <AuthRequired>
+          <AdminShell currentPath={currentPath} onNavigate={navigate} />
+        </AuthRequired>
       )}
       {currentPath === '/dashboard/writer' && (
         <AuthRequired><ContentWriterDashboardPage /></AuthRequired>
       )}
 
       {/* Shared routes */}
-      {currentPath === '/dashboard/notifications' && (
+      {currentPath === '/dashboard/notifications' && user?.user_type !== 'parent' && (
         <AuthRequired><NotificationsCentricPage /></AuthRequired>
       )}
       {currentPath === '/settings' && (
@@ -2543,19 +2113,6 @@ export default function App() {
         />
       </Modal>
 
-      {/* MODAL WORKFLOW: Create and link adolescent child files */}
-      <Modal isOpen={isAddChildOpen} onClose={() => setIsAddChildOpen(false)} title="Register Teen Daughter profile">
-        <ChildForm onSubmit={handleCreateChild} />
-      </Modal>
-
-      {/* MODAL WORKFLOW: Book consulting request for daughter */}
-      <Modal isOpen={isParentBookOpen} onClose={() => setIsParentBookOpen(false)} title="Book specialist checkup for your daughter">
-        <AppointmentForm
-          onSubmit={handleParentBookForChild}
-          isLoading={appointmentSaving}
-          providers={healthProviders}
-        />
-      </Modal>
         </>
       )}
 

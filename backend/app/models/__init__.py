@@ -35,6 +35,10 @@ class User(db.Model):
     current_session_data = db.Column(db.Text, nullable=True)
     session_timeout_minutes = db.Column(db.Integer, default=2)
     
+    # Account provenance: self_registered vs family_managed (parent-created, may lack phone)
+    account_type = db.Column(db.String(20), default='self_registered', nullable=False)
+    is_phone_verified = db.Column(db.Boolean, default=False)
+
     # Privacy and parent access control
     allow_parent_access = db.Column(db.Boolean, default=True)  # Whether parents can access this user's data
     data_sharing_consent = db.Column(db.Boolean, default=False)  # Consent to share anonymised research data
@@ -43,7 +47,7 @@ class User(db.Model):
     # Relationships
     cycle_logs = db.relationship('CycleLog', backref='user', lazy=True)
     meal_logs = db.relationship('MealLog', backref='user', lazy=True)
-    appointments = db.relationship('Appointment', backref='user', lazy=True)
+    appointments = db.relationship('Appointment', foreign_keys='Appointment.user_id', backref='user', lazy=True)
     # Notifications relationship is defined in the Notification model
     
     def __repr__(self):
@@ -378,7 +382,8 @@ class Appointment(db.Model):
     __tablename__ = 'appointments'
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Who booked the appointment
+    for_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Patient (child when parent books)
     provider_id = db.Column(db.Integer, db.ForeignKey('health_providers.id'), nullable=True)  # Assigned health provider
     appointment_for = db.Column(db.String(100), nullable=True)  # Could be 'self' or name of child
     appointment_date = db.Column(db.DateTime, nullable=False)
@@ -388,8 +393,16 @@ class Appointment(db.Model):
     status = db.Column(db.String(50), nullable=False, default='pending')  # 'pending', 'confirmed', 'cancelled', 'completed'
     notes = db.Column(db.Text, nullable=True)
     provider_notes = db.Column(db.Text, nullable=True)  # Notes from health provider
+    booked_for_child = db.Column(db.Boolean, default=False)
+    parent_consent_date = db.Column(db.DateTime, nullable=True)
+    is_telemedicine = db.Column(db.Boolean, default=False)
+    appointment_type_id = db.Column(db.Integer, nullable=True)
+    payment_method = db.Column(db.String(50), nullable=True)
+    location_notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    booked_for_user = db.relationship('User', foreign_keys=[for_user_id], backref='appointments_for')
     
     def __repr__(self):
         return f'<Appointment {self.id}>'

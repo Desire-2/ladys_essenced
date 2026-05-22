@@ -15,13 +15,13 @@ from app.models import (
     User, HealthProvider, Appointment, Notification, Parent, 
     ParentChild, Adolescent
 )
-from app.auth.middleware import token_required
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
 from sqlalchemy import func, or_, and_
 from functools import wraps
 import logging
 import json
+from app.utils.parent_auth import get_or_create_parent_profile, authorize_parent_for_child
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -37,9 +37,9 @@ def parent_required(f):
     """Decorator to verify user is a parent"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        parent = Parent.query.filter_by(user_id=current_user_id).first()
-        
+        current_user_id = int(get_jwt_identity())
+        parent = get_or_create_parent_profile(current_user_id)
+
         if not parent:
             return jsonify({'error': 'Only parents can access this endpoint'}), 403
         
@@ -53,15 +53,19 @@ def parent_child_authorization(f):
     """Decorator to verify parent has access to specific child"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        current_user_id = g.get('parent_user_id', get_jwt_identity())
-        parent = Parent.query.filter_by(user_id=current_user_id).first()
-        
+        current_user_id = int(g.get('parent_user_id', get_jwt_identity()))
+        parent = get_or_create_parent_profile(current_user_id)
+
         if not parent:
             return jsonify({'error': 'Unauthorized'}), 403
-        
-        # Get child_id from request
-        child_id = request.args.get('child_id') or (request.get_json() or {}).get('child_id')
-        
+
+        child_id = (
+            kwargs.get('child_id')
+            or request.view_args.get('child_id')
+            or request.args.get('child_id')
+            or (request.get_json(silent=True) or {}).get('child_id')
+        )
+
         if not child_id:
             return jsonify({'error': 'child_id is required'}), 400
         
@@ -85,7 +89,7 @@ def parent_child_authorization(f):
 # ============================================================================
 
 @parent_appointments_bp.route('/parent/children', methods=['GET'])
-@token_required
+@jwt_required()
 @parent_required
 def get_parent_children():
     """
@@ -128,26 +132,17 @@ def get_parent_children():
 
 
 @parent_appointments_bp.route('/parent/children/<int:child_id>/details', methods=['GET'])
-@token_required
-@parent_required
-@parent_child_authorization
+@jwt_required()
 def get_child_details(child_id):
     """
-    Get detailed information about a specific child
-    
-    Args:
-        child_id: ID of the child/adolescent
-    
-    Returns:
-        JSON: Child details and health summary
+    Legacy path — same payload as GET /api/parents/children/<id>/details.
+    Single @jwt_required() avoids stacked-decorator 401 issues.
     """
+    parent, adolescent, user, err = authorize_parent_for_child(child_id)
+    if err:
+        return err
+
     try:
-        adolescent = Adolescent.query.get(child_id)
-        
-        if not adolescent or not adolescent.user:
-            return jsonify({'error': 'Child not found'}), 404
-        
-        user = adolescent.user
         
         # Get appointment statistics
         total_appointments = Appointment.query.filter_by(
@@ -171,17 +166,22 @@ def get_child_details(child_id):
             status='completed'
         ).order_by(Appointment.appointment_date.desc()).first()
         
+        access_granted = user.allow_parent_access
         return jsonify({
             'success': True,
+            'access_granted': access_granted,
             'child': {
                 'id': adolescent.id,
                 'user_id': user.id,
                 'name': user.name,
                 'email': user.email,
+                'phone_number': user.phone_number,
                 'date_of_birth': adolescent.date_of_birth.isoformat() if adolescent.date_of_birth else None,
                 'personal_cycle_length': user.personal_cycle_length,
                 'personal_period_length': user.personal_period_length,
                 'has_provided_cycle_info': user.has_provided_cycle_info,
+                'access_granted': access_granted,
+                'account_type': getattr(user, 'account_type', 'family_managed'),
                 'created_at': user.created_at.isoformat()
             },
             'health_summary': {
@@ -206,7 +206,7 @@ def get_child_details(child_id):
 # ============================================================================
 
 @parent_appointments_bp.route('/parent/book-appointment-for-child', methods=['POST'])
-@token_required
+@jwt_required()
 @parent_required
 def book_appointment_for_child():
     """
@@ -385,28 +385,16 @@ def book_appointment_for_child():
 # ============================================================================
 
 @parent_appointments_bp.route('/parent/children/<int:child_id>/appointments', methods=['GET'])
-@token_required
-@parent_required
-@parent_child_authorization
+@jwt_required()
 def get_child_appointments(child_id):
     """
-    Get appointments for a specific child
-    
-    Query parameters:
-        - status: Filter by status (pending, confirmed, cancelled, completed)
-        - date_from: Filter appointments from this date (YYYY-MM-DD)
-        - date_to: Filter appointments until this date (YYYY-MM-DD)
-        - provider_id: Filter by provider
-    
-    Returns:
-        JSON: List of appointments
+    Get appointments for a specific child (legacy /api/parent/... path).
     """
+    parent, adolescent, child_user, err = authorize_parent_for_child(child_id)
+    if err:
+        return err
+
     try:
-        adolescent = Adolescent.query.get(child_id)
-        if not adolescent:
-            return jsonify({'error': 'Child not found'}), 404
-        
-        child_user = adolescent.user
         
         # Build query
         query = Appointment.query.filter_by(for_user_id=child_user.id)
@@ -484,7 +472,7 @@ def get_child_appointments(child_id):
 
 
 @parent_appointments_bp.route('/parent/appointments/<int:appointment_id>/cancel', methods=['POST'])
-@token_required
+@jwt_required()
 @parent_required
 def cancel_child_appointment(appointment_id):
     """
@@ -573,7 +561,7 @@ def cancel_child_appointment(appointment_id):
 
 
 @parent_appointments_bp.route('/parent/appointments/<int:appointment_id>/reschedule', methods=['POST'])
-@token_required
+@jwt_required()
 @parent_required
 def reschedule_child_appointment(appointment_id):
     """
@@ -724,7 +712,7 @@ def is_provider_available(provider, appointment_datetime):
 
 
 @parent_appointments_bp.route('/parent/appointments/<int:appointment_id>', methods=['GET'])
-@token_required
+@jwt_required()
 @parent_required
 def get_parent_appointment_details(appointment_id):
     """
