@@ -57,11 +57,6 @@ export function useAdminUsers(initialFilters: UserFilters = {}) {
     }
   }, [filters]);
 
-  // Only fetch once on initial mount
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
   return {
     data,
     isLoading,

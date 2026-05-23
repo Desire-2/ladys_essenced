@@ -47,8 +47,6 @@ import {
   createAppointment,
   deleteAppointment,
   fetchAppointments,
-  fetchProviderAppointments,
-  fetchUnassignedAppointments,
   mapAppointment,
   type AppointmentFormData,
 } from './lib/appointmentsApi';
@@ -59,8 +57,7 @@ import {
 import { HealthProviderCard } from './components/features/HealthProviderCard';
 import { 
   User as UserType, CycleLog, MealLog, Appointment, 
-  Notification, ContentItem, Course, 
-  ProviderAvailability 
+  Notification, ContentItem, Course
 } from './types';
 
 // UI components
@@ -94,6 +91,7 @@ import { UmwariChat } from './components/umwari/UmwariChat';
 import { UmwariFullPage } from './components/umwari/UmwariFullPage';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { AdminShell } from './pages/admin/AdminShell';
+import { ProviderShell } from './pages/providers/ProviderShell';
 import { ParentShell } from './pages/parent/ParentShell';
 
 export default function App() {
@@ -228,7 +226,7 @@ export default function App() {
           <p className="text-xs text-muted">Your account role is <strong>{user?.user_type.toUpperCase()}</strong>. This system view is protected.</p>
           <Button onClick={() => {
             if (user?.user_type === 'parent') navigate('/dashboard/parent');
-            else if (user?.user_type === 'health_provider') navigate('/dashboard/provider');
+            else if (user?.user_type === 'health_provider') navigate('/providers');
             else if (user?.user_type === 'admin') navigate('/dashboard/admin');
             else if (user?.user_type === 'content_writer') navigate('/dashboard/writer');
             else navigate('/dashboard');
@@ -1477,179 +1475,6 @@ export default function App() {
   };
 
   // ==========================================
-  // CLINIC WORKER STATES
-  // ==========================================
-  const [providerApps, setProviderApps] = useState<Appointment[]>([]);
-  const [unassignedApps, setUnassignedApps] = useState<Appointment[]>([]);
-  const [patients, setPatients] = useState<any[]>([]);
-  const [patientSearch, setPatientSearch] = useState('');
-  const [gridAvls, setGridAvls] = useState<ProviderAvailability[]>([]);
-
-  const syncProviderDashboard = async () => {
-    if (!user || user.user_type !== 'health_provider') return;
-    try {
-      setProviderApps(await fetchProviderAppointments());
-      setUnassignedApps(await fetchUnassignedAppointments());
-
-      const { data: pats } = await api.get<any[]>(`/health-provider/patients?search=${patientSearch}`);
-      setPatients(pats);
-
-      const { data: avl } = await api.get<ProviderAvailability[]>('/health-provider/availability');
-      setGridAvls(avl);
-    } catch {}
-  };
-
-  useEffect(() => {
-    if (user && user.user_type === 'health_provider' && accessToken) {
-      syncProviderDashboard();
-    }
-  }, [user, accessToken, patientSearch, currentPath]);
-
-  const handleClaimAppointment = async (id: number) => {
-    try {
-      await api.patch(`/health-provider/appointments/${id}/claim`);
-      toast.success('Consultation successfully claimed! Moving to your clinic schedule desk.');
-      syncProviderDashboard();
-    } catch {
-      toast.error('Claims failed.');
-    }
-  };
-
-  const handleAddSlotToDay = async (day_of_week: string, slot: string) => {
-    try {
-      await api.post('/health-provider/availability/slots', { day_of_week, slot });
-      toast.success(`Slot ${slot} added to ${day_of_week}`);
-      syncProviderDashboard();
-    } catch {
-       toast.error('Failed to update slot.');
-    }
-  };
-
-  // ==========================================
-  // VIEW: Provider Desk
-  // ==========================================
-  const ProviderDashboardPage = () => {
-    return (
-      <RoleRequired allowed={['health_provider']}>
-        <DashboardLayout currentPath="/dashboard/provider" onNavigate={navigate}>
-          <div className="space-y-6 text-left animate-[fadeInUp_0.15s_ease-out]">
-            
-            <div className="border-b border-border pb-4 select-none">
-              <h2 className="text-2xl font-extrabold font-heading text-ink">Clinical Consulting Desk</h2>
-              <p className="text-xs text-muted mt-0.5">Manage unaligned consulting schedules, claiming bookings from parents/girls, and verify block slots.</p>
-            </div>
-
-            {/* Provider stats grids */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-              
-              {/* Daily timeline appointment */}
-              <div className="md:col-span-8 space-y-4">
-                <h3 className="text-lg font-bold font-heading text-ink flex items-center gap-2">
-                  🩺 Today’s Clinic Schedule Timelines ({providerApps.length})
-                </h3>
-
-                <div className="space-y-3">
-                  {providerApps.map((item) => (
-                    <AppointmentCard key={item.id} appointment={item} showUser />
-                  ))}
-
-                  {providerApps.length === 0 && (
-                    <div className="p-8 border border-dashed border-border rounded-xl bg-surface/40 text-center text-xs text-muted">
-                      No active appointment consultations assigned under your account today. Use Claim below to pick upcoming parent tickets.
-                    </div>
-                  )}
-                </div>
-
-                {/* Claiming stack */}
-                <h3 className="text-lg font-bold font-heading text-ink pt-5">
-                  📥 Unassigned Parent-Adolescent Claim desk ({unassignedApps.length})
-                </h3>
-
-                <div className="space-y-3">
-                  {unassignedApps.map((app) => (
-                    <div key={app.id} className="border border-border p-4 bg-surface rounded-xl flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                      <div className="space-y-1">
-                        <p className="text-sm font-bold text-ink capitalize">{app.appointment_type} ({app.user_name || 'Patient'})</p>
-                        <p className="text-[11px] text-muted">Booking: {formatDateTime(app.scheduled_datetime)}</p>
-                        {app.notes && <p className="text-xs text-muted italic">"{app.notes}"</p>}
-                      </div>
-                      <Button onClick={() => handleClaimAppointment(app.id)} className="text-xs py-1 px-3">
-                        Claim consultaion
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Patient Searches & availability slots */}
-              <div className="md:col-span-4 space-y-5">
-                <Card className="p-4 bg-surface select-none">
-                  <h3 className="text-sm font-extrabold uppercase text-muted tracking-wider border-b border-border pb-2 mb-3">Patient Registry Search</h3>
-                  
-                  <div className="relative mb-3">
-                    <Search className="absolute left-3 top-3 h-4.5 w-4.5 text-muted" />
-                    <Input 
-                      placeholder="Search patient name..." 
-                      value={patientSearch}
-                      onChange={(e) => setPatientSearch(e.target.value)}
-                      className="pl-9 text-xs"
-                    />
-                  </div>
-
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {patients.map((p) => (
-                      <div key={p.id} className="p-2.5 border border-border bg-cream/20 rounded-lg flex items-center justify-between gap-2.5 text-xs">
-                        <div className="text-left font-sans">
-                          <p className="font-bold text-ink leading-tight">{p.name}</p>
-                          <p className="text-[10px] text-muted">Age {p.age} • Cycle {p.cycle_regular}</p>
-                        </div>
-                        <Badge variant="muted">Active</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-
-                {/* Clinic blocking grids */}
-                <Card className="p-4 bg-cream/15">
-                  <h3 className="text-sm font-extrabold uppercase text-muted tracking-wider border-b border-border pb-2 mb-3">Weekly availability</h3>
-                  
-                  <div className="space-y-3 text-xs">
-                    {gridAvls.map((day) => (
-                      <div key={day.day_of_week} className="text-left font-sans border-b border-border pb-2 last:border-0 last:pb-0">
-                        <strong className="text-ink font-semibold">{day.day_of_week}</strong>
-                        
-                        <div className="flex flex-wrap gap-1 mt-1.5 justify-start">
-                          {day.slots.map((sl, si) => (
-                            <span key={si} className="bg-surface text-[10px] border border-border text-ink px-1.5 py-0.5 rounded font-mono font-medium">
-                              {sl}
-                            </span>
-                          ))}
-                          
-                          <button
-                            onClick={() => {
-                              const sl = prompt(`Add timing slot to ${day.day_of_week} (e.g., 10:30):`);
-                              if (sl && sl.trim()) handleAddSlotToDay(day.day_of_week, sl.trim());
-                            }}
-                            className="text-[10px] bg-sage text-surface hover:bg-sage/85 hover:underline px-1.5 py-0.5 rounded cursor-pointer font-bold"
-                          >
-                            + Slot
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              </div>
-
-            </div>
-
-          </div>
-        </DashboardLayout>
-      </RoleRequired>
-    );
-  };
-
-  // ==========================================
   // CONTENT WRITER STATES & WRITING DESK
   // ==========================================
   const [writerContent, setWriterContent] = useState<ContentItem[]>([]);
@@ -2030,8 +1855,15 @@ export default function App() {
           <ParentShell currentPath={currentPath} onNavigate={navigate} />
         </AuthRequired>
       )}
-      {currentPath === '/dashboard/provider' && (
-        <AuthRequired><ProviderDashboardPage /></AuthRequired>
+      {(currentPath === '/dashboard/provider' ||
+        currentPath === '/providers' ||
+        currentPath.startsWith('/providers/')) && (
+        <AuthRequired>
+          <ProviderShell
+            currentPath={currentPath === '/dashboard/provider' ? '/providers' : currentPath}
+            onNavigate={navigate}
+          />
+        </AuthRequired>
       )}
       {currentPath.startsWith('/dashboard/admin') && (
         <AuthRequired>

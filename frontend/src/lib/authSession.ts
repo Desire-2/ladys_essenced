@@ -35,7 +35,7 @@ export function dashboardPathForUserType(userType: User['user_type']): string {
     case 'parent':
       return '/dashboard/parent';
     case 'health_provider':
-      return '/dashboard/provider';
+      return '/providers';
     case 'admin':
       return '/dashboard/admin';
     case 'content_writer':

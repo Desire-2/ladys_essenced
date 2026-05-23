@@ -158,6 +158,7 @@ class Adolescent(db.Model):
     date_of_birth = db.Column(db.DateTime, nullable=True)
     
     # Relationships
+    user = db.relationship('User', backref='adolescent_profile', uselist=False)
     parent_relationships = db.relationship('ParentChild', backref='adolescent', lazy=True)
     
     def __repr__(self):

@@ -24,6 +24,7 @@ interface AdminDataTableProps<T> {
     page: number;
     total: number;
     perPage: number;
+    pages?: number;
     onPageChange: (page: number) => void;
   };
 }
@@ -61,7 +62,7 @@ export function AdminDataTable<T extends { id: number }>({
     onSelect?.(selectedItems);
   };
 
-  if (isLoading) {
+  if (isLoading && !data.length) {
     return (
       <div className="flex items-center justify-center p-12">
         <Loader className="w-6 h-6 text-muted animate-spin" />
@@ -69,7 +70,7 @@ export function AdminDataTable<T extends { id: number }>({
     );
   }
 
-  if (!data.length) {
+  if (!isLoading && !data.length) {
     return (
       <div className="text-center py-12">
         <p className="text-muted font-medium">{emptyMessage}</p>
@@ -78,11 +79,20 @@ export function AdminDataTable<T extends { id: number }>({
   }
 
   const allSelected = data.length > 0 && selectedIds.length === data.length;
+  const totalPages = pagination?.pages ?? Math.max(1, Math.ceil((pagination?.total ?? 0) / (pagination?.perPage ?? 1)));
 
   return (
     <div className="space-y-4">
       {/* Table */}
-      <div className="overflow-x-auto border border-border rounded-lg">
+      <div className="relative overflow-x-auto border border-border rounded-lg">
+        {isLoading && (
+          <div
+            className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 rounded-lg"
+            aria-busy="true"
+          >
+            <Loader className="w-6 h-6 text-muted animate-spin" />
+          </div>
+        )}
         <table className="w-full text-sm font-sans">
           <thead>
             <tr className="border-b border-border bg-gray-50">
@@ -141,7 +151,7 @@ export function AdminDataTable<T extends { id: number }>({
                 {columns.map((col) => (
                   <td
                     key={`${item.id}-${col.key}`}
-                    className="px-4 py-3"
+                    className={`px-4 py-3 ${col.key === 'actions' ? 'overflow-visible relative' : ''}`}
                     style={{ width: col.width }}
                   >
                     {col.render ? col.render(item, index) : '-'}
@@ -170,7 +180,7 @@ export function AdminDataTable<T extends { id: number }>({
               <ChevronLeft className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-1">
-              {Array.from({ length: pagination.pages }).map((_, i) => {
+              {Array.from({ length: totalPages }).map((_, i) => {
                 const pageNum = i + 1;
                 const isActive = pageNum === pagination.page;
                 return (
@@ -190,7 +200,7 @@ export function AdminDataTable<T extends { id: number }>({
             </div>
             <button
               onClick={() => pagination.onPageChange(pagination.page + 1)}
-              disabled={pagination.page === pagination.pages}
+              disabled={pagination.page >= totalPages}
               className="p-2 rounded border border-border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="w-4 h-4" />

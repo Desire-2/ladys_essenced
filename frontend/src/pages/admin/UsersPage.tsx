@@ -2,7 +2,7 @@
  * Admin Users Management Page
  * Full user directory with filtering, searching, and management actions
  */
-import React, { useState, useCallback, useDeferredValue, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Loader, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   useAdminUsers,
@@ -40,10 +40,21 @@ const STATUS_OPTIONS = [
 
 export function UsersPage({ onNavigate }: UsersPageProps) {
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [userType, setUserType] = useState('');
   const [isActive, setIsActive] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(id);
+  }, [search]);
+
+  const closeOverlays = () => {
+    setConfirmModal({ isOpen: false, type: 'status' });
+    setRoleChangeUser(null);
+  };
 
   // Modals
   const [confirmModal, setConfirmModal] = useState<{
@@ -57,28 +68,35 @@ export function UsersPage({ onNavigate }: UsersPageProps) {
   const [roleChangeUser, setRoleChangeUser] = useState<AdminUser | null>(null);
 
   // Fetch users with filters
-  const { data: usersData, isLoading: usersLoading, fetchUsers } = useAdminUsers({
-    page,
-    per_page: perPage,
-    user_type: userType,
-    search,
-    is_active: isActive ? isActive === 'true' : undefined,
-  });
+  const listFilters = useMemo(
+    () => ({
+      page,
+      per_page: perPage,
+      user_type: userType,
+      search: debouncedSearch,
+      is_active: isActive ? isActive === 'true' : undefined,
+    }),
+    [page, perPage, userType, debouncedSearch, isActive],
+  );
+
+  const { data: usersData, isLoading: usersLoading, fetchUsers } = useAdminUsers(listFilters);
 
   // Mutations
+  const refreshList = () => fetchUsers(listFilters);
+
   const { toggle: toggleStatus } = useToggleUserStatus(() => {
-    fetchUsers({ page, per_page: perPage, user_type: userType, search, is_active: isActive ? isActive === 'true' : undefined });
+    refreshList();
     setConfirmModal({ isOpen: false, type: 'status' });
   });
 
   const { changeRole } = useChangeUserRole(() => {
-    fetchUsers({ page, per_page: perPage, user_type: userType, search, is_active: isActive ? isActive === 'true' : undefined });
+    refreshList();
     setConfirmModal({ isOpen: false, type: 'role' });
     setRoleChangeUser(null);
   });
 
   const { deleteUser } = useDeleteUser(() => {
-    fetchUsers({ page, per_page: perPage, user_type: userType, search, is_active: isActive ? isActive === 'true' : undefined });
+    refreshList();
     setConfirmModal({ isOpen: false, type: 'delete' });
   });
 
@@ -86,10 +104,9 @@ export function UsersPage({ onNavigate }: UsersPageProps) {
     setConfirmModal({ isOpen: false, type: 'reset_password' });
   });
 
-  // Handle initial fetch
   useEffect(() => {
-    fetchUsers({ page, per_page: perPage, user_type: userType, search, is_active: isActive ? isActive === 'true' : undefined });
-  }, [page, perPage, userType, search, isActive]);
+    fetchUsers(listFilters);
+  }, [listFilters]);
 
   const handleToggleStatus = async () => {
     if (confirmModal.userId) {
@@ -126,7 +143,7 @@ export function UsersPage({ onNavigate }: UsersPageProps) {
     return [...base, ...(roleSpecific[userType] || [])];
   };
 
-  const columns = [
+  const columns = useMemo(() => [
     {
       key: 'name',
       label: 'User',
@@ -206,7 +223,7 @@ export function UsersPage({ onNavigate }: UsersPageProps) {
         />
       ),
     },
-  ];
+  ], []);
 
   return (
     <div className="space-y-6">
@@ -239,6 +256,7 @@ export function UsersPage({ onNavigate }: UsersPageProps) {
         <select
           value={userType}
           onChange={(e) => {
+            closeOverlays();
             setUserType(e.target.value);
             setPage(1);
           }}
@@ -255,6 +273,7 @@ export function UsersPage({ onNavigate }: UsersPageProps) {
         <select
           value={isActive}
           onChange={(e) => {
+            closeOverlays();
             setIsActive(e.target.value);
             setPage(1);
           }}

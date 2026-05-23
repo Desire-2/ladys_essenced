@@ -39,7 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { label: 'Children', path: '/dashboard/parent', icon: Users, roles: ['parent'] },
     
     // Medical staff
-    { label: 'Clinic Desk', path: '/dashboard/provider', icon: CalendarDays, roles: ['health_provider'] },
+    { label: 'Clinic Desk', path: '/providers', icon: CalendarDays, roles: ['health_provider'] },
     
     // Administrative
     { label: 'Control Panel', path: '/dashboard/admin', icon: ShieldAlert, roles: ['admin'] },
