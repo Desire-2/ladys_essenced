@@ -68,3 +68,28 @@ body::before {
   pointer-events: none;
   border-radius: 50%;
 }
+
+/* 3D Logo Animation */
+@keyframes spin3d {
+  0% {
+    transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg);
+  }
+  25% {
+    transform: rotateX(10deg) rotateY(90deg) rotateZ(5deg);
+  }
+  50% {
+    transform: rotateX(0deg) rotateY(180deg) rotateZ(0deg);
+  }
+  75% {
+    transform: rotateX(-10deg) rotateY(270deg) rotateZ(-5deg);
+  }
+  100% {
+    transform: rotateX(0deg) rotateY(360deg) rotateZ(0deg);
+  }
+}
+
+.logo-3d {
+  perspective: 1200px;
+  transform-style: preserve-3d;
+  animation: spin3d 8s infinite linear;
+}

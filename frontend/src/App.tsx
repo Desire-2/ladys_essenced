@@ -246,7 +246,7 @@ export default function App() {
   const LoginPage = () => {
     const [phoneNumber, setPhoneNumber] = useState('');
     const [password, setPassword] = useState('');
-    const [isPinMode, setIsPinMode] = useState(true);
+    const [isPinMode, setIsPinMode] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
     const [shakeError, setShakeError] = useState(false);
@@ -287,11 +287,10 @@ export default function App() {
           <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-[#C4785A] opacity-30 rounded-full blur-[80px]" />
           <div className="absolute bottom-[-15%] right-[-10%] w-[500px] h-[500px] bg-[#8FAF8A] opacity-20 rounded-full blur-[100px]" />
           
-          <div className="flex items-center gap-4 relative z-10 select-none">
-            <div className="w-12 h-12 bg-[#F5EDE0] rounded-full flex items-center justify-center shadow-lg">
-              <div className="w-6 h-6 border-2 border-[#7A4F6D] rounded-full" />
+          <div className="flex items-center gap-4 relative z-10 select-none group">
+            <div className="logo-3d">
+              <img src="/Logo.png" alt="Lady's Essence Logo" className="h-20 drop-shadow-lg" />
             </div>
-            <h1 className="text-4xl font-heading italic text-[#F5EDE0] leading-none tracking-tight">Lady's Essence</h1>
           </div>
 
           <div className="space-y-6 max-w-lg relative z-10 my-auto select-none">
