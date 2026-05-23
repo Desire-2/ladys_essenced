@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ladys-essenced.vercel.app/sitemap.xml
+Sitemap: https://ladys-essence.afritechbridge.online/sitemap.xml
