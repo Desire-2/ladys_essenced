@@ -418,8 +418,7 @@ export default function App() {
       setIsLoading(true);
       try {
         const payload = {
-          first_name: firstName,
-          last_name: lastName,
+          name: `${firstName} ${lastName}`.trim(),
           phone_number: phoneNumber,
           password,
           email: email || undefined,
@@ -454,20 +453,6 @@ export default function App() {
         kinya: 'Ndi umubyeyi',
         desc: 'Monitor linked daughter logs in a privacy-first layout, ensuring dignified hygiene guidance and care.',
         icon: '🤱'
-      },
-      {
-        type: 'health_provider' as const,
-        title: 'I’m a Healthcare Specialist',
-        kinya: 'Ndi umuganga',
-        desc: 'Manage teen consultations, claiming pending clinic schedules, and block slots.',
-        icon: '🩺'
-      },
-      {
-        type: 'content_writer' as const,
-        title: 'I’m an Educational Writer',
-        kinya: 'Ndi umwanditsi w’inyigisho',
-        desc: 'Curate localized wellness content in Kinyarwanda & English to support safety and strength metrics.',
-        icon: '✍️'
       }
     ];
 

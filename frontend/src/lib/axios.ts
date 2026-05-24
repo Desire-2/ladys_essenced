@@ -9,6 +9,9 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL
 
 console.log('🔗 Connecting to Flask Backend:', API_BASE_URL);
 
+// Public endpoints that don't require authentication
+const PUBLIC_ENDPOINTS = ['/auth/register', '/auth/login', '/auth/refresh'];
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
@@ -16,14 +19,16 @@ export const api = axios.create({
   timeout: 30000, // 30s timeout to prevent infinite loading
 });
 
-// Request interceptor: inject access token
+// Request interceptor: inject access token (only for protected endpoints)
 api.interceptors.request.use((config) => {
+  const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => config.url?.includes(endpoint));
+  
   const token = useAuthStore.getState().accessToken;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
     // DEBUG: Uncomment to log authorization headers
     // console.log(`📤 Adding Authorization header to ${config.url}`);
-  } else {
+  } else if (!isPublicEndpoint) {
     console.warn(`⚠️  No token available for ${config.url} - Authorization header NOT added`);
   }
   return config;
