@@ -442,7 +442,7 @@ export default function App() {
     const rolesMap = [
       {
         type: 'adolescent' as const,
-        title: 'I’m an Adolescent Girl',
+        title: 'I’m a Young Girl/Woman',
         kinya: 'Ndi umukobwa ukiri muto',
         desc: 'Log cycle start dates securely, visual nutrient summaries, and speaks to Dr. Agnes in comfort.',
         icon: '🌸'
