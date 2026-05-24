@@ -353,6 +353,7 @@ export default function App() {
                 </div>
                 <Input
                   type="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   icon={<Lock className="w-4 h-4" />}

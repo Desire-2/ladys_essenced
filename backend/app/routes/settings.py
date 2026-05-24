@@ -58,16 +58,19 @@ def _privacy_payload(user: User) -> dict:
     if user.user_type == 'adolescent':
         adolescent = Adolescent.query.filter_by(user_id=user.id).first()
         if adolescent:
+            # Optimized: single query with joins to avoid N+1
+            from sqlalchemy.orm import joinedload
+            relations = ParentChild.query.filter_by(adolescent_id=adolescent.id)\
+                .options(
+                    joinedload(ParentChild.parent).joinedload(Parent.user)
+                ).all()
+            
             parents = []
-            for relation in ParentChild.query.filter_by(adolescent_id=adolescent.id).all():
-                parent = Parent.query.get(relation.parent_id)
-                if not parent:
-                    continue
-                parent_user = User.query.get(parent.user_id)
-                if parent_user:
+            for relation in relations:
+                if relation.parent and relation.parent.user:
                     parents.append({
-                        'id': parent.id,
-                        'name': parent_user.name,
+                        'id': relation.parent.id,
+                        'name': relation.parent.user.name,
                         'relationship': relation.relationship_type,
                     })
             payload['linked_parents'] = parents

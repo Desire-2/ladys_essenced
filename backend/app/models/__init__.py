@@ -144,6 +144,7 @@ class Parent(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     
     # Relationships
+    user = db.relationship('User', backref='parent_profile', uselist=False)
     children = db.relationship('ParentChild', backref='parent', lazy=True)
     
     def __repr__(self):

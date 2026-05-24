@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff, Sparkles } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -40,11 +40,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   const { apiKey, setApiKey } = useUmwariStore();
 
   const [loading, setLoading] = useState(true);
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [allowParentAccess, setAllowParentAccess] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [firstName, setFirstName] = useState(() => user?.first_name ?? '');
+  const [lastName, setLastName] = useState(() => user?.last_name ?? '');
+  const [email, setEmail] = useState(() => user?.email ?? '');
+  const [phone, setPhone] = useState(() => user?.phone_number ?? '');
+  const [allowParentAccess, setAllowParentAccess] = useState(() => user?.allow_parent_access ?? false);
   const [linkedParents, setLinkedParents] = useState<LinkedParent[]>([]);
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFS);
   const [dataSharingConsent, setDataSharingConsent] = useState(false);
@@ -62,7 +63,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   const [keyTestStatus, setKeyTestStatus] = useState<'success' | 'error' | null>(null);
   const [testingConn, setTestingConn] = useState(false);
 
-  const applyBundle = useCallback((account: User, privacy: Awaited<ReturnType<typeof fetchSettings>>['privacy'], umwari: { server_key_configured: boolean }) => {
+  const applyBundleToForm = (
+    account: User,
+    privacy: Awaited<ReturnType<typeof fetchSettings>>['privacy'],
+    umwari: { server_key_configured: boolean },
+  ) => {
     setFirstName(account.first_name);
     setLastName(account.last_name);
     setEmail(account.email ?? '');
@@ -73,36 +78,44 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
     setDataSharingConsent(privacy.data_sharing_consent);
     setLinkedParents(privacy.linked_parents ?? []);
     setServerGeminiConfigured(umwari.server_key_configured);
-    setUser(account);
-  }, [setUser]);
+  };
 
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const bundle = await fetchSettings();
-        if (!cancelled) {
-          applyBundle(bundle.account, bundle.privacy, bundle.umwari);
-        }
+        if (cancelled) return;
+        applyBundleToForm(bundle.account, bundle.privacy, bundle.umwari);
+        setUser(bundle.account);
       } catch (err: unknown) {
-        if (!cancelled && user) {
-          setFirstName(user.first_name);
-          setLastName(user.last_name);
-          setEmail(user.email ?? '');
-          setPhone(user.phone_number);
-          setAllowParentAccess(user.allow_parent_access);
+        if (cancelled) return;
+        const cachedUser = useAuthStore.getState().user;
+        if (cachedUser) {
+          setFirstName(cachedUser.first_name);
+          setLastName(cachedUser.last_name ?? '');
+          setEmail(cachedUser.email ?? '');
+          setPhone(cachedUser.phone_number);
+          setAllowParentAccess(cachedUser.allow_parent_access);
         }
         const message =
           (err as { response?: { data?: { message?: string } } })?.response?.data?.message
           ?? 'Could not load settings from the server.';
+        setLoadError(message);
         toast.error(message);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [applyBundle, user?.id]);
+
+    return () => {
+      cancelled = true;
+    };
+    // Load once on mount — do not depend on user?.id or setUser (would retrigger forever)
+  }, []);
 
   const handleSaveAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,6 +247,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
     );
   }
 
+  if (loadError && !user) {
+    return (
+      <DashboardLayout currentPath="/settings" onNavigate={onNavigate}>
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3 text-center px-4">
+          <p className="text-sm text-mauve">{loadError}</p>
+          <Button onClick={() => window.location.reload()}>Try again</Button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout currentPath="/settings" onNavigate={onNavigate}>
       <div className="space-y-6 text-left animate-[fadeInUp_0.15s_ease-out] select-none max-w-4xl">
@@ -263,6 +287,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                   <Input
                     label="Current password"
                     type="password"
+                    autoComplete="current-password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Required to change password"
@@ -270,6 +295,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                   <Input
                     label="New password"
                     type="password"
+                    autoComplete="new-password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Leave blank to keep current"
@@ -279,6 +305,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                       <Input
                         label="New 4-digit PIN"
                         type="password"
+                        autoComplete="new-password"
                         maxLength={4}
                         value={newPin}
                         onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}

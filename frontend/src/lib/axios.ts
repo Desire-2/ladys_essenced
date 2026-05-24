@@ -13,6 +13,7 @@ export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
+  timeout: 30000, // 30s timeout to prevent infinite loading
 });
 
 // Request interceptor: inject access token
@@ -20,7 +21,8 @@ api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-    console.log(`📤 Adding Authorization header to ${config.url}`);
+    // DEBUG: Uncomment to log authorization headers
+    // console.log(`📤 Adding Authorization header to ${config.url}`);
   } else {
     console.warn(`⚠️  No token available for ${config.url} - Authorization header NOT added`);
   }

@@ -288,6 +288,7 @@ def create_app():
                 CycleLog, MealLog, Appointment, Notification, ContentCategory, ContentItem,
                 Feedback, SystemLog, Analytics, UserSession
             )
+            from app.ussd.ussd_models import USSDSession, USSDTransaction  # noqa: F401
             
             # Create database directory if using SQLite
             if database_url.startswith('sqlite:///'):
