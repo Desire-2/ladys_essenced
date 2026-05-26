@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Lady\'s Essence</string>
+    <string name="title_activity_main">Lady\'s Essence</string>
+    <string name="package_name">com.ladysessence.mobile</string>
+    <string name="custom_url_scheme">com.ladysessence.mobile</string>
+</resources>
