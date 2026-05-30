@@ -1,19 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext traffic to localhost (10.0.2.2) for development API calls -->
+    <!-- Allow cleartext traffic for development backend on local network -->
     <domain-config cleartextTrafficPermitted="true">
+        <!-- Android Emulator: 10.0.2.2 is the host machine -->
         <domain includeSubdomains="true">10.0.2.2</domain>
+        <!-- Real device: your local network IP -->
+        <domain includeSubdomains="true">192.168.1.105</domain>
+        <!-- Localhost variants -->
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">localhost</domain>
+        <!-- Allow any 192.168.x.x (local network) -->
+        <domain includeSubdomains="true">192.168.1.100</domain>
     </domain-config>
 
-    <!-- Allow cleartext for production Render backend -->
+    <!-- HTTPS only for production -->
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">ladys-essenced-hoil.onrender.com</domain>
-    </domain-config>
-
-    <!-- Default cleartext policy for HTTPS domains -->
-    <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">*.com</domain>
         <domain includeSubdomains="true">*.org</domain>
     </domain-config>
