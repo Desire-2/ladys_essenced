@@ -1,0 +1,107 @@
+name: Android Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package.json'
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-levels: '24,35,36'
+          build-tools-version: '35.0.0'
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Build production web assets
+        run: |
+          cd frontend
+          npm run build
+        env:
+          VITE_API_URL: 'https://ladys-essenced-hoil.onrender.com'
+
+      - name: Sync Capacitor assets
+        run: |
+          cd frontend
+          npx cap sync android
+
+      - name: Set permissions for gradlew
+        run: |
+          chmod +x frontend/android/gradlew
+
+      - name: Build Android release APK
+        run: |
+          cd frontend/android
+          ./gradlew assembleRelease
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-21-temurin/
+
+      - name: Verify APK signing
+        run: |
+          APK_PATH="frontend/android/app/build/outputs/apk/release/app-release.apk"
+          if [ -f "$APK_PATH" ]; then
+            echo "✅ APK generated: $(ls -lh $APK_PATH)"
+            jarsigner -verify -verbose "$APK_PATH"
+          else
+            echo "❌ APK not found at $APK_PATH"
+            exit 1
+          fi
+
+      - name: Upload APK as artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: frontend/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 30
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+            Production release for Lady's Essence mobile app.
+            
+            **APK Details:**
+            - Package: com.ladysessence.mobile
+            - Signed with production keystore
+            - Backend: https://ladys-essenced-hoil.onrender.com
+          draft: false
+          prerelease: false
+
+      - name: Upload APK to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: frontend/android/app/build/outputs/apk/release/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
