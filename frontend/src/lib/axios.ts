@@ -2,12 +2,22 @@ import axios from 'axios';
 import { useAuthStore } from '../stores/authStore';
 import { refreshAccessToken } from './authSession';
 
-/** Base URL for all API requests (Flask backend). */
-export const API_BASE_URL = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api`
-  : '/api';
+/**
+ * Base URL for all API requests (Flask backend).
+ * Forced to Render backend for mobile builds.
+ */
+const RENDER_URL = 'https://ladys-essenced-hoil.onrender.com';
+const envUrl = import.meta.env.VITE_API_URL;
 
-console.log('🔗 Connecting to Flask Backend:', API_BASE_URL);
+// If we are on a mobile device (Capacitor), we ALWAYS want the remote backend.
+// 'https://localhost' is the origin Capacitor uses for local files.
+const isMobile = window.location.origin.includes('localhost') && !window.location.port;
+
+export const API_BASE_URL = (isMobile || !envUrl || envUrl.includes('localhost'))
+  ? `${RENDER_URL}/api`
+  : `${envUrl}/api`;
+
+console.log('🚀 API Target:', API_BASE_URL);
 
 // Public endpoints that don't require authentication
 const PUBLIC_ENDPOINTS = ['/auth/register', '/auth/login', '/auth/refresh'];
@@ -16,27 +26,18 @@ export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
-  timeout: 30000, // 30s timeout to prevent infinite loading
+  timeout: 30000,
 });
 
-// Request interceptor: inject access token (only for protected endpoints)
 api.interceptors.request.use((config) => {
   const isPublicEndpoint = PUBLIC_ENDPOINTS.some(endpoint => config.url?.includes(endpoint));
-  
   const token = useAuthStore.getState().accessToken;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-    // DEBUG: Uncomment to log authorization headers
-    // console.log(`📤 Adding Authorization header to ${config.url}`);
-  } else if (!isPublicEndpoint) {
-    console.warn(`⚠️  No token available for ${config.url} - Authorization header NOT added`);
   }
   return config;
-}, (error) => {
-  return Promise.reject(error);
-});
+}, (error) => Promise.reject(error));
 
-// Response interceptor: handle 401 → refresh → retry
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -47,19 +48,15 @@ api.interceptors.response.use(
       if (refreshToken) {
         try {
           const newAccessToken = await refreshAccessToken(refreshToken);
-          
           useAuthStore.getState().setAccessToken(newAccessToken);
-          
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
           }
-          return api(originalRequest); // Retry original
+          return api(originalRequest);
         } catch (refreshErr) {
           useAuthStore.getState().logout();
           return Promise.reject(refreshErr);
         }
-      } else {
-        useAuthStore.getState().logout();
       }
     }
     return Promise.reject(error);

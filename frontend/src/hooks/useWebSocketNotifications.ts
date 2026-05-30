@@ -21,20 +21,21 @@ const initSocket = (token: string): SocketIO => {
 
   // Dynamically import Socket.IO only if available
   try {
-    const io = require('socket.io-client').io || (window as any).io;
-    const apiUrl = process.env.REACT_APP_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+    const io = (require('socket.io-client') as any).io || (window as any).io;
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://ladys-essenced-hoil.onrender.com';
 
     socket = io(apiUrl, {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 5,
+      path: '/socket.io',
       auth: {
         token,
       },
     });
 
-    return socket;
+    return socket!;
   } catch (error) {
     console.warn('Socket.IO not available, notifications will be polled instead');
     return null as any;
@@ -163,7 +164,7 @@ export const useWebSocketNotifications = () => {
 const showNotificationToast = (notification: Notification) => {
   try {
     // Try to use react-hot-toast if available
-    const toast = require('react-hot-toast').default;
+    const toast = (require('react-hot-toast') as any).default;
     
     const bgColorMap: Record<string, string> = {
       success: 'bg-green-500',
@@ -175,7 +176,7 @@ const showNotificationToast = (notification: Notification) => {
     const bgColor = bgColorMap[notification.type] || 'bg-blue-500';
 
     toast.custom(
-      (t) => (
+      (t: any) => (
         <div
           className={`${bgColor} text-white px-4 py-3 rounded shadow-lg max-w-md animate-pulse`}
           style={{

@@ -5,8 +5,9 @@ const config: CapacitorConfig = {
   appName: "Lady's Essence",
   webDir: 'dist',
   server: {
-    url: process.env.CAPACITOR_SERVER_URL,
-    cleartext: process.env.NODE_ENV === 'development',
+    // Ensure we don't accidentally point to localhost in the packaged app
+    url: process.env.NODE_ENV === 'production' ? undefined : process.env.CAPACITOR_SERVER_URL,
+    cleartext: true, // Useful for testing, though Render uses HTTPS
     androidScheme: 'https'
   },
   plugins: {
@@ -33,7 +34,7 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: true,
-    webContentsDebuggingEnabled: process.env.NODE_ENV === 'development'
+    webContentsDebuggingEnabled: true
   }
 };
 
