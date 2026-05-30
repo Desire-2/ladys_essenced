@@ -3,12 +3,14 @@
 ## Quick Start
 
 ### Activate Virtual Environment
+
 ```bash
 cd backend
 source venv/bin/activate
 ```
 
 ### Verify Notification System
+
 ```bash
 python -c "
 from app.models.notification import Notification, NotificationTemplate, NotificationSubscription
@@ -27,9 +29,11 @@ print('✓ All notification modules import successfully')
 ## Environment Configuration (.env)
 
 ### Current Configuration
+
 Location: `backend/.env`
 
 **Existing Variables:**
+
 ```
 ALLOWED_ORIGINS=...          # CORS whitelist
 DATABASE_URL=...             # PostgreSQL connection (Aiven cloud)
@@ -41,6 +45,7 @@ GEMINI_API_KEY=...           # Gemini AI integration
 ### Notification-Specific Configuration
 
 #### Email Notifications (Optional)
+
 Add these to `.env` if implementing email notifications:
 
 ```env
@@ -55,11 +60,13 @@ MAIL_SUBJECT_PREFIX=[Lady's Essence]
 ```
 
 **Gmail Setup:**
+
 1. Enable 2-Factor Authentication
-2. Generate App Password: https://myaccount.google.com/apppasswords
+2. Generate App Password: [https://myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
 3. Use app password in `MAIL_PASSWORD`
 
 #### SMS Notifications (Optional)
+
 Add these to `.env` if implementing SMS notifications:
 
 ```env
@@ -74,6 +81,7 @@ SMS_API_KEY=your-api-key
 ```
 
 #### Notification Preferences (Optional)
+
 ```env
 # Default notification settings
 NOTIFICATIONS_ENABLED=True
@@ -87,9 +95,11 @@ NOTIFICATIONS_BACKGROUND_INTERVAL=30
 ## Virtual Environment Setup
 
 ### Installation Reminder
+
 The backend uses Python 3.8+ with requirements specified in `requirements.txt`.
 
 **Already Installed Packages for Notifications:**
+
 ```
 Flask==3.1.0
 Flask-SQLAlchemy==3.0.5
@@ -100,24 +110,28 @@ Flask-SocketIO==5.3.4
 ### Install Additional Notifications Features (if needed)
 
 **For Email Support:**
+
 ```bash
 source venv/bin/activate
 pip install Flask-Mail==0.9.1
 ```
 
 **For SMS Support:**
+
 ```bash
 source venv/bin/activate
 pip install twilio==8.10.0
 ```
 
 **For Background Tasks (Production):**
+
 ```bash
 source venv/bin/activate
 pip install celery==5.3.4 redis==5.0.0
 ```
 
 **Update requirements.txt after installing:**
+
 ```bash
 pip freeze > requirements.txt
 ```
@@ -127,6 +141,7 @@ pip freeze > requirements.txt
 ## Running the Notification System
 
 ### Start Backend with Virtual Environment
+
 ```bash
 cd backend
 source venv/bin/activate
@@ -134,18 +149,21 @@ python run.py
 ```
 
 **Output should show:**
+
 ```
 ✓ Notification templates seeded successfully
  * Running on http://127.0.0.1:5001
 ```
 
 ### Start Frontend (Separate Terminal)
+
 ```bash
 cd frontend
 npm run dev
 ```
 
 **Frontend will connect to:**
+
 ```
 NEXT_PUBLIC_API_URL=http://localhost:5001
 ```
@@ -155,6 +173,7 @@ NEXT_PUBLIC_API_URL=http://localhost:5001
 ## Testing Notification Integration
 
 ### Test 1: Import All Modules
+
 ```bash
 source venv/bin/activate
 python -c "
@@ -170,6 +189,7 @@ print('✓ All notification helpers import successfully')
 ```
 
 ### Test 2: Verify Database Connection
+
 ```bash
 source venv/bin/activate
 python -c "
@@ -183,6 +203,7 @@ with app.app_context():
 ```
 
 ### Test 3: Check Template Seeding
+
 ```bash
 source venv/bin/activate
 python -c "
@@ -198,6 +219,7 @@ with app.app_context():
 ```
 
 ### Test 4: API Endpoint Health Check
+
 ```bash
 # Start backend first: source venv/bin/activate && python run.py
 
@@ -213,33 +235,30 @@ curl http://localhost:5001/health
 ### Phase 3 Route Integration (Current Task)
 
 1. **Activate Virtual Environment**
-   ```bash
+  ```bash
    cd backend
    source venv/bin/activate
-   ```
-
+  ```
 2. **Edit Route Files**
-   - Open `app/routes/appointments.py`
-   - Add import: `from app.services.appointment_notifications import notify_appointment_created`
-   - Call helper at integration point
-
+  - Open `app/routes/appointments.py`
+  - Add import: `from app.services.appointment_notifications import notify_appointment_created`
+  - Call helper at integration point
 3. **Test Changes**
-   ```bash
+  ```bash
    python -m py_compile app/routes/appointments.py
-   ```
-
+  ```
 4. **Run Backend**
-   ```bash
+  ```bash
    python run.py
-   ```
-
+  ```
 5. **Test with curl/Frontend**
-   ```bash
+  ```bash
    curl -X GET http://localhost:5001/api/notifications \
      -H "Authorization: Bearer $TOKEN"
-   ```
+  ```
 
 ### Deactivate Virtual Environment (When Done)
+
 ```bash
 deactivate
 ```
@@ -251,6 +270,7 @@ deactivate
 ### Issue: "ModuleNotFoundError: No module named 'app'"
 
 **Solution:** Ensure you've activated venv first
+
 ```bash
 source venv/bin/activate  # Always do this first!
 python run.py             # Then run commands
@@ -259,6 +279,7 @@ python run.py             # Then run commands
 ### Issue: "python: command not found"
 
 **Solution:** Use `python3` explicitly or activate venv
+
 ```bash
 source venv/bin/activate
 python run.py  # Now 'python' is available
@@ -267,6 +288,7 @@ python run.py  # Now 'python' is available
 ### Issue: Database connection fails
 
 **Verify .env has valid DATABASE_URL:**
+
 ```bash
 source venv/bin/activate
 python -c "import os; print(os.getenv('DATABASE_URL')[:30] + '...')"
@@ -274,7 +296,8 @@ python -c "import os; print(os.getenv('DATABASE_URL')[:30] + '...')"
 
 ### Issue: Notification templates not seeding
 
-**Check app/__init__.py imports template seeding:**
+**Check app/init.py imports template seeding:**
+
 ```bash
 source venv/bin/activate
 grep -n "seed_notification_templates" app/__init__.py
@@ -287,6 +310,7 @@ Should show: `from app.services.notification_templates_seed import seed_notifica
 ## File Checklist
 
 ### Required Files
+
 - ✅ `backend/venv/` - Python virtual environment
 - ✅ `backend/.env` - Environment configuration
 - ✅ `backend/requirements.txt` - Python dependencies
@@ -301,6 +325,7 @@ Should show: `from app.services.notification_templates_seed import seed_notifica
 - ✅ `backend/app/routes/notifications_api.py` - REST endpoints (4 new)
 
 ### Integration Files (In Progress - Phase 3)
+
 - ⏳ `backend/app/routes/appointments.py` - Add appointment helper calls
 - ⏳ `backend/app/routes/parent_appointments.py` - Add parent appointment helpers
 - ⏳ `backend/app/routes/cycle_logs.py` - Add cycle notification helpers
@@ -314,6 +339,7 @@ Should show: `from app.services.notification_templates_seed import seed_notifica
 ## Environment Variables Reference
 
 ### Required (Already Set)
+
 ```
 DATABASE_URL         # PostgreSQL connection string
 JWT_SECRET_KEY       # JWT authentication secret
@@ -323,6 +349,7 @@ ALLOWED_ORIGINS      # CORS whitelist
 ```
 
 ### Optional (For Future Enhancement)
+
 ```
 MAIL_SERVER          # SMTP server for email notifications
 MAIL_PORT            # SMTP port (587 for TLS, 465 for SSL)
@@ -338,40 +365,43 @@ TWILIO_PHONE_NUMBER  # Twilio phone number for SMS
 ## Next Steps
 
 1. **Phase 3 Integration**: Use venv to edit and test route integrations
-   ```bash
+  ```bash
    cd backend && source venv/bin/activate
    # Edit routes, test with: python -m py_compile app/routes/appointments.py
-   ```
-
+  ```
 2. **Phase 4 Background Tasks**: Implement appointment reminders
-   ```bash
+  ```bash
    # May need: pip install celery redis
    # Add to .env: NOTIFICATIONS_BACKGROUND_INTERVAL=30
-   ```
-
+  ```
 3. **Email Support (Optional)**: Add email channel
-   ```bash
+  ```bash
    pip install Flask-Mail
    # Add MAIL_* variables to .env
-   ```
-
+  ```
 4. **SMS Support (Optional)**: Add SMS channel
-   ```bash
+  ```bash
    pip install twilio
    # Add TWILIO_* variables to .env
-   ```
+  ```
 
 ---
 
 ## Summary
 
-| Component | Status | Command |
-|-----------|--------|---------|
-| Virtual Environment | ✅ Ready | `source venv/bin/activate` |
-| .env Configuration | ✅ Ready | `cat backend/.env` |
-| Notification Models | ✅ Ready | `python -c "from app.models.notification import Notification"` |
-| Helper Modules | ✅ Ready | All 5 helpers in `app/services/` |
-| API Endpoints | ✅ Ready | 4 new endpoints in `notifications_api.py` |
-| Route Integration | ⏳ Phase 3 | In progress (20 integration points) |
 
-**Everything is configured and ready for Phase 3 route integration!**
+| Component           | Status    | Command                                                        |
+| ------------------- | --------- | -------------------------------------------------------------- |
+| Virtual Environment | ✅ Ready   | `source venv/bin/activate`                                     |
+| .env Configuration  | ✅ Ready   | `cat backend/.env`                                             |
+| Notification Models | ✅ Ready   | `python -c "from app.models.notification import Notification"` |
+| Helper Modules      | ✅ Ready   | All 5 helpers in `app/services/`                               |
+| API Endpoints       | ✅ Ready   | 4 new endpoints in `notifications_api.py`                      |
+| Route Integration   | ⏳ Phase 3 | In progress (20 integration points)                            |
+
+
+**Everything is configured and ready for Phase 3 route integration!**  
+  
+
+
+on android app always it returns login credentials incorrect but the credential works well on web fix this
