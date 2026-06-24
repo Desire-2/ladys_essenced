@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useUmwariStore } from '../stores/umwariStore';
 import { useAuthStore } from '../stores/authStore';
-import { buildSystemPrompt } from '../lib/gemini';
+import { buildSystemPrompt, getTimeOfDay } from '../lib/gemini';
 import { API_BASE_URL } from '../lib/axios';
 import { useUmwariContext } from './useUmwariContext';
 import type { UmwariMessage } from '../types/umwari';
@@ -13,12 +13,26 @@ export function useUmwari() {
 
   const sendMessage = useCallback(async (userText: string) => {
     // Refresh context on message send to ensure up-to-date data
-    refetchContext();
+    // Await the refetch so we always use the freshest data
+    const freshContext = await refetchContext();
 
-    // Create a normalized health context if none is loaded yet
-    const resolvedContext = healthContext || {
-      user: { firstName: 'Friend', userType: 'adolescent' }
-    };
+    // Create a normalized health context from fresh data (fall back to closure, then generic).
+    // IMPORTANT: If the fresh fetch succeeds as a whole object but the profile sub-call failed,
+    // freshContext.user.firstName will be 'Friend' (fallback in UmwariContextProvider). In that
+    // case we MUST prefer healthContext's name (which we know is correct because the greeting
+    // useEffect only fires when healthContext is truthy).
+    const baseContext = freshContext || healthContext;
+    const resolvedContext = baseContext
+      ? {
+          ...baseContext,
+          user: {
+            ...baseContext.user,
+            firstName: freshContext?.user?.firstName && freshContext.user.firstName !== 'Friend'
+              ? freshContext.user.firstName
+              : healthContext?.user?.firstName || baseContext.user.firstName || 'Friend',
+          },
+        }
+      : { user: { firstName: 'Friend', userType: 'adolescent' } };
 
     // If it's a real user message (not the behind-the-scenes greeting trigger), add it
     let userMsg: UmwariMessage | null = null;
@@ -56,9 +70,9 @@ export function useUmwari() {
           parts: [{ text: m.content.trim() }],
         }));
 
-      // Special handling for GREETING prompt
-      const promptToSend = userText === '__GREETING__' 
-        ? 'Please begin our session with your structured, warm greeting tailored to my data.' 
+      // Special handling for GREETING prompt — inject user's name and time-of-day so Gemini can use them
+      const promptToSend = userText === '__GREETING__'
+        ? `Hello! It is currently ${getTimeOfDay()} where I am. Please greet me warmly using my name and the appropriate time of day. My name is ${resolvedContext.user.firstName}. Begin our session with your structured, warm greeting tailored to my data.`
         : userText;
 
       const contents = [
@@ -156,3 +170,4 @@ export function useUmwari() {
 
   return { sendMessage, extractDoctorRecommendations, cleanContent };
 }
+

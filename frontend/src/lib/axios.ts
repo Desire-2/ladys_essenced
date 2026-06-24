@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '../stores/authStore';
-import { refreshAccessToken } from './authSession';
+import { refreshAccessTokenWithTimeout } from './authSession';
 
 /**
  * Base URL for all API requests (Flask backend).
@@ -71,7 +71,7 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
-          const newAccessToken = await refreshAccessToken(refreshToken);
+          const newAccessToken = await refreshAccessTokenWithTimeout(refreshToken);
           useAuthStore.getState().setAccessToken(newAccessToken);
           if (originalRequest.headers) {
             originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;

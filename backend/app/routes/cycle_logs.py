@@ -4409,3 +4409,263 @@ def get_health_summary():
 
     except Exception as e:
         return jsonify({'message': f'Error generating health summary: {str(e)}'}), 500
+
+@cycle_logs_bp.route('/wellness/monthly-stats', methods=['GET'])
+@jwt_required()
+def get_wellness_monthly_stats():
+    """
+    GET /api/cycle-logs/wellness/monthly-stats?months=12&user_id=...
+
+    Returns wellness data (mood, sleep, stress, energy, exercise, symptoms)
+    aggregated by calendar month for longer-term trend analysis.
+
+    Query params:
+        months  — number of months of history to include (default 12, max 36)
+        user_id — optional; if provided and caller is a parent of that user, returns child's data
+
+    Response: { "monthly_stats": [ { month, year, logs, mood, sleep, stress,
+               energy, exercise, symptoms, cycle_lengths, period_lengths,
+               flow_intensity }, ... ], "total_months": N, "total_logs": N }
+    """
+    from app.models import ParentChild, Adolescent, Parent
+
+    # ── Helper for ordinal-value scoring ──────────────────────────────
+    def _ord_to_score(val: str, mapping: dict) -> float | None:
+        return mapping.get(val)
+
+    try:
+        current_user_id = get_jwt_identity()
+        months_back = request.args.get('months', 12, type=int)
+        months_back = max(1, min(36, months_back))
+
+        target_user_id = request.args.get('user_id', type=int)
+        if target_user_id and target_user_id != current_user_id:
+            parent = Parent.query.filter_by(user_id=current_user_id).first()
+            if not parent:
+                return jsonify({'error': 'Only parents can view other users\' statistics'}), 403
+            is_related = ParentChild.query.filter_by(
+                parent_id=parent.id
+            ).join(Adolescent).filter(
+                Adolescent.user_id == target_user_id
+            ).first()
+            if not is_related:
+                return jsonify({'error': 'Not authorized to view this user\'s data'}), 403
+            effective_user_id = target_user_id
+        else:
+            effective_user_id = current_user_id
+
+        cutoff_date = datetime.utcnow() - timedelta(days=months_back * 31)
+
+        logs = CycleLog.query.filter(
+            CycleLog.user_id == effective_user_id,
+            CycleLog.start_date >= cutoff_date
+        ).order_by(CycleLog.start_date.asc()).all()
+
+        if not logs:
+            return jsonify({
+                'monthly_stats': [],
+                'total_months': 0,
+                'total_logs': 0,
+                'months_requested': months_back,
+            }), 200
+
+        MOOD_SCORE = {
+            'very_good': 5, 'good': 4, 'neutral': 3, 'low': 2, 'very_low': 1,
+        }
+        SLEEP_SCORE = {
+            'excellent': 4, 'good': 3, 'fair': 2, 'poor': 1,
+        }
+        STRESS_SCORE = {
+            'low': 3, 'moderate': 2, 'high': 1, 'very_high': 0,
+        }
+        ENERGY_SCORE = {
+            'high': 4, 'moderate': 3, 'low': 2, 'very_low': 1,
+        }
+
+        # ── Group logs by year-month ──────────────────────────────────
+        monthly_buckets: dict[tuple[int, int], list] = defaultdict(list)
+        for log in logs:
+            key = (log.start_date.year, log.start_date.month)
+            monthly_buckets[key].append(log)
+
+        # Also collect all logs sorted to compute cycle-length per month
+        # (a cycle length spans across months; assign to the starting month)
+        all_logs_sorted = sorted(logs, key=lambda x: x.start_date)
+        cycle_start_months: dict[tuple[int, int], list[int]] = defaultdict(list)
+        for i in range(len(all_logs_sorted) - 1):
+            curr = all_logs_sorted[i]
+            nxt = all_logs_sorted[i + 1]
+            gap = (nxt.start_date.date() - curr.start_date.date()).days
+            if 15 <= gap <= 90:
+                key = (curr.start_date.year, curr.start_date.month)
+                cycle_start_months[key].append(gap)
+
+        monthly_stats = []
+        sorted_keys = sorted(monthly_buckets.keys(), reverse=True)
+
+        for year, month in sorted_keys:
+            bucket = monthly_buckets[(year, month)]
+            month_label = f"{year}-{month:02d}"
+
+            # Mood
+            moods = [log.mood for log in bucket if log.mood]
+            mood_dist: dict[str, int] = {}
+            for m in moods:
+                mood_dist[m] = mood_dist.get(m, 0) + 1
+            mood_scores = [
+                s for m in moods
+                if (s := _ord_to_score(m, MOOD_SCORE)) is not None
+            ]
+            avg_mood = round(sum(mood_scores) / len(mood_scores), 2) if mood_scores else None
+            dominant_mood = max(mood_dist, key=mood_dist.get) if mood_dist else None
+            negative_mood_pct = round(
+                sum(1 for m in moods if m in ('low', 'very_low')) / len(moods) * 100, 1
+            ) if moods else None
+
+            # Sleep
+            sleep_vals = [log.sleep_quality for log in bucket if log.sleep_quality]
+            sleep_dist: dict[str, int] = {}
+            for s in sleep_vals:
+                sleep_dist[s] = sleep_dist.get(s, 0) + 1
+            sleep_scores = [
+                s for sv in sleep_vals
+                if (s := _ord_to_score(sv, SLEEP_SCORE)) is not None
+            ]
+            avg_sleep = round(sum(sleep_scores) / len(sleep_scores), 2) if sleep_scores else None
+            poor_sleep_pct = round(
+                sum(1 for sv in sleep_vals if sv in ('fair', 'poor')) / len(sleep_vals) * 100, 1
+            ) if sleep_vals else None
+
+            # Stress
+            stress_vals = [log.stress_level for log in bucket if log.stress_level]
+            stress_dist: dict[str, int] = {}
+            for s in stress_vals:
+                stress_dist[s] = stress_dist.get(s, 0) + 1
+            stress_scores = [
+                s for sv in stress_vals
+                if (s := _ord_to_score(sv, STRESS_SCORE)) is not None
+            ]
+            avg_stress = round(sum(stress_scores) / len(stress_scores), 2) if stress_scores else None
+            high_stress_pct = round(
+                sum(1 for sv in stress_vals if sv in ('high', 'very_high')) / len(stress_vals) * 100, 1
+            ) if stress_vals else None
+
+            # Energy
+            energy_vals = [log.energy_level for log in bucket if log.energy_level]
+            energy_dist: dict[str, int] = {}
+            for e in energy_vals:
+                energy_dist[e] = energy_dist.get(e, 0) + 1
+            energy_scores = [
+                s for ev in energy_vals
+                if (s := _ord_to_score(ev, ENERGY_SCORE)) is not None
+            ]
+            avg_energy = round(sum(energy_scores) / len(energy_scores), 2) if energy_scores else None
+            low_energy_pct = round(
+                sum(1 for ev in energy_vals if ev in ('low', 'very_low')) / len(energy_vals) * 100, 1
+            ) if energy_vals else None
+
+            # Exercise
+            exercise_count = sum(
+                1 for log in bucket
+                if log.exercise_activities and log.exercise_activities.strip()
+            )
+            exercise_pct = round(exercise_count / len(bucket) * 100, 1) if bucket else 0
+
+            # Symptoms
+            all_symptoms: list[str] = []
+            for log in bucket:
+                if log.symptoms:
+                    parts = [s.strip().lower() for s in log.symptoms.split(',') if s.strip()]
+                    all_symptoms.extend(parts)
+            symptom_freq: dict[str, int] = {}
+            for s in all_symptoms:
+                symptom_freq[s] = symptom_freq.get(s, 0) + 1
+            top_symptoms = dict(
+                sorted(symptom_freq.items(), key=lambda x: -x[1])[:5]
+            )
+
+            # Flow intensity
+            flow_vals = [log.flow_intensity for log in bucket if log.flow_intensity]
+            flow_dist: dict[str, int] = {}
+            for fv in flow_vals:
+                flow_dist[fv] = flow_dist.get(fv, 0) + 1
+
+            # Cycle lengths assigned to this month
+            month_cycles = cycle_start_months.get((year, month), [])
+
+            # Period lengths (from start→end dates within this month's logs)
+            period_lengths = []
+            for log in bucket:
+                if log.start_date and log.end_date:
+                    dur = (log.end_date.date() - log.start_date.date()).days
+                    if 1 <= dur <= 10:
+                        period_lengths.append(dur)
+
+            monthly_stats.append({
+                'month': month,
+                'year': year,
+                'label': month_label,
+                'total_logs': len(bucket),
+                'mood': {
+                    'distribution': mood_dist,
+                    'average_score': avg_mood,
+                    'dominant_mood': dominant_mood,
+                    'negative_mood_percentage': negative_mood_pct,
+                    'total_with_data': len(moods),
+                },
+                'sleep': {
+                    'distribution': sleep_dist,
+                    'average_score': avg_sleep,
+                    'poor_sleep_percentage': poor_sleep_pct,
+                    'total_with_data': len(sleep_vals),
+                },
+                'stress': {
+                    'distribution': stress_dist,
+                    'average_score': avg_stress,
+                    'high_stress_percentage': high_stress_pct,
+                    'total_with_data': len(stress_vals),
+                },
+                'energy': {
+                    'distribution': energy_dist,
+                    'average_score': avg_energy,
+                    'low_energy_percentage': low_energy_pct,
+                    'total_with_data': len(energy_vals),
+                },
+                'exercise': {
+                    'logs_with_exercise': exercise_count,
+                    'exercise_percentage': exercise_pct,
+                },
+                'symptoms': {
+                    'top_symptoms': top_symptoms,
+                    'total_symptom_entries': len(all_symptoms),
+                },
+                'flow_intensity': {
+                    'distribution': flow_dist,
+                    'total_with_data': len(flow_vals),
+                },
+                'cycle_lengths': {
+                    'values': month_cycles,
+                    'average': round(sum(month_cycles) / len(month_cycles), 1) if month_cycles else None,
+                    'min': min(month_cycles) if month_cycles else None,
+                    'max': max(month_cycles) if month_cycles else None,
+                    'count': len(month_cycles),
+                },
+                'period_lengths': {
+                    'values': period_lengths,
+                    'average': round(sum(period_lengths) / len(period_lengths), 1) if period_lengths else None,
+                    'count': len(period_lengths),
+                },
+            })
+
+        total_logs = sum(ms['total_logs'] for ms in monthly_stats)
+
+        return jsonify({
+            'monthly_stats': monthly_stats,
+            'total_months': len(monthly_stats),
+            'total_logs': total_logs,
+            'months_requested': months_back,
+            'user_id': effective_user_id,
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to compute monthly wellness stats: {str(e)}'}), 500

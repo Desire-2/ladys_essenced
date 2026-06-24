@@ -6,9 +6,11 @@ import { UmwariMessage } from './UmwariMessage';
 import { UmwariTyping } from './UmwariTyping';
 import { UmwariLanguagePicker } from './UmwariLanguagePicker';
 import { UmwariOnboarding } from './UmwariOnboarding';
+import { UmwariInsightsPanel } from './UmwariInsightsPanel';
 import { 
   Send, Sparkles, RefreshCw, MessageSquareX, LayoutDashboard, 
-  ShieldCheck, Calendar, Heart, Compass, ClipboardList, Info, Trash2
+  ShieldCheck, Calendar, Heart, Compass, ClipboardList, Info, Trash2, 
+  Lightbulb
 } from 'lucide-react';
 import { Card } from '../ui/Card';
 
@@ -17,31 +19,32 @@ export const UmwariFullPage: React.FC = () => {
   const { sendMessage } = useUmwari();
   const { data: healthContext, isLoading: contextLoading, refetch } = useUmwariContext();
   const [inputText, setInputText] = useState('');
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const SUGGESTED_PROMPTS = {
     en: [
+      "Generate my health insights",
       "Review my recent cycle logs regularity",
       "Are there any nutritional gaps in my diet?",
-      "Suggest menstrual hygiene tips under Rwandese climate",
-      "When is my peak fertile days looking this window?",
+      "When is my next fertile window?",
     ],
     rw: [
+      "Nshyira inyunganizi ku buzima bwanjye",
       "Suzuma kubahiriza inshuro zanjye",
       "Haba hari imirire mibi ngira mu biryo?",
-      "Inama z'isuku mu bihe by'imihango mu Rwanda",
       "Ni ryari igihe cyanjye cyiza cyo gusama?",
     ],
     fr: [
+      "Générez mes conseils santé",
       "Vérifiez la régularité de mes cycles récents",
       "Y a-t-il des carences nutritionnelles dans mon alimentation?",
-      "Conseils d'hygiène menstruelle sous climat rwandais",
       "Quelle est ma période de fertilité maximale?",
     ],
     sw: [
+      "Nipatie maarifa yangu ya afya",
       "Angalia usawa wa mzunguko wangu",
       "Kuna pengo lolote la lishe kwenye chakula changu?",
-      "Ushauri wa usafi wa hedhi katika mazingira ya Rwanda",
       "Je, siku zangu za rutuba kuu zinatabiriwa lini?",
     ],
   };
@@ -146,7 +149,11 @@ export const UmwariFullPage: React.FC = () => {
                 <div className="min-w-0">
                   <span className="block text-[10px] uppercase font-black text-muted leading-none">Cycle Regularity</span>
                   <span className="block text-xs font-bold text-ink truncate mt-1">
-                    {healthContext.cycleSummary?.regularityStatus || 'No records added yet'}
+                    {healthContext.cycleSummary?.regularityStatus
+                      ? healthContext.cycleSummary.regularityStatus.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+                      : healthContext.cycleSummary?.totalLogs && healthContext.cycleSummary.totalLogs > 0
+                        ? `${healthContext.cycleSummary.totalLogs} log${healthContext.cycleSummary.totalLogs > 1 ? 's' : ''} recorded`
+                        : 'No records added yet'}
                   </span>
                 </div>
               </div>
@@ -206,10 +213,22 @@ export const UmwariFullPage: React.FC = () => {
             </div>
           )}
 
+          {/* View Full Insights Button */}
+          {healthContext?.aiInsights && (
+            <button
+              onClick={() => setInsightsOpen(true)}
+              type="button"
+              className="w-full h-9 bg-gradient-to-r from-[#7A4F6D]/10 to-[#C4785A]/10 hover:from-[#7A4F6D]/20 hover:to-[#C4785A]/20 border border-[#7A4F6D]/20 hover:border-[#7A4F6D]/40 text-[#7A4F6D] text-xs font-extrabold rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
+            >
+              <Lightbulb className="w-3.5 h-3.5" />
+              <span>View Full Insights</span>
+            </button>
+          )}
+
           <button
             onClick={refetch}
             type="button"
-            className="w-full h-9 bg-[#FAF9F6] border border-ink/5 hover:border-terracotta/20 text-muted hover:text-ink text-xs font-extrabold rounded-xl flex items-center justify-center gap-1.5 transition-all mt-4"
+            className="w-full h-9 bg-[#FAF9F6] border border-ink/5 hover:border-terracotta/20 text-muted hover:text-ink text-xs font-extrabold rounded-xl flex items-center justify-center gap-1.5 transition-all mt-3"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Sync health metrics</span>
@@ -314,6 +333,14 @@ export const UmwariFullPage: React.FC = () => {
         </form>
 
       </div>
+      {/* Insights Modal Panel */}
+      {healthContext?.aiInsights && (
+        <UmwariInsightsPanel
+          aiInsights={healthContext.aiInsights}
+          isOpen={insightsOpen}
+          onClose={() => setInsightsOpen(false)}
+        />
+      )}
     </div>
   );
 };

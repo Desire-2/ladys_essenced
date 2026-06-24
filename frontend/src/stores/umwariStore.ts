@@ -50,10 +50,24 @@ export const useUmwariStore = create<UmwariState>()(
     {
       name: 'umwari-config-v2', // unique name
       partialize: (state) => ({
-        // Only persist config, not live state/messages
+        // Persist config
         isConfigured: state.isConfigured,
         apiKey: state.apiKey,
         language: state.language,
+        // Persist recent messages (last 20) so chat survives page refresh
+        messages: state.messages.slice(-20),
+      }),
+      // Only rehydrate messages on initial load; streaming state is session-only
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<typeof current>),
+        // Never rehydrate streaming state
+        isStreaming: false,
+        isLoadingContext: false,
+        // Merge persisted messages if current is empty (new session)
+        messages: current.messages.length > 0
+          ? current.messages
+          : (persisted as any).messages ?? [],
       }),
     }
   )

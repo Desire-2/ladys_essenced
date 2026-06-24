@@ -470,6 +470,12 @@ def get_child_cycle_logs(adolescent_id):
             'period_length': log.period_length,
             'symptoms': log.symptoms,
             'notes': log.notes,
+            'mood': log.mood,
+            'energy_level': log.energy_level,
+            'sleep_quality': log.sleep_quality,
+            'stress_level': log.stress_level,
+            'exercise_activities': log.exercise_activities,
+            'flow_intensity': log.flow_intensity,
             'created_at': log.created_at.isoformat()
         } for log in logs.items],
         'total': logs.total,

@@ -82,17 +82,30 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     (async () => {
       setLoading(true);
       setLoadError(null);
+
+      // Safety timeout: if the fetch hangs for 20 seconds (e.g. auth refresh fetch()
+      // without a timeout in authSession.ts), release the loading state gracefully.
+      timeoutId = setTimeout(() => {
+        if (cancelled) return;
+        setLoading(false);
+        setLoadError('Request timed out. Check that the backend server is running.');
+        toast.error('Settings request timed out. Please try again.');
+      }, 20_000);
+
       try {
         const bundle = await fetchSettings();
         if (cancelled) return;
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
         applyBundleToForm(bundle.account, bundle.privacy, bundle.umwari);
         setUser(bundle.account);
       } catch (err: unknown) {
         if (cancelled) return;
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
         const cachedUser = useAuthStore.getState().user;
         if (cachedUser) {
           setFirstName(cachedUser.first_name);
@@ -113,6 +126,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
 
     return () => {
       cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
     };
     // Load once on mount — do not depend on user?.id or setUser (would retrigger forever)
   }, []);

@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 import requests
 from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.utils.gemini_config import ENV_KEY_NAMES, get_gemini_api_key_from_env, resolve_gemini_api_key
 
@@ -168,3 +168,72 @@ def umwari_chat():
         mimetype='text/plain; charset=utf-8',
         headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
     )
+
+
+@umwari_bp.route('/insights', methods=['POST'])
+@jwt_required()
+def umwari_insights():
+    """
+    Generate AI health insights and return them as structured data that Umwari
+    can discuss conversationally. Calls KinyarwandaInsightService under the hood.
+
+    Request body (optional):
+    {
+        "language": "kinyarwanda" | "english" (default: user's current or english)
+    }
+
+    Response:
+    {
+        "success": true,
+        "insights": { "inyunganizi": "...", "icyo_wakora": [...], "ihumure": "..." },
+        "cached": false,
+        "generated_at": "...",
+        "language": "..."
+    }
+    """
+    try:
+        from app.services.kinyarwanda_insight_service import KinyarwandaInsightService
+        from app.models import User
+
+        current_user_id = get_jwt_identity()
+        if not current_user_id:
+            return jsonify({'error': 'Invalid token'}), 401
+
+        user = User.query.get(int(current_user_id))
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        body = request.get_json(silent=True) or {}
+        language = body.get('language', 'english').lower()
+        if language not in ('kinyarwanda', 'english'):
+            language = 'english'
+
+        service = KinyarwandaInsightService()
+        if not service.google_api_key:
+            return jsonify({
+                'error': 'Gemini API key not configured on the server. Set GEMINI_API_KEY in backend/.env.'
+            }), 500
+
+        result = service.generate_insight(int(current_user_id), language)
+
+        if not result.get('success'):
+            return jsonify({
+                'error': result.get('error', 'Failed to generate insights')
+            }), 500
+
+        return jsonify({
+            'success': True,
+            'insights': result['data'],
+            'cached': result.get('cached', False),
+            'generated_at': result['data'].get('generated_at', ''),
+            'language': language,
+            'target_user': {
+                'id': user.id,
+                'name': user.name,
+                'user_type': user.user_type,
+            }
+        }), 200
+
+    except Exception as exc:
+        current_app.logger.exception('Umwari insights endpoint error')
+        return jsonify({'error': f'Insights generation failed: {exc}'}), 500

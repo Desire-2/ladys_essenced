@@ -8,9 +8,10 @@ import { UmwariMessage } from './UmwariMessage';
 import { UmwariTyping } from './UmwariTyping';
 import { UmwariOnboarding } from './UmwariOnboarding';
 import { UmwariLanguagePicker } from './UmwariLanguagePicker';
+import { UmwariInsightsPanel } from './UmwariInsightsPanel';
 import { 
   Send, Sparkles, X, Minimize2, Maximize2, RefreshCw, 
-  HelpCircle, Settings, MessageSquareX, Compass 
+  HelpCircle, Settings, MessageSquareX, Compass, Lightbulb 
 } from 'lucide-react';
 
 export const UmwariChat: React.FC = () => {
@@ -18,32 +19,33 @@ export const UmwariChat: React.FC = () => {
   const { sendMessage } = useUmwari();
   const { data: healthContext, isLoading: contextLoading } = useUmwariContext();
   const [inputText, setInputText] = useState('');
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const SUGGESTED_PROMPTS = {
     en: [
+      "Generate my health insights",
       "How is my cycle looking?",
       "I've been feeling tired lately",
       "When is my next fertile window?",
-      "Help me understand my symptoms",
     ],
     rw: [
+      "Nshyira inyunganizi ku buzima bwanjye",
       "Inshuro zanjye zisa bite?",
       "Nakoraga umunaniro benshi vuba",
       "Ni ryari igihe cy'imfura gukurikira?",
-      "Nsobanurire ibimenyetso byanjye",
     ],
     fr: [
+      "Générez mes conseils santé",
       "Comment se présente mon cycle?",
       "Je me sens fatiguée ces derniers temps",
       "Quand est ma prochaine fenêtre fertile?",
-      "Aidez-moi à comprendre mes symptômes",
     ],
     sw: [
+      "Nipatie maarifa yangu ya afya",
       "Mzunguko wangu unaonekana vipi?",
       "Nimekuwa nikihisi uchovu hivi karibuni",
       "Wakati wangu wa rutuba wa pili ni lini?",
-      "Nisaidie kuelewa dalili zangu",
     ],
   };
 
@@ -128,6 +130,17 @@ export const UmwariChat: React.FC = () => {
         {/* Action controllers */}
         <div className="flex items-center gap-2.5">
           <UmwariLanguagePicker compact />
+
+          {healthContext?.aiInsights && (
+            <button
+              onClick={() => setInsightsOpen(true)}
+              className="p-1 hover:bg-white/10 rounded-md transition-all text-white/80 hover:text-white relative"
+              title="View Full Health Insights"
+              type="button"
+            >
+              <Lightbulb className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           <button
             onClick={toFullPage}
@@ -229,6 +242,14 @@ export const UmwariChat: React.FC = () => {
         </button>
       </form>
 
+      {/* Insights Modal Panel */}
+      {healthContext?.aiInsights && (
+        <UmwariInsightsPanel
+          aiInsights={healthContext.aiInsights}
+          isOpen={insightsOpen}
+          onClose={() => setInsightsOpen(false)}
+        />
+      )}
     </motion.div>
   );
 };

@@ -14,10 +14,23 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   error,
   icon,
   type = 'text',
+  autoComplete,
   ...props
 }, ref) => {
   const [showPassword, setShowPassword] = useState(false);
   const isPasswordField = type === 'password';
+
+  // Sensible autocomplete defaults for accessibility & browser autofill
+  const resolvedAutoComplete = autoComplete ?? (() => {
+    switch (type) {
+      case 'tel':    return 'tel';
+      case 'email':  return 'email';
+      case 'password': return 'current-password';
+      case 'search': return 'search';
+      case 'url':    return 'url';
+      default:       return undefined;
+    }
+  })();
 
   return (
     <div className="w-full text-left font-sans">
@@ -35,6 +48,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
         <input
           type={isPasswordField && showPassword ? 'text' : type}
           ref={ref}
+          autoComplete={resolvedAutoComplete}
           className={cn(
             'block w-full rounded-[16px] border border-border bg-surface px-4 py-3 text-sm text-ink transition-all placeholder:text-muted/70 focus:border-terracotta focus:ring-1 focus:ring-terracotta focus:outline-none disabled:opacity-50',
             icon && 'pl-10',

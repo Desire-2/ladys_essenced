@@ -52,6 +52,18 @@ export interface UmwariHealthContext {
     anomalyDetected: boolean;
     fertileWindowStart?: string;
     fertileWindowEnd?: string;
+    regularityScore?: number;
+    confidenceLevel?: string;
+    healthInsightsCount?: number;
+  };
+  wellnessSummary?: {
+    dominantMood?: string;
+    negativeMoodPercentage?: number;
+    highStressPercentage?: number;
+    poorSleepPercentage?: number;
+    lowEnergyPercentage?: number;
+    exerciseConsistency?: number;
+    hasWellnessData: boolean;
   };
   mealSummary?: {
     logsThisWeek: number;
@@ -71,6 +83,14 @@ export interface UmwariHealthContext {
     clinic: string;
     isVerified: boolean;
   }>;
+  /** AI-generated health insights (from backend KinyarwandaInsightService) */
+  aiInsights?: {
+    inyunganizi: string;          // Health insight text
+    icyo_wakora: string[];        // Recommendations
+    ihumure: string;              // Encouragement
+    language: string;
+    generated_at: string;
+  };
 }
 
 export interface UmwariState {

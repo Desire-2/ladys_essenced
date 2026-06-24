@@ -5,14 +5,14 @@ import {
   Users, ShieldAlert, BookOpen, Clock, AlertTriangle, 
   Search, Lock, Phone, User, Check, Eye, HelpCircle, 
   FileText, Plus, CheckCircle, RefreshCcw, ThumbsUp, Trash2, Pencil,
-  Sparkles, Apple
+  Sparkles, Apple, Activity
 } from 'lucide-react';
 
 import { formatDateTime } from './lib/utils';
 import { useAuthStore } from './stores/authStore';
 import { api } from './lib/axios';
 import {
-  refreshAccessToken,
+  refreshAccessTokenWithTimeout,
   fetchUserProfile,
   dashboardPathForUserType,
 } from './lib/authSession';
@@ -79,6 +79,7 @@ import { CycleCalendar } from './components/features/CycleCalendar';
 import { NutritionDonut } from './components/features/NutritionDonut';
 import { AppointmentCard } from './components/features/AppointmentCard';
 import { InsightCard } from './components/features/InsightCard';
+import { WellnessTrends } from './components/features/WellnessTrends';
 
 // Forms
 import { CycleLogForm } from './components/forms/CycleLogForm';
@@ -90,9 +91,12 @@ import { UmwariFab } from './components/umwari/UmwariFab';
 import { UmwariChat } from './components/umwari/UmwariChat';
 import { UmwariFullPage } from './components/umwari/UmwariFullPage';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { UmwariContextProvider } from './hooks/useUmwariContext';
 import { AdminShell } from './pages/admin/AdminShell';
 import { ProviderShell } from './pages/providers/ProviderShell';
 import { ParentShell } from './pages/parent/ParentShell';
+import { AuthRequired } from './components/auth/AuthRequired';
+import { RoleRequired } from './components/auth/RoleRequired';
 
 export default function App() {
   const { user, accessToken, setUser, setAccessToken, logout } = useAuthStore();
@@ -178,7 +182,7 @@ export default function App() {
       }
 
       try {
-        const newAccessToken = await refreshAccessToken(storedRefreshToken);
+        const newAccessToken = await refreshAccessTokenWithTimeout(storedRefreshToken);
         setAccessToken(newAccessToken);
         const userData = await fetchUserProfile(newAccessToken);
         setUser(userData);
@@ -200,45 +204,6 @@ export default function App() {
       <p className="text-sm text-muted">{message}</p>
     </div>
   );
-
-  /** Requires signed-in session (redirect to /login is handled globally). */
-  const AuthRequired = ({ children }: { children: React.ReactNode }) => {
-    if (isAuthHydrating) {
-      return <AuthLoadingScreen message="Restoring your session…" />;
-    }
-    if (!isAuthenticated || !user) {
-      return <AuthLoadingScreen message="Redirecting to sign in…" />;
-    }
-    return <>{children}</>;
-  };
-
-  // Role Gate security
-  const RoleRequired = ({ children, allowed }: { children: React.ReactNode; allowed: string[] }) => {
-    if (!isAuthenticated || !user) {
-      return null;
-    }
-
-    if (!allowed.includes(user.user_type)) {
-      return (
-        <div className="p-8 bg-surface border border-border rounded-xl max-w-md mx-auto my-12 text-center font-sans space-y-4">
-          <AlertTriangle className="w-12 h-12 text-mauve mx-auto" />
-          <h2 className="text-lg font-bold font-heading text-ink text-center">Unauthorized Role Segment</h2>
-          <p className="text-xs text-muted">Your account role is <strong>{user?.user_type.toUpperCase()}</strong>. This system view is protected.</p>
-          <Button onClick={() => {
-            if (user?.user_type === 'parent') navigate('/dashboard/parent');
-            else if (user?.user_type === 'health_provider') navigate('/providers');
-            else if (user?.user_type === 'admin') navigate('/dashboard/admin');
-            else if (user?.user_type === 'content_writer') navigate('/dashboard/writer');
-            else navigate('/dashboard');
-          }} className="w-full">
-            Return to Authorized Dashboard
-          </Button>
-        </div>
-      );
-    }
-
-    return <>{children}</>;
-  };
 
   // ==========================================
   // PAGE COMPONENT 1: /login
@@ -330,6 +295,7 @@ export default function App() {
             <form onSubmit={handleLogin} className="space-y-4">
               <Input
                 type="tel"
+                autoComplete="username"
                 label="Phone Number (Inomero ya terefone)"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
@@ -565,6 +531,7 @@ export default function App() {
 
               <Input
                 type="tel"
+                autoComplete="username"
                 label="Phone Number (Terefone)"
                 placeholder="Your phone number"
                 value={phoneNumber}
@@ -929,6 +896,20 @@ export default function App() {
             </Card>
 
           </div>
+
+          {/* Wellness Trends Dashboard Widget */}
+          <Card className="p-6 bg-white">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold font-heading text-ink flex items-center gap-2">
+                <Activity className="w-5 h-5 text-[#8FAF8A]" /> Wellness Trends
+              </h3>
+              <span className="text-[9px] text-muted font-bold uppercase tracking-wider">From cycle logs</span>
+            </div>
+            <WellnessTrends
+              logs={cycleLogsList}
+              isLoading={dashboardLoading}
+            />
+          </Card>
 
           {/* AI insights and clinic appointment widgets */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1804,7 +1785,7 @@ export default function App() {
   }
 
   return (
-    <>
+    <UmwariContextProvider>
       <Toaster position="top-center" reverseOrder={false} />
       
       {currentPath === '/login' && <LoginPage />}
@@ -1814,36 +1795,36 @@ export default function App() {
         <>
       {/* Adolescent Router views */}
       {currentPath === '/dashboard' && (
-        <RoleRequired allowed={['adolescent']}>
+        <RoleRequired allowed={['adolescent']} navigate={navigate}>
           <AdolescentDashboard />
         </RoleRequired>
       )}
       {currentPath === '/dashboard/cycle' && (
-        <RoleRequired allowed={['adolescent']}>
+        <RoleRequired allowed={['adolescent']} navigate={navigate}>
           <CycleTrackerPage />
         </RoleRequired>
       )}
       {currentPath === '/dashboard/meals' && (
-        <RoleRequired allowed={['adolescent']}>
+        <RoleRequired allowed={['adolescent']} navigate={navigate}>
           <MealsLogPage />
         </RoleRequired>
       )}
       {currentPath === '/dashboard/appointments' && (
-        <RoleRequired allowed={['adolescent']}>
+        <RoleRequired allowed={['adolescent']} navigate={navigate}>
           <AppointmentsPage />
         </RoleRequired>
       )}
 
       {/* Role dashboard routes */}
       {currentPath.startsWith('/dashboard/parent') && (
-        <AuthRequired>
+        <AuthRequired isAuthHydrating={isAuthHydrating}>
           <ParentShell currentPath={currentPath} onNavigate={navigate} />
         </AuthRequired>
       )}
       {(currentPath === '/dashboard/provider' ||
         currentPath === '/providers' ||
         currentPath.startsWith('/providers/')) && (
-        <AuthRequired>
+        <AuthRequired isAuthHydrating={isAuthHydrating}>
           <ProviderShell
             currentPath={currentPath === '/dashboard/provider' ? '/providers' : currentPath}
             onNavigate={navigate}
@@ -1851,24 +1832,24 @@ export default function App() {
         </AuthRequired>
       )}
       {currentPath.startsWith('/dashboard/admin') && (
-        <AuthRequired>
+        <AuthRequired isAuthHydrating={isAuthHydrating}>
           <AdminShell currentPath={currentPath} onNavigate={navigate} />
         </AuthRequired>
       )}
       {currentPath === '/dashboard/writer' && (
-        <AuthRequired><ContentWriterDashboardPage /></AuthRequired>
+        <AuthRequired isAuthHydrating={isAuthHydrating}><ContentWriterDashboardPage /></AuthRequired>
       )}
 
       {/* Shared routes */}
       {currentPath === '/dashboard/notifications' && user?.user_type !== 'parent' && (
-        <AuthRequired><NotificationsCentricPage /></AuthRequired>
+        <AuthRequired isAuthHydrating={isAuthHydrating}><NotificationsCentricPage /></AuthRequired>
       )}
       {currentPath === '/settings' && (
-        <AuthRequired><SettingsPage onNavigate={navigate} /></AuthRequired>
+        <AuthRequired isAuthHydrating={isAuthHydrating}><SettingsPage onNavigate={navigate} /></AuthRequired>
       )}
       
       {currentPath === '/dashboard/umwari' && (
-        <AuthRequired>
+        <AuthRequired isAuthHydrating={isAuthHydrating}>
           <DashboardLayout currentPath="/dashboard/umwari" onNavigate={navigate}>
             <UmwariFullPage />
           </DashboardLayout>
@@ -1940,6 +1921,6 @@ export default function App() {
           <UmwariFab />
         </>
       )}
-    </>
+    </UmwariContextProvider>
   );
 }
