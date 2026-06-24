@@ -21,7 +21,6 @@ export const useUmwariStore = create<UmwariState>()(
       completeOnboarding: () => set({ isConfigured: true }),
       setApiKey: (key) => {
         const trimmedKey = key.trim();
-        localStorage.setItem('umwari_gemini_key', trimmedKey);
         set({ apiKey: trimmedKey, isConfigured: trimmedKey.length > 0 });
       },
 

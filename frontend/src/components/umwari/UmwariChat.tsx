@@ -68,9 +68,14 @@ export const UmwariChat: React.FC = () => {
       .catch(() => {});
   }, [store.isConfigured]);
 
-  // Proactive welcome greeting triggering on first open when configured
+  // Proactive welcome greeting — only once per session (reset when chat is cleared)
+  const greetingSentRef = useRef(false);
   useEffect(() => {
-    if (store.isConfigured && store.messages.length === 0 && !contextLoading && healthContext) {
+    if (store.messages.length === 0) {
+      greetingSentRef.current = false; // Reset when chat is cleared
+    }
+    if (store.isConfigured && store.messages.length === 0 && !contextLoading && healthContext && !greetingSentRef.current) {
+      greetingSentRef.current = true;
       sendMessage('__GREETING__');
     }
   }, [store.isConfigured, store.messages.length, contextLoading, healthContext, sendMessage]);
@@ -187,8 +192,8 @@ export const UmwariChat: React.FC = () => {
         ) : (
           <div className="flex flex-col space-y-4">
             {store.messages
-              // Hide behind-the-scenesgreeting trigger if visible
-              .filter(m => m.content !== '__GREETING__')
+          // Hide behind-the-scenes greeting trigger if visible
+          .filter(m => m.content !== '__GREETING__')
               .map((msg) => (
                 <UmwariMessage key={msg.id} message={msg} />
               ))

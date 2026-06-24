@@ -4,6 +4,29 @@ import remarkGfm from 'remark-gfm';
 import { UmwariMessage as IUmwariMessage } from '../../types/umwari';
 import { UmwariDoctorCard } from './UmwariDoctorCard';
 
+// Shared utilities for parsing doctor recommendations from Umwari responses
+// Extracted here to avoid duplication with useUmwari.ts
+
+export const DOCTOR_RECOMMENDATION_RE = /\{"umwari_recommend":\s*(\{[^}]+\})\}/g;
+
+export function extractRecommendations(text: string): any[] {
+  const matches = text.match(DOCTOR_RECOMMENDATION_RE) ?? [];
+  return matches.map((m) => {
+    try {
+      const cleaned = m.replace(/[\n\r]/g, '');
+      const parsed = JSON.parse(cleaned);
+      return parsed.umwari_recommend;
+    } catch (e) {
+      console.error('Error parsing doctor recommendation block:', e);
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+export function cleanDoctorRecommendations(text: string): string {
+  return text.replace(DOCTOR_RECOMMENDATION_RE, '').trim();
+}
+
 interface UmwariMessageProps {
   message: IUmwariMessage;
 }
@@ -11,28 +34,8 @@ interface UmwariMessageProps {
 export const UmwariMessage: React.FC<UmwariMessageProps> = ({ message }) => {
   const isUmwari = message.role === 'umwari';
 
-  // Extract recommended doctors from JSON blocks inline safely
-  const extractRecommendations = (text: string) => {
-    const matches = text.match(/\{"umwari_recommend":\s*(\{[^}]+\})\}/g) ?? [];
-    return matches.map((m) => {
-      try {
-        const cleaned = m.replace(/[\n\r]/g, '');
-        const parsed = JSON.parse(cleaned);
-        return parsed.umwari_recommend;
-      } catch (e) {
-        console.error('Error parsing doctor recommendation block:', e);
-        return null;
-      }
-    }).filter(Boolean);
-  };
-
-  // Strip JSON blocks out of raw text to avoid rendering raw code blocks to the user
-  const cleanContent = (text: string) => {
-    return text.replace(/\{"umwari_recommend":\s*\{[^}]+\}\}/g, '').trim();
-  };
-
   const recommendations = isUmwari ? extractRecommendations(message.content) : [];
-  const cleanedText = isUmwari ? cleanContent(message.content) : message.content;
+  const cleanedText = isUmwari ? cleanDoctorRecommendations(message.content) : message.content;
 
   // Format timestamp safely
   const formattedTime = new Date(message.timestamp).toLocaleTimeString([], {
@@ -72,9 +75,9 @@ export const UmwariMessage: React.FC<UmwariMessageProps> = ({ message }) => {
             <UmwariDoctorCard
               key={`${rec.providerId}-${idx}`}
               providerId={rec.providerId}
-              name={rec.name || 'Clinical Specialist'}
-              specialization={rec.specialization || 'Gynecology & reproductive support'}
-              clinic={rec.clinic || 'Kigali Health Center'}
+              name={rec.name}
+              specialization={rec.specialization}
+              clinic={rec.clinic}
               reason={rec.reason}
               urgency={rec.urgency || 'routine'}
             />

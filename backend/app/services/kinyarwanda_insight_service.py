@@ -173,9 +173,16 @@ class KinyarwandaInsightService:
             # Extract wellness data from cycle logs (mood, sleep, stress, exercise, energy)
             wellness_patterns = self._analyze_wellness_data(cycle_logs)
             
-            # Fetch available health providers for recommendations
+            # Fetch available health providers for recommendations (eagerly load user relationship)
             from app.models import HealthProvider
-            available_providers = HealthProvider.query.filter_by(is_verified=True).limit(5).all()
+            from sqlalchemy.orm import joinedload
+            available_providers = (
+                HealthProvider.query
+                .options(joinedload(HealthProvider.user))
+                .filter_by(is_verified=True)
+                .limit(5)
+                .all()
+            )
             
             return {
                 'success': True,
@@ -320,7 +327,7 @@ class KinyarwandaInsightService:
                 'symptom_patterns': symptom_analysis,
                 'health_insights': health_insights,
                 'outliers_detected': sum(1 for c in filtered_cycle_data if c.get('is_outlier', False)),
-                'regularity_score': CyclePredictionEngine.compute_regularity_index(cycle_lengths) if len(cycle_lengths) >= 2 else None
+                'regularity_score': CyclePredictionEngine.compute_regularity_index(cycle_lengths).get('score') if len(cycle_lengths) >= 2 else None
             }
             
         except Exception as e:
@@ -373,10 +380,14 @@ class KinyarwandaInsightService:
                 cycle_summary += f"Cycles are gradually shortening (rate: {trend.get('rate', 0):.1f} days per cycle). "
             
             # Add regularity information
-            regularity = cycle_analysis.get('regularity_score', {})
-            if regularity and isinstance(regularity, dict):
-                variability_type = regularity.get('variability', 'unknown')
-                cycle_summary += f"Regularity: {variability_type.replace('_', ' ')}. "
+            reg_score_val = cycle_analysis.get('regularity_score')
+            if reg_score_val is not None:
+                if reg_score_val >= 80:
+                    cycle_summary += f"Regularity score: {reg_score_val}/100 (very regular). "
+                elif reg_score_val >= 60:
+                    cycle_summary += f"Regularity score: {reg_score_val}/100 (moderately regular). "
+                else:
+                    cycle_summary += f"Regularity score: {reg_score_val}/100 (may have variability). "
             
             # Add ML pattern insights
             ml_patterns = cycle_analysis.get('ml_patterns', {})

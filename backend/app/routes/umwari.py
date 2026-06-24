@@ -179,7 +179,8 @@ def umwari_insights():
 
     Request body (optional):
     {
-        "language": "kinyarwanda" | "english" (default: user's current or english)
+        "language": "kinyarwanda" | "english" (default: user's current or english),
+        "target_user_id": <int> (optional — for parent requesting insights about a child)
     }
 
     Response:
@@ -208,13 +209,30 @@ def umwari_insights():
         if language not in ('kinyarwanda', 'english'):
             language = 'english'
 
+        # Support parent requesting insights about a child
+        target_user_id = body.get('target_user_id')
+        if target_user_id:
+            # Verify parent-child relationship
+            from app.models import ParentChild, Adolescent, Parent
+            parent = Parent.query.filter_by(user_id=current_user_id).first()
+            if not parent:
+                return jsonify({'error': 'Only parents can request insights for another user'}), 403
+            child_relation = ParentChild.query.filter_by(
+                parent_id=parent.id, adolescent_id=target_user_id
+            ).first()
+            if not child_relation:
+                return jsonify({'error': 'No parent-child relationship found'}), 403
+            insight_user_id = int(target_user_id)
+        else:
+            insight_user_id = int(current_user_id)
+
         service = KinyarwandaInsightService()
         if not service.google_api_key:
             return jsonify({
                 'error': 'Gemini API key not configured on the server. Set GEMINI_API_KEY in backend/.env.'
             }), 500
 
-        result = service.generate_insight(int(current_user_id), language)
+        result = service.generate_insight(insight_user_id, language)
 
         if not result.get('success'):
             return jsonify({
@@ -228,7 +246,7 @@ def umwari_insights():
             'generated_at': result['data'].get('generated_at', ''),
             'language': language,
             'target_user': {
-                'id': user.id,
+                'id': insight_user_id,
                 'name': user.name,
                 'user_type': user.user_type,
             }

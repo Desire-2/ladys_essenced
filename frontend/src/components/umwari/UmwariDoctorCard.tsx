@@ -1,27 +1,37 @@
 import React, { useState } from 'react';
 import { Stethoscope, Calendar, Clock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { useUmwariContext } from '../../hooks/useUmwariContext';
 import { createAppointment, getApiErrorMessage } from '../../lib/appointmentsApi';
 import toast from 'react-hot-toast';
 
 interface DoctorRecommendationProps {
   providerId: number;
-  name: string;
-  specialization: string;
-  clinic: string;
-  reason: string;
+  name?: string;
+  specialization?: string;
+  clinic?: string;
+  reason?: string;
   urgency: 'routine' | 'soon' | 'urgent';
 }
 
 export const UmwariDoctorCard: React.FC<DoctorRecommendationProps> = ({
   providerId,
-  name,
-  specialization,
-  clinic,
+  name: propName,
+  specialization: propSpecialization,
+  clinic: propClinic,
   reason,
   urgency,
 }) => {
   const { user } = useAuthStore();
+  const { data: healthContext } = useUmwariContext();
+
+  // Look up provider details from the health context if not provided directly
+  // (Gemini only sends providerId, reason, urgency — name/specialization/clinic are looked up)
+  const providerFromContext = healthContext?.availableProviders?.find(p => p.id === providerId);
+  
+  const name = propName || providerFromContext?.name || 'Clinical Specialist';
+  const specialization = propSpecialization || providerFromContext?.specialization || 'Gynecology & Reproductive Health';
+  const clinic = propClinic || providerFromContext?.clinic || 'Community Health Center';
   const [bookingDate, setBookingDate] = useState('');
   const [bookingTime, setBookingTime] = useState('09:00');
   const [isBooking, setIsBooking] = useState(false);

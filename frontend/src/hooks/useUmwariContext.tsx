@@ -6,6 +6,7 @@ import { flattenMealStats } from '../lib/mealLogsApi';
 import { fetchUpcomingAppointments } from '../lib/appointmentsApi';
 import { fetchHealthProviders, type HealthProviderSummary } from '../lib/healthProvidersApi';
 import { useAuthStore } from '../stores/authStore';
+import { useUmwariStore } from '../stores/umwariStore';
 import type { UmwariHealthContext } from '../types/umwari';
 
 // ──────────────────────────────────────────
@@ -71,7 +72,9 @@ export function UmwariContextProvider({ children }: { children: React.ReactNode 
         api.get('/meal-logs'),
         fetchUpcomingAppointments(),
         fetchHealthProviders(),
-        api.post('/umwari/insights', { language: 'english' }),
+        api.post('/umwari/insights', {
+          language: useUmwariStore.getState().language === 'rw' ? 'kinyarwanda' : 'english',
+        }),
       ]);
 
       // Extract results safely
@@ -154,6 +157,7 @@ export function UmwariContextProvider({ children }: { children: React.ReactNode 
       const healthInsightsCount = anom?.anomalies?.length ?? undefined;
 
       // Extract pre-generated AI health insights (may be cached on backend)
+      const insightsLang = useUmwariStore.getState().language === 'rw' ? 'kinyarwanda' : 'english';
       const aiInsights: UmwariHealthContext['aiInsights'] =
         insightsRes.status === 'fulfilled' &&
         insightsRes.value.data?.success &&
@@ -164,7 +168,7 @@ export function UmwariContextProvider({ children }: { children: React.ReactNode 
                 ? insightsRes.value.data.insights.icyo_wakora
                 : [],
               ihumure: insightsRes.value.data.insights.ihumure || '',
-              language: insightsRes.value.data.language || 'english',
+              language: insightsRes.value.data.language || insightsLang,
               generated_at: insightsRes.value.data.generated_at || '',
             }
           : undefined;

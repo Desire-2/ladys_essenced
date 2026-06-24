@@ -56,9 +56,14 @@ export const UmwariFullPage: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [store.messages, store.isStreaming]);
 
-  // Special proactive system trigger if conversation has clean sheet
+  // Proactive welcome greeting — only once per session (reset when chat is cleared)
+  const greetingSentRef = useRef(false);
   useEffect(() => {
-    if (store.isConfigured && store.messages.length === 0 && !contextLoading && healthContext) {
+    if (store.messages.length === 0) {
+      greetingSentRef.current = false; // Reset when chat is cleared
+    }
+    if (store.isConfigured && store.messages.length === 0 && !contextLoading && healthContext && !greetingSentRef.current) {
+      greetingSentRef.current = true;
       sendMessage('__GREETING__');
     }
   }, [store.isConfigured, store.messages.length, contextLoading, healthContext, sendMessage]);

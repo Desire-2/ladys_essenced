@@ -7,20 +7,39 @@ import { useUmwariContext } from './useUmwariContext';
 import type { UmwariMessage } from '../types/umwari';
 import { nanoid } from 'nanoid';
 
+// Cache the last system prompt + context fingerprint so we don't re-send it on every message
+let _lastSystemPrompt = '';
+let _lastContextFingerprint = '';
+
+function _fingerprint(healthContext: any): string {
+  if (!healthContext) return '';
+  const cycle = healthContext.cycleSummary;
+  return [
+    healthContext.user?.firstName || '',
+    cycle?.totalLogs ?? 0,
+    cycle?.lastPeriodStart || '',
+    cycle?.nextPredictedPeriod || '',
+    cycle?.regularityStatus || '',
+    healthContext.mealSummary?.logsThisWeek ?? 0,
+    healthContext.appointmentSummary?.upcoming?.length ?? 0,
+  ].join('|');
+}
+
 export function useUmwari() {
-  const store = useUmwariStore();
+  const {
+    apiKey,
+    language,
+    addMessage,
+    updateLastMessage,
+    setStreaming,
+  } = useUmwariStore();
   const { data: healthContext, refetch: refetchContext } = useUmwariContext();
 
   const sendMessage = useCallback(async (userText: string) => {
     // Refresh context on message send to ensure up-to-date data
-    // Await the refetch so we always use the freshest data
     const freshContext = await refetchContext();
 
-    // Create a normalized health context from fresh data (fall back to closure, then generic).
-    // IMPORTANT: If the fresh fetch succeeds as a whole object but the profile sub-call failed,
-    // freshContext.user.firstName will be 'Friend' (fallback in UmwariContextProvider). In that
-    // case we MUST prefer healthContext's name (which we know is correct because the greeting
-    // useEffect only fires when healthContext is truthy).
+    // Create a normalized health context from fresh data
     const baseContext = freshContext || healthContext;
     const resolvedContext = baseContext
       ? {
@@ -34,6 +53,16 @@ export function useUmwari() {
         }
       : { user: { firstName: 'Friend', userType: 'adolescent' } };
 
+    // Only rebuild the system prompt if the health context has changed
+    const fp = _fingerprint(resolvedContext);
+    let systemPrompt: string;
+    if (fp !== _lastContextFingerprint || !_lastSystemPrompt) {
+      systemPrompt = buildSystemPrompt(resolvedContext, language);
+      _lastSystemPrompt = systemPrompt;
+      _lastContextFingerprint = fp;
+    } else {
+      systemPrompt = _lastSystemPrompt;
+    }
     // If it's a real user message (not the behind-the-scenes greeting trigger), add it
     let userMsg: UmwariMessage | null = null;
     if (userText !== '__GREETING__') {
@@ -43,10 +72,10 @@ export function useUmwari() {
         content: userText,
         timestamp: new Date().toISOString(),
       };
-      store.addMessage(userMsg);
+      addMessage(userMsg);
     }
 
-    store.setStreaming(true);
+    setStreaming(true);
 
     // Add empty placeholder Umwari message that we will stream text into
     const umwariMsg: UmwariMessage = {
@@ -55,32 +84,34 @@ export function useUmwari() {
       content: '',
       timestamp: new Date().toISOString(),
     };
-    store.addMessage(umwariMsg);
+    addMessage(umwariMsg);
 
     try {
-      const systemPrompt = buildSystemPrompt(resolvedContext, store.language);
-
-      // Build safe conversation history for Gemini chat thread
-      // Exclude the currently created empty model response and the current user message (will be sent in chat history)
-      const history = store.messages
+      // Build safe conversation history — exclude the current placeholder response
+      const currentMessages = useUmwariStore.getState().messages;
+      const history = currentMessages
         .filter((m) => m.id !== umwariMsg.id && (userMsg ? m.id !== userMsg.id : m.content !== '__GREETING__'))
-        .filter((m) => m.content.trim().length > 0)
+        .filter((m) => m.content.trim().length > 0 && m.content !== '__GREETING__')
         .map((m) => ({
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.content.trim() }],
         }));
 
-      // Special handling for GREETING prompt — inject user's name and time-of-day so Gemini can use them
+      // For greeting — inject user's name and time-of-day so Gemini can use them
       const promptToSend = userText === '__GREETING__'
         ? `Hello! It is currently ${getTimeOfDay()} where I am. Please greet me warmly using my name and the appropriate time of day. My name is ${resolvedContext.user.firstName}. Begin our session with your structured, warm greeting tailored to my data.`
         : userText;
 
-      const contents = [
-        { role: 'user', parts: [{ text: systemPrompt }] },
-        { role: 'model', parts: [{ text: 'Mwaramutse! Ndi Umwari, inshuti yawe yizewe ku bujyanama bw\'ubuzima. Mbafashe iki uyu munsi? Hello! I am Umwari, your trusted health companion. How can I help you today?' }] },
-        ...history,
-        { role: 'user', parts: [{ text: promptToSend }] }
-      ];
+      // Only include the system prompt on the first message of a session
+      // For subsequent messages, the model already has the context
+      const contents = history.length === 0
+        ? [
+            { role: 'user', parts: [{ text: `[System Context]\n${systemPrompt}\n\n---\n\n${promptToSend}` }] },
+          ]
+        : [
+            ...history,
+            { role: 'user', parts: [{ text: promptToSend }] },
+          ];
 
       const token = useAuthStore.getState().accessToken;
 
@@ -93,8 +124,7 @@ export function useUmwari() {
         body: JSON.stringify({
           parts: contents,
           modelName: 'gemini-2.5-flash',
-          // Fallback only when backend/.env has no GEMINI_API_KEY
-          apiKey: store.apiKey?.trim() || undefined,
+          apiKey: apiKey?.trim() || undefined,
           config: {}
         })
       });
@@ -118,7 +148,7 @@ export function useUmwari() {
             throw new Error(errMatch?.[1]?.trim() || 'Gemini request failed');
           }
           
-          store.updateLastMessage(chunkText);
+          updateLastMessage(chunkText);
         }
       }
 
@@ -132,42 +162,22 @@ export function useUmwari() {
         msg.includes('apikey') ||
         msg.includes('quota exceeded');
       
-      let errorMsg = store.language === 'rw'
+      let errorMsg = language === 'rw'
         ? 'Mumbabarire, hari ikibazo cyakarere kibaye muri sisitemu. Nyamuneka mugerageze mukanya.'
         : 'Something went wrong while connecting with Gemini. Please try again in a moment.';
 
       if (isConfigErr) {
-        errorMsg = store.language === 'rw'
+        errorMsg = language === 'rw'
           ? 'Mumbabarire cyane, serivisi ya AI ya Umwari ntabwo irasozwa gusanwa cyangwa gushyirwaho neza. Nyamuneka reba niba urufunguzo rwa Gemini API key ruri muri Settings > Secrets.'
           : 'I sincerely apologize, but the Umwari AI services are not fully configured yet on the backend server. Please verify the Gemini API key inside Settings > Secrets.';
       }
 
-      store.updateLastMessage(errorMsg);
+      updateLastMessage(errorMsg);
     } finally {
-      store.setStreaming(false);
+      setStreaming(false);
     }
-  }, [store, store.apiKey, healthContext, refetchContext]);
+  }, [healthContext, refetchContext, language, apiKey, addMessage, updateLastMessage, setStreaming]);
 
-  // Safely parse doctor recommendations JSON anywhere inside the generated response
-  const extractDoctorRecommendations = useCallback((content: string) => {
-    const matches = content.match(/\{"umwari_recommend":\s*(\{[^}]+\})\}/g) ?? [];
-    return matches.map((m) => {
-      try {
-        const cleanedMatch = m.replace(/[\n\r]/g, '');
-        const parsed = JSON.parse(cleanedMatch);
-        return parsed.umwari_recommend;
-      } catch (e) {
-        console.error('Error parsing doctor recommendation block:', e);
-        return null;
-      }
-    }).filter(Boolean);
-  }, []);
-
-  // Strips off recommendations JSON to keep text bubble clean and professional
-  const cleanContent = useCallback((content: string) => {
-    return content.replace(/\{"umwari_recommend":\s*\{[^}]+\}\}/g, '').trim();
-  }, []);
-
-  return { sendMessage, extractDoctorRecommendations, cleanContent };
+  return { sendMessage };
 }
 
