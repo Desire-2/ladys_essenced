@@ -1,24 +1,66 @@
-import React from 'react';
-import { Lock, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Lock, AlertTriangle, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { fetchPhaseInsights } from '@/lib/cycleLogsApi';
 import type { ChildProfile } from '@/types/parent';
 import { getAccessState, getChildColor, childAgeFromDob, daysUntil } from '@/lib/parentUtils';
-import { formatDateTime } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
 import { ChildHealthBadge } from './ChildHealthBadge';
 import { PrivacyStatusBadge } from './PrivacyStatusBadge';
+
+const PHASE_DOT: Record<string, string> = {
+  menstrual: 'bg-terracotta',
+  follicular: 'bg-sage',
+  ovulation: 'bg-mauve',
+  luteal: 'bg-zinc-400',
+};
+
+const PHASE_LABELS: Record<string, string> = {
+  menstrual: 'Menstruation',
+  follicular: 'Follicular',
+  ovulation: 'Ovulation',
+  luteal: 'Luteal',
+};
 
 interface FamilyChildCardProps {
   child: ChildProfile;
   onView: (adolescentId: number) => void;
+  /** Optional pre-fetched current phase to avoid duplicate API calls */
+  currentPhase?: string | null;
 }
 
-export function FamilyChildCard({ child, onView }: FamilyChildCardProps) {
+export function FamilyChildCard({ child, onView, currentPhase: propPhase }: FamilyChildCardProps) {
   const color = getChildColor(child.adolescent_id);
   const access = getAccessState(child);
   const age = childAgeFromDob(child.date_of_birth);
   const nextAppt = child.upcoming_appointments[0];
   const days = daysUntil(child.next_period_predicted);
+
+  // Current phase indicator — use prop if provided, otherwise fetch inline
+  const [localPhase, setLocalPhase] = useState<string | null>(null);
+  const [phaseLoading, setPhaseLoading] = useState(false);
+
+  useEffect(() => {
+    if (propPhase !== undefined) {
+      setLocalPhase(propPhase);
+      return;
+    }
+    if (access !== 'privacy_locked' && child.access_granted) {
+      setPhaseLoading(true);
+      fetchPhaseInsights(undefined, child.adolescent_id)
+        .then((res) => setLocalPhase(res.current_phase || null))
+        .catch(() => {
+          // Silently fail — phase indicator is decorative
+        })
+        .finally(() => setPhaseLoading(false));
+    }
+  }, [child.adolescent_id, child.access_granted, access, propPhase]);
+
+  const currentPhase = propPhase !== undefined ? propPhase : localPhase;
+
+  const phaseDot = currentPhase ? PHASE_DOT[currentPhase] : null;
+  const phaseLabel = currentPhase ? PHASE_LABELS[currentPhase] || currentPhase : null;
 
   return (
     <Card className="family-child-card min-w-[280px] max-w-sm flex-shrink-0 p-5">
@@ -33,11 +75,22 @@ export function FamilyChildCard({ child, onView }: FamilyChildCardProps) {
         >
           {child.name.charAt(0).toUpperCase()}
         </div>
-        {child.unread_notifications > 0 && (
-          <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-terracotta text-cream text-xs font-bold flex items-center justify-center">
-            {child.unread_notifications}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {/* Phase indicator dot + label */}
+          {phaseLoading ? (
+            <Loader2 className="w-3 h-3 text-muted animate-spin" />
+          ) : phaseDot && phaseLabel ? (
+            <span className="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-cream border border-border">
+              <span className={cn('w-1.5 h-1.5 rounded-full', phaseDot)} />
+              {phaseLabel}
+            </span>
+          ) : null}
+          {child.unread_notifications > 0 && (
+            <span className="min-w-[22px] h-[22px] px-1.5 rounded-full bg-terracotta text-cream text-xs font-bold flex items-center justify-center">
+              {child.unread_notifications}
+            </span>
+          )}
+        </div>
       </div>
 
       <h3 className="font-heading text-lg font-bold text-ink mt-3">{child.name}</h3>

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { formatDate } from '@/lib/utils';
+import { ParentCyclePhaseInsights } from '@/components/features/ParentCyclePhaseInsights';
 import type { CycleLogFormData } from '@/lib/cycleLogsApi';
 import type { CycleLogWellness } from '@/components/features/WellnessTrends';
 
@@ -80,6 +81,11 @@ export function ChildCyclePage({ adolescentId, onNavigate }: ChildCyclePageProps
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-heading font-bold">{name}&apos;s cycle &amp; health</h2>
         <Button onClick={() => setLogOpen(true)}>+ Log new period</Button>
+      </div>
+
+      {/* ── Cycle Phase Insights ── */}
+      <div className="p-5 border border-border rounded-xl bg-surface">
+        <ParentCyclePhaseInsights adolescentId={adolescentId} childName={name} />
       </div>
 
       {/* ── Wellness Trends Widget ── */}

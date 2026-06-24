@@ -80,6 +80,7 @@ import { NutritionDonut } from './components/features/NutritionDonut';
 import { AppointmentCard } from './components/features/AppointmentCard';
 import { InsightCard } from './components/features/InsightCard';
 import { WellnessTrends } from './components/features/WellnessTrends';
+import { CyclePhaseInsights } from './components/features/CyclePhaseInsights';
 
 // Forms
 import { CycleLogForm } from './components/forms/CycleLogForm';
@@ -909,6 +910,11 @@ export default function App() {
               logs={cycleLogsList}
               isLoading={dashboardLoading}
             />
+          </Card>
+
+          {/* Cycle Phase Insights */}
+          <Card className="p-6 bg-white">
+            <CyclePhaseInsights hasCycleTracking={hasCycleTracking} />
           </Card>
 
           {/* AI insights and clinic appointment widgets */}

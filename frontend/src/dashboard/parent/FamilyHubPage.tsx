@@ -6,6 +6,7 @@ import { FamilyChildCard } from '@/components/parent/FamilyChildCard';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FamilyPhaseOverview } from '@/components/features/FamilyPhaseOverview';
 import { formatDateTime } from '@/lib/utils';
 
 interface FamilyHubPageProps {
@@ -125,6 +126,14 @@ export function FamilyHubPage({ onNavigate }: FamilyHubPageProps) {
           />
         )}
       </div>
+
+      {/* Family Phase Overview — compact snapshot of each child's current phase */}
+      {data?.children && data.children.length > 0 && (
+        <FamilyPhaseOverview
+          children={data.children}
+          onViewChild={(id) => onNavigate(`/dashboard/parent/children/${id}/cycle`)}
+        />
+      )}
 
       {timeline.length > 0 && (
         <div>

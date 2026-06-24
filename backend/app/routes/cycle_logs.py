@@ -322,6 +322,7 @@ class CyclePredictionEngine:
             'shortest_cycle': min(lengths),
             'longest_cycle': max(lengths),
             'cycles_analyzed': len(lengths),
+            'cycle_type': 'short' if mean < 26 else 'long' if mean > 32 else 'normal',
         }
 
     @staticmethod
@@ -1761,8 +1762,24 @@ class CyclePredictionEngine:
 
             next_next_start = next_start + timedelta(days=round(this_cycle_length))
             ovulation_date = next_next_start - timedelta(days=14)
-            fertile_start = ovulation_date - timedelta(days=5)
-            fertile_end = ovulation_date + timedelta(days=1)
+            
+            # Adaptive fertile window based on regularity
+            # Regular cycles (CV < 15%): standard 5 days before, 1 day after ovulation
+            # Somewhat irregular (CV 15-25%): 6 days before, 2 days after
+            # Very irregular (CV > 25%): 7 days before, 2 days after
+            conf_level = confidence
+            if conf_level in ['very_low', 'low'] or (isinstance(baseline, dict) and baseline.get('std_dev', 0) > 5):
+                fert_window_before = 7
+                fert_window_after = 2
+            elif conf_level in ['medium'] or (isinstance(baseline, dict) and baseline.get('std_dev', 0) > 3):
+                fert_window_before = 6
+                fert_window_after = 2
+            else:
+                fert_window_before = 5
+                fert_window_after = 1
+            
+            fertile_start = ovulation_date - timedelta(days=fert_window_before)
+            fertile_end = ovulation_date + timedelta(days=fert_window_after)
 
             std = baseline.get('std_dev', 3) if not baseline.get('error') else 5
             earliest_start = next_start - timedelta(days=round(std))
@@ -3052,6 +3069,7 @@ def get_cycle_stats():
             for i, e in enumerate(cycle_data.get('all_entries', []))
         ],
         'latest_period_start': stats['basic_stats'].get('latest_period_start'),
+            'cycle_type': stats['basic_stats'].get('cycle_type'),
         'days_since_period': stats['basic_stats'].get('days_since_period'),
         'current_cycle_phase': stats['basic_stats'].get('current_cycle_phase'),
         'total_logs': stats['basic_stats'].get('total_logs'),
@@ -3198,6 +3216,11 @@ def get_calendar_data():
             'flow_intensity': None,
             'symptoms': [],
             'notes': None,
+            'mood': None,
+            'energy_level': None,
+            'sleep_quality': None,
+            'stress_level': None,
+            'exercise_activities': None,
             'cycle_day': None,
             'phase': None,
             'confidence': None
@@ -3242,6 +3265,18 @@ def get_calendar_data():
                 if log.notes:
                     day_data['notes'] = log.notes
                 
+                # Wellness data from cycle logs
+                if log.mood:
+                    day_data['mood'] = log.mood
+                if log.energy_level:
+                    day_data['energy_level'] = log.energy_level
+                if log.sleep_quality:
+                    day_data['sleep_quality'] = log.sleep_quality
+                if log.stress_level:
+                    day_data['stress_level'] = log.stress_level
+                if log.exercise_activities:
+                    day_data['exercise_activities'] = log.exercise_activities
+                
                 day_data['phase'] = 'menstrual'
             
             # Calculate cycle day and phase
@@ -3252,26 +3287,57 @@ def get_calendar_data():
                 if cycle_day <= cycle_length:
                     day_data['cycle_day'] = cycle_day
                     
-                    # Determine phase if not period
-                    # Ovulation window spans 5 days (LH surge ±2 days around O-day = cycle day cycle_length-16 to cycle_length-11)
+                                        # Determine phase for EVERY day using reliable day ranges
+                    # Phase boundaries based on cycle_length:
+                    # - Menstrual: days 1 to period_end
+                    # - Follicular: from period end to ~5 days before ovulation
+                    # - Fertile window: 5 days before ovulation to 1 day after
+                    # - Luteal: from after fertile window to cycle end
                     if not day_data['is_period_day']:
-                        if cycle_day <= cycle_length - 16:
+                        # Calculate phase-specific days for this cycle
+                        # Ovulation day = cycle_length - 14 (standard estimate)
+                        ovulation_est = cycle_length - 14
+                        
+                        if cycle_day <= ovulation_est - 5:
                             day_data['phase'] = 'follicular'
-                        elif cycle_day <= cycle_length - 11:
-                            day_data['phase'] = 'ovulation'
+                        elif cycle_day <= ovulation_est + 1:
+                            # This is the fertile window around ovulation
+                            if cycle_day == ovulation_est:
+                                day_data['phase'] = 'ovulation'
+                            else:
+                                day_data['phase'] = 'follicular'
                         else:
                             day_data['phase'] = 'luteal'
                     
-                    # Calculate ovulation and fertile window
-                    ovulation_day_num = cycle_length - 14
+                    # Calculate ovulation and fertile windowCalculate ovulation and fertile window
+                    # Adaptive luteal phase: use 14 days as default, but allow ±2 for short/long cycles
+                    # Research shows luteal phase ranges 11-17 days, but we use 14 for standard prediction
+                    luteal_default = 14
+                    ovulation_day_num = cycle_length - luteal_default
                     
                     if cycle_day == ovulation_day_num and not day_data['is_period_day']:
                         day_data['is_ovulation_day'] = True
                         day_data['phase'] = 'ovulation'
                         print(f"🥚 Marked {current_date} as ovulation day (cycle day {cycle_day})")
                     
-                    # Fertile window: 5 days before ovulation to 1 day after
-                    fertile_start = ovulation_day_num - 5
+                    # Fertile window: adaptive width based on regularity
+                    # Regular cycles: 5 days before to 1 day after ovulation (standard)
+                    # Irregular cycles: wider window to account for prediction uncertainty
+                    # CV > 15% means somewhat irregular - widen by 1 day each side
+                    # CV > 25% means very irregular - widen by 2 days each side
+                    if hasattr(log, 'cycle_length') and log.cycle_length and isinstance(log.cycle_length, (int, float)):
+                        cv_raw = (baseline.get('std_dev', 3) / max(log.cycle_length, 1)) * 100 if baseline.get('std_dev') else 10
+                    else:
+                        cv_raw = (baseline.get('std_dev', 3) / max(avg_cycle_length, 1)) * 100 if baseline.get('std_dev') else 10
+                    
+                    if cv_raw > 25:
+                        fert_margin = 7  # Very irregular: 7 before, 2 after
+                    elif cv_raw > 15:
+                        fert_margin = 6  # Somewhat irregular: 6 before, 2 after
+                    else:
+                        fert_margin = 5  # Regular: standard 5 before, 1 after
+                    
+                    fertile_start = ovulation_day_num - fert_margin
                     fertile_end = ovulation_day_num + 1
                     
                     if fertile_start <= cycle_day <= fertile_end and not day_data['is_period_day'] and not day_data['is_ovulation_day']:
@@ -3349,6 +3415,7 @@ def get_calendar_data():
             'total_logs': len(logs),
             'data_points': len(cycle_lengths),
             'average_cycle_length': round(avg_cycle_length, 1) if avg_cycle_length else None,
+            'cycle_type': baseline.get('cycle_type', 'unknown') if isinstance(baseline, dict) else 'unknown',
             'variability': variability_info,
             'predictions': predictions[:3]  # Only include next 3 predictions in summary
         },
@@ -4669,3 +4736,314 @@ def get_wellness_monthly_stats():
 
     except Exception as e:
         return jsonify({'error': f'Failed to compute monthly wellness stats: {str(e)}'}), 500
+
+
+@cycle_logs_bp.route('/phase-insights', methods=['GET'])
+@jwt_required()
+def get_phase_insights():
+    """
+    Get personalized health tips for each menstrual cycle phase.
+    Analyzes wellness data (mood, energy, sleep, stress, exercise) from cycle logs
+    to generate phase-specific insights and recommendations.
+    
+    Query params:
+        phase (optional): 'menstrual', 'follicular', 'ovulation', 'luteal' — filters to one phase.
+        user_id (optional): For parent viewing child's data
+    """
+    current_user_id = int(get_jwt_identity())
+    requested_user_id = request.args.get('user_id', type=int)
+    target_user_id = current_user_id
+    filter_phase = request.args.get('phase')
+    
+    # Verify parent-child relationship if needed
+    if requested_user_id and requested_user_id != current_user_id:
+        from app.models import User, ParentChild, Parent, Adolescent
+        current_user = User.query.get(current_user_id)
+        if not current_user or current_user.user_type != 'parent':
+            return jsonify({'message': 'Only parents can view child data'}), 403
+        parent = Parent.query.filter_by(user_id=current_user_id).first()
+        adolescent = Adolescent.query.filter_by(user_id=requested_user_id).first()
+        if not parent or not adolescent:
+            return jsonify({'message': 'Parent or child record not found'}), 404
+        parent_child = ParentChild.query.filter_by(parent_id=parent.id, adolescent_id=adolescent.id).first()
+        if not parent_child:
+            return jsonify({'message': 'Access denied'}), 403
+        target_user_id = requested_user_id
+    
+    # Get cycle logs for analysis
+    logs = CycleLog.query.filter_by(user_id=target_user_id).order_by(CycleLog.start_date).all()
+    
+    # Extract wellness data from logs
+    wellness_per_log = []
+    for log in logs:
+        entry = {
+            'start_date': log.start_date.isoformat() if log.start_date else None,
+            'end_date': log.end_date.isoformat() if log.end_date else None,
+            'mood': log.mood,
+            'energy_level': log.energy_level,
+            'sleep_quality': log.sleep_quality,
+            'stress_level': log.stress_level,
+            'exercise_activities': log.exercise_activities,
+            'flow_intensity': log.flow_intensity,
+            'symptoms': log.symptoms,
+            'cycle_length': log.cycle_length,
+        }
+        wellness_per_log.append(entry)
+    
+    # Aggregate wellness data across all logs
+    moods = [w['mood'] for w in wellness_per_log if w['mood']]
+    energies = [w['energy_level'] for w in wellness_per_log if w['energy_level']]
+    sleeps = [w['sleep_quality'] for w in wellness_per_log if w['sleep_quality']]
+    stresses = [w['stress_level'] for w in wellness_per_log if w['stress_level']]
+    exercises = [w['exercise_activities'] for w in wellness_per_log if w['exercise_activities']]
+    
+    # Compute wellness aggregates
+    def most_common(lst):
+        if not lst:
+            return None
+        from collections import Counter
+        return Counter(lst).most_common(1)[0][0]
+    
+    def percentage(lst, value):
+        if not lst:
+            return 0
+        return round(lst.count(value) / len(lst) * 100)
+    
+    # Helper: generate phase-specific personalized tips
+    def build_tip(category, tip_text, priority='info', phase_key=None):
+        return {
+            'category': category,
+            'tip': tip_text,
+            'priority': priority,
+            'phase': phase_key,
+        }
+    
+    # Phase-specific insight builders
+    phase_insights = {}
+    
+    # --- MENSTRUAL PHASE ---
+    menstrual_tips = []
+    if moods:
+        if percentage(moods, 'low') + percentage(moods, 'very_low') > 50:
+            menstrual_tips.append(build_tip(
+                'mood', 'Your mood tends to be lower during your period. Gentle activities and rest can help. Try light stretching and warm compresses.',
+                'warning', 'menstrual'
+            ))
+        else:
+            menstrual_tips.append(build_tip(
+                'mood', 'You generally maintain positive mood during your period — great emotional resilience! Keep up whatever self-care you are practicing.',
+                'positive', 'menstrual'
+            ))
+    else:
+        menstrual_tips.append(build_tip(
+            'mood', 'During menstruation, mood changes are common due to hormonal shifts. Track your mood to discover patterns.',
+            'info', 'menstrual'
+        ))
+    
+    if energies:
+        if percentage(energies, 'low') + percentage(energies, 'very_low') > 50:
+            menstrual_tips.append(build_tip(
+                'energy', 'Your energy is typically low during your period. Prioritise rest, stay hydrated, and consider gentle walks to maintain circulation.',
+                'warning', 'menstrual'
+            ))
+        else:
+            menstrual_tips.append(build_tip(
+                'energy', 'Your energy stays relatively stable during menstruation — listen to your body and dont overexert.',
+                'positive', 'menstrual'
+            ))
+    
+    if sleeps:
+        if percentage(sleeps, 'poor') > 30:
+            menstrual_tips.append(build_tip(
+                'sleep', 'Sleep quality often dips during your period. Try a warm bath before bed, reduce screen time, and keep your room cool.',
+                'warning', 'menstrual'
+            ))
+    
+    if stresses:
+        if percentage(stresses, 'high') + percentage(stresses, 'very_high') > 40:
+            menstrual_tips.append(build_tip(
+                'stress', 'Stress tends to be elevated during your period. Deep breathing, meditation, and gentle yoga can help manage symptoms.',
+                'warning', 'menstrual'
+            ))
+    
+    # Iron-rich foods recommendation
+    menstrual_tips.append(build_tip(
+        'nutrition', 'Include iron-rich foods (spinach, beans, lean red meat) and stay hydrated to support your body during menstruation.',
+        'info', 'menstrual'
+    ))
+    
+    phase_insights['menstrual'] = {
+        'label': 'Menstrual Phase',
+        'bilingual': 'Imihango',
+        'days_typical': '1–5',
+        'description': 'Uterine lining sheds — period bleeding occurs',
+        'wellness_summary': {
+            'most_common_mood': most_common(moods),
+            'most_common_energy': most_common(energies),
+            'most_common_sleep': most_common(sleeps),
+            'most_common_stress': most_common(stresses),
+            'total_logs_with_data': len([w for w in wellness_per_log if w['mood'] or w['energy_level']]),
+        },
+        'tips': menstrual_tips,
+    }
+    
+    # --- FOLLICULAR PHASE ---
+    follicular_tips = []
+    follicular_tips.append(build_tip(
+        'energy', 'The follicular phase is your energy peak! Estrogen rises, boosting mood and vitality. This is the best time for challenging workouts, projects, and social activities.',
+        'positive', 'follicular'
+    ))
+    follicular_tips.append(build_tip(
+        'nutrition', 'Your metabolism works efficiently now. Focus on complex carbs for sustained energy, and include fermented foods for gut health.',
+        'info', 'follicular'
+    ))
+    if stresses and percentage(stresses, 'high') + percentage(stresses, 'very_high') > 30:
+        follicular_tips.append(build_tip(
+            'stress', 'Even though energy is rising, your stress base is elevated. Use this phase natural momentum to build healthy coping routines.',
+            'info', 'follicular'
+        ))
+    
+    phase_insights['follicular'] = {
+        'label': 'Follicular Phase',
+        'bilingual': 'Ubuzima busanzwe',
+        'days_typical': '6–13',
+        'description': 'Egg follicles mature, estrogen rises — energy and mood improve',
+        'wellness_summary': {
+            'most_common_mood': most_common(moods),
+            'most_common_energy': most_common(energies),
+        },
+        'tips': follicular_tips,
+    }
+    
+    # --- OVULATION / FERTILE PHASE ---
+    ovulation_tips = []
+    ovulation_tips.append(build_tip(
+        'fertility', 'Ovulation is your most fertile day. If trying to conceive, this is the optimal time. If avoiding pregnancy, use protection as sperm can survive 5+ days.',
+        'info', 'ovulation'
+    ))
+    ovulation_tips.append(build_tip(
+        'energy', 'Ovulation brings a surge of energy, confidence, and libido. Your communication skills peak — great for important conversations and presentations.',
+        'positive', 'ovulation'
+    ))
+    ovulation_tips.append(build_tip(
+        'body', 'Some people feel mild cramping (mittelschmerz) or notice increased cervical mucus (egg-white consistency). This is normal.',
+        'info', 'ovulation'
+    ))
+    
+    # Fertile window tips based on cycle regularity
+    cycle_lengths = [cl for w in wellness_per_log if (cl := w.get('cycle_length'))]
+    if cycle_lengths:
+        avg_cl = sum(cycle_lengths) / len(cycle_lengths)
+        ovulation_tips.append(build_tip(
+            'timing', f'With your average cycle of {avg_cl:.0f} days, ovulation likely occurs around day {max(1, int(avg_cl - 14))}. The fertile window spans ~6 days centred on ovulation.',
+            'info', 'ovulation'
+        ))
+    
+    phase_insights['ovulation'] = {
+        'label': 'Ovulation & Fertile Window',
+        'bilingual': 'Uburumbuke',
+        'days_typical': '~14 (cycle_length − 14)',
+        'description': 'Egg released — 24-hour fertile window, sperm can survive 5+ days',
+        'wellness_summary': {
+            'cycle_lengths_count': len(cycle_lengths),
+        },
+        'tips': ovulation_tips,
+    }
+    
+    # --- LUTEAL PHASE ---
+    luteal_tips = []
+    if moods:
+        if percentage(moods, 'low') + percentage(moods, 'very_low') > 30:
+            luteal_tips.append(build_tip(
+                'mood', 'You frequently experience low mood during the luteal phase (PMS). Tracking symptoms can help you prepare. Magnesium, B6, and omega-3s may help.',
+                'warning', 'luteal'
+            ))
+        else:
+            luteal_tips.append(build_tip(
+                'mood', 'Your mood stays fairly balanced during the luteal phase. Continue your wellness routine to maintain this.',
+                'positive', 'luteal'
+            ))
+    
+    if energies:
+        if percentage(energies, 'low') + percentage(energies, 'very_low') > 40:
+            luteal_tips.append(build_tip(
+                'energy', 'Energy typically drops in the luteal phase. Reduce workout intensity, prioritise sleep, and avoid overcommitting.',
+                'warning', 'luteal'
+            ))
+    
+    if sleeps:
+        if percentage(sleeps, 'poor') + percentage(sleeps, 'fair') > 40:
+            luteal_tips.append(build_tip(
+                'sleep', 'Sleep quality often suffers before your period. Try magnesium glycinate, reduce caffeine after 2 PM, and keep a consistent bedtime.',
+                'warning', 'luteal'
+            ))
+    
+    if stresses:
+        if percentage(stresses, 'high') + percentage(stresses, 'very_high') > 40:
+            luteal_tips.append(build_tip(
+                'stress', 'Stress sensitivity increases in the luteal phase. Reduce demands where possible, practice self-compassion, and schedule lighter tasks.',
+                'warning', 'luteal'
+            ))
+    
+    luteal_tips.append(build_tip(
+        'nutrition', 'Cravings are common in this phase. Choose complex carbs, dark chocolate in moderation, and salty snacks. Magnesium-rich foods can reduce bloating and cramps.',
+        'info', 'luteal'
+    ))
+    luteal_tips.append(build_tip(
+        'exercise', 'Switch to lower-impact exercise: walking, swimming, yoga, or Pilates. Your body is better at fat-burning than high-intensity work now.',
+        'info', 'luteal'
+    ))
+    
+    phase_insights['luteal'] = {
+        'label': 'Luteal Phase',
+        'bilingual': 'Imbere y\'imihango',
+        'days_typical': '15–28',
+        'description': 'Progesterone rises, PMS symptoms may appear, body prepares for next cycle',
+        'wellness_summary': {
+            'most_common_mood': most_common(moods),
+            'most_common_energy': most_common(energies),
+            'most_common_sleep': most_common(sleeps),
+            'most_common_stress': most_common(stresses),
+        },
+        'tips': luteal_tips,
+    }
+    
+    # Determine current phase based on the most recent log
+    today = datetime.now().date()
+    current_phase = 'follicular'  # default
+    if logs:
+        sorted_logs = sorted(logs, key=lambda x: x.start_date, reverse=True)
+        latest = sorted_logs[0]
+        cycle_data = CyclePredictionEngine.extract_cycle_lengths_robust(logs)
+        lengths = cycle_data.get('lengths', [])
+        avg_cycle = statistics.mean(lengths) if lengths else 28
+        if latest.end_date and latest.start_date:
+            last_end = CyclePredictionEngine._to_date(latest.end_date)
+            days_since_end = (today - last_end).days
+            predicted_cycle = avg_cycle
+            ovulation_day = max(1, int(predicted_cycle - 14))
+            
+            # Simple phase estimation
+            if latest.start_date <= today <= (latest.end_date if latest.end_date else latest.start_date):
+                current_phase = 'menstrual'
+            elif days_since_end <= ovulation_day - 5:
+                current_phase = 'follicular'
+            elif days_since_end <= ovulation_day + 1:
+                current_phase = 'ovulation'
+            elif days_since_end <= predicted_cycle:
+                current_phase = 'luteal'
+    
+    result = {
+        'phases': phase_insights,
+        'current_phase': current_phase,
+        'total_cycles_analyzed': len(logs),
+        'wellness_data_available': len([w for w in wellness_per_log if any([w['mood'], w['energy_level'], w['sleep_quality'], w['stress_level'], w['exercise_activities']])]),
+        'has_sufficient_data': len(logs) >= 2,
+    }
+    
+    # If a specific phase was requested, return only that phase
+    if filter_phase and filter_phase in phase_insights:
+        result['phases'] = {filter_phase: phase_insights[filter_phase]}
+        result['requested_phase'] = filter_phase
+    
+    return jsonify(result), 200
