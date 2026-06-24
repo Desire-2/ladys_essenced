@@ -7,6 +7,11 @@ export interface CycleLogFormData {
   flow_level: 'light' | 'medium' | 'heavy';
   symptoms: string[];
   notes?: string;
+  mood?: string;
+  energy_level?: string;
+  sleep_quality?: string;
+  stress_level?: string;
+  exercise_activities?: string;
 }
 
 export interface CycleLogCreateResponse {
@@ -35,6 +40,11 @@ export function buildCycleLogPayload(data: CycleLogFormData, options?: { userId?
   };
   if (data.end_date) payload.end_date = data.end_date;
   if (data.notes) payload.notes = data.notes;
+  if (data.mood) payload.mood = data.mood;
+  if (data.energy_level) payload.energy_level = data.energy_level;
+  if (data.sleep_quality) payload.sleep_quality = data.sleep_quality;
+  if (data.stress_level) payload.stress_level = data.stress_level;
+  if (data.exercise_activities) payload.exercise_activities = data.exercise_activities;
   if (options?.userId) payload.user_id = options.userId;
   return payload;
 }

@@ -19,7 +19,27 @@ from app.services.notification_manager import notification_manager
 logger = logging.getLogger(__name__)
 
 
-def ussd_save_cycle_log(user, start_date_str, end_date_str=None, flow_intensity='medium'):
+def _parse_ussd_mood(val):
+    """Map USSD mood number to model value."""
+    mapping = {'1': 'very_low', '2': 'low', '3': 'neutral', '4': 'good', '5': 'very_good'}
+    return mapping.get(val)
+
+
+def _parse_ussd_sleep(val):
+    """Map USSD sleep quality number to model value."""
+    mapping = {'1': 'poor', '2': 'fair', '3': 'good', '4': 'excellent'}
+    return mapping.get(val)
+
+
+def _parse_ussd_stress(val):
+    """Map USSD stress level number to model value."""
+    mapping = {'1': 'low', '2': 'moderate', '3': 'high', '4': 'very_high'}
+    return mapping.get(val)
+
+
+def ussd_save_cycle_log(user, start_date_str, end_date_str=None, flow_intensity='medium',
+                         mood=None, energy_level=None, sleep_quality=None,
+                         stress_level=None, exercise_activities=None):
     """Save cycle log via the same validation path as POST /api/cycle-logs/."""
     try:
         start_date = datetime.strptime(start_date_str, '%d/%m/%Y').date()
@@ -59,6 +79,11 @@ def ussd_save_cycle_log(user, start_date_str, end_date_str=None, flow_intensity=
             cycle_length=cycle_length,
             period_length=period_length,
             flow_intensity=flow_intensity,
+            mood=mood,
+            energy_level=energy_level,
+            sleep_quality=sleep_quality,
+            stress_level=stress_level,
+            exercise_activities=exercise_activities,
         )
         db.session.add(new_log)
         db.session.flush()
@@ -108,6 +133,21 @@ def ussd_save_cycle_log(user, start_date_str, end_date_str=None, flow_intensity=
             end_text += f"\nEnd: {end_date.strftime('%d/%m/%Y')}"
         if prediction_msg:
             end_text += prediction_msg
+
+        # Add wellness summary if any tracked
+        wellness_bits = []
+        if mood:
+            mood_label = {'very_low': 'Very Low', 'low': 'Low', 'neutral': 'Neutral', 'good': 'Good', 'very_good': 'Very Good'}.get(mood, mood)
+            wellness_bits.append(f"Mood: {mood_label}")
+        if sleep_quality:
+            wellness_bits.append(f"Sleep: {sleep_quality.title()}")
+        if stress_level:
+            stress_label = {'low': 'Low', 'moderate': 'Moderate', 'high': 'High', 'very_high': 'Very High'}.get(stress_level, stress_level)
+            wellness_bits.append(f"Stress: {stress_label}")
+        if exercise_activities:
+            wellness_bits.append(f"Exercise: {exercise_activities[:30]}")
+        if wellness_bits:
+            end_text += "\n" + "\n".join(wellness_bits)
 
         return f"END {end_text}"
 

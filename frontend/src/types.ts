@@ -22,6 +22,11 @@ export interface CycleLog {
   symptoms: string[];
   notes?: string;
   confidence_score?: number;
+  mood?: string | null;
+  energy_level?: string | null;
+  sleep_quality?: string | null;
+  stress_level?: string | null;
+  exercise_activities?: string | null;
   created_at: string;
 }
 

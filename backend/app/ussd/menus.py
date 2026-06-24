@@ -115,17 +115,83 @@ def handle_cycle_menu(user, input_list):
 
 
 def _handle_cycle_log_flow(user, input_list):
-    back = _back_or_main(user, input_list, lambda u, il: handle_cycle_menu(u, ['1'] + il))
-    if back:
-        return back
+    step = len(input_list)
+
+    # Only apply back navigation for steps 0-1 (date inputs) where '0' means back
+    if step <= 1:
+        back = _back_or_main(user, input_list, lambda u, il: handle_cycle_menu(u, ['1'] + il))
+        if back:
+            return back
 
     if not input_list:
         return "CON Enter period start date (DD/MM/YYYY):"
-
-    if len(input_list) == 1:
+    if step == 1:
         return "CON Enter end date (DD/MM/YYYY)\nor type 'ongoing':"
 
-    return ussd_save_cycle_log(user, input_list[0], input_list[1])
+    # Step 2: Mood (0 = skip, not back)
+    if step == 2:
+        return (
+            "CON 🌤️ How was your mood?\n"
+            "1. Very Low 😢\n"
+            "2. Low 😟\n"
+            "3. Neutral 😐\n"
+            "4. Good 🙂\n"
+            "5. Very Good 😊\n"
+            "0. Skip"
+        )
+
+    # Step 3: Sleep quality (0 = skip)
+    if step == 3:
+        return (
+            "CON 🌙 How was your sleep?\n"
+            "1. Poor 😴\n"
+            "2. Fair 🛌\n"
+            "3. Good 🌟\n"
+            "4. Excellent ✨\n"
+            "0. Skip"
+        )
+
+    # Step 4: Stress level (0 = skip)
+    if step == 4:
+        return (
+            "CON 😰 Stress level?\n"
+            "1. Low 🧘\n"
+            "2. Moderate 😰\n"
+            "3. High 😤\n"
+            "4. Very High 😫\n"
+            "0. Skip"
+        )
+
+    # Step 5: Exercise activities
+    if step == 5:
+        return (
+            "CON 🏃‍♀️ Exercise activities?\n"
+            "Type activities (e.g. walking, yoga)\n"
+            "or type 'skip':"
+        )
+
+    # Step 6+: Save with all wellness data
+    mood_raw = input_list[2] if len(input_list) > 2 else '0'
+    sleep_raw = input_list[3] if len(input_list) > 3 else '0'
+    stress_raw = input_list[4] if len(input_list) > 4 else '0'
+    exercise_raw = input_list[5] if len(input_list) > 5 else 'skip'
+
+    from app.ussd.services import _parse_ussd_mood, _parse_ussd_sleep, _parse_ussd_stress
+
+    mood = _parse_ussd_mood(mood_raw) if mood_raw and mood_raw != '0' else None
+    sleep_q = _parse_ussd_sleep(sleep_raw) if sleep_raw and sleep_raw != '0' else None
+    stress = _parse_ussd_stress(stress_raw) if stress_raw and stress_raw != '0' else None
+    exercise = exercise_raw.strip() if exercise_raw and exercise_raw.lower() != 'skip' else None
+
+    return ussd_save_cycle_log(
+        user,
+        input_list[0],
+        input_list[1],
+        mood=mood,
+        sleep_quality=sleep_q,
+        stress_level=stress,
+        exercise_activities=exercise,
+    )
 
 
 def _handle_last_period(user):
@@ -138,10 +204,27 @@ def _handle_last_period(user):
         return "END No period logged yet."
 
     start = last_log.start_date.strftime('%d/%m/%Y')
+    lines = [f"📅 Last period:\nStart: {start}"]
     if last_log.end_date:
         end = last_log.end_date.strftime('%d/%m/%Y')
-        return f"END Last period:\nStart: {start}\nEnd: {end}"
-    return f"END Last period:\nStart: {start}\nStatus: Ongoing"
+        lines.append(f"End: {end}")
+    else:
+        lines.append(f"Status: Ongoing")
+
+    # Show wellness data if available
+    if last_log.mood:
+        mood_label = {'very_low': 'Very Low', 'low': 'Low', 'neutral': 'Neutral', 'good': 'Good', 'very_good': 'Very Good'}.get(last_log.mood, last_log.mood)
+        lines.append(f"😊 Mood: {mood_label}")
+    if last_log.sleep_quality:
+        lines.append(f"🌙 Sleep: {last_log.sleep_quality.title()}")
+    if last_log.stress_level:
+        stress_label = {'low': 'Low', 'moderate': 'Moderate', 'high': 'High', 'very_high': 'Very High'}.get(last_log.stress_level, last_log.stress_level)
+        lines.append(f"😰 Stress: {stress_label}")
+    if last_log.exercise_activities:
+        ex = last_log.exercise_activities[:30]
+        lines.append(f"🏃 Exercise: {ex}")
+
+    return "END " + "\n".join(lines)
 
 
 def handle_meal_menu(user, input_list):

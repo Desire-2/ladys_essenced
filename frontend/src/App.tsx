@@ -1885,6 +1885,11 @@ export default function App() {
                   flow_level: editingCycleLog.flow_level,
                   symptoms: editingCycleLog.symptoms,
                   notes: editingCycleLog.notes,
+                  mood: editingCycleLog.mood ?? undefined,
+                  energy_level: editingCycleLog.energy_level ?? undefined,
+                  sleep_quality: editingCycleLog.sleep_quality ?? undefined,
+                  stress_level: editingCycleLog.stress_level ?? undefined,
+                  exercise_activities: editingCycleLog.exercise_activities ?? undefined,
                 }
               : undefined
           }

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Calendar, AlertCircle } from 'lucide-react';
+import { Calendar, AlertCircle, Heart, Moon, Zap, Activity, Dumbbell } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import type { CycleLogFormData } from '../../lib/cycleLogsApi';
@@ -12,6 +12,40 @@ interface CycleLogFormProps {
 }
 
 const todayIso = () => new Date().toISOString().split('T')[0];
+
+/* ── Wellness field options ── */
+const MOOD_OPTIONS = [
+  { value: '', label: 'Not tracked', emoji: '—' },
+  { value: 'very_low', label: 'Very Low', emoji: '😢' },
+  { value: 'low', label: 'Low', emoji: '😟' },
+  { value: 'neutral', label: 'Neutral', emoji: '😐' },
+  { value: 'good', label: 'Good', emoji: '🙂' },
+  { value: 'very_good', label: 'Very Good', emoji: '😊' },
+];
+
+const ENERGY_OPTIONS = [
+  { value: '', label: 'Not tracked', icon: '—' },
+  { value: 'very_low', label: 'Very Low', icon: '⬇' },
+  { value: 'low', label: 'Low', icon: '↓' },
+  { value: 'moderate', label: 'Moderate', icon: '→' },
+  { value: 'high', label: 'High', icon: '↑' },
+];
+
+const SLEEP_OPTIONS = [
+  { value: '', label: 'Not tracked', icon: '—' },
+  { value: 'poor', label: 'Poor', icon: '😴' },
+  { value: 'fair', label: 'Fair', icon: '🛌' },
+  { value: 'good', label: 'Good', icon: '🌟' },
+  { value: 'excellent', label: 'Excellent', icon: '✨' },
+];
+
+const STRESS_OPTIONS = [
+  { value: '', label: 'Not tracked', icon: '—' },
+  { value: 'low', label: 'Low', icon: '🧘' },
+  { value: 'moderate', label: 'Moderate', icon: '😰' },
+  { value: 'high', label: 'High', icon: '😤' },
+  { value: 'very_high', label: 'Very High', icon: '😫' },
+];
 
 export const CycleLogForm: React.FC<CycleLogFormProps> = ({
   onSubmit,
@@ -31,6 +65,13 @@ export const CycleLogForm: React.FC<CycleLogFormProps> = ({
   );
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [errorMsg, setErrorMsg] = useState('');
+
+  /* ── Wellness state ── */
+  const [mood, setMood] = useState(initialData?.mood ?? '');
+  const [energyLevel, setEnergyLevel] = useState(initialData?.energy_level ?? '');
+  const [sleepQuality, setSleepQuality] = useState(initialData?.sleep_quality ?? '');
+  const [stressLevel, setStressLevel] = useState(initialData?.stress_level ?? '');
+  const [exerciseActivities, setExerciseActivities] = useState(initialData?.exercise_activities ?? '');
 
   const maxDate = todayIso();
 
@@ -90,6 +131,11 @@ export const CycleLogForm: React.FC<CycleLogFormProps> = ({
       flow_level: flowLevel,
       symptoms: selectedSymptoms,
       notes: notes.trim() || undefined,
+      mood: mood || undefined,
+      energy_level: energyLevel || undefined,
+      sleep_quality: sleepQuality || undefined,
+      stress_level: stressLevel || undefined,
+      exercise_activities: exerciseActivities.trim() || undefined,
     });
   };
 
@@ -185,6 +231,102 @@ export const CycleLogForm: React.FC<CycleLogFormProps> = ({
               </button>
             );
           })}
+        </div>
+      </div>
+
+      {/* ── Wellness Tracking Section ── */}
+      <div className="border-t border-border pt-4 mt-2">
+        <p className="text-xs font-black uppercase tracking-wider text-[#7A4F6D] mb-3 flex items-center gap-1.5">
+          <Heart className="w-3.5 h-3.5" /> Wellness Tracking (Optional)
+        </p>
+        <p className="text-[10px] text-muted/80 mb-4 -mt-2">Track mood, energy, sleep, and more to unlock personalized wellness trends.</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Mood */}
+          <div className="space-y-1.5">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
+              <Heart className="w-3 h-3 text-[#7A4F6D]" /> Mood
+            </label>
+            <select
+              value={mood}
+              onChange={(e) => setMood(e.target.value)}
+              className="block w-full h-10 rounded-lg border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-[#7A4F6D] focus:ring-1 focus:ring-[#7A4F6D]/30 focus:outline-none cursor-pointer"
+            >
+              {MOOD_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.emoji} {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Energy Level */}
+          <div className="space-y-1.5">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
+              <Zap className="w-3 h-3 text-[#C4785A]" /> Energy
+            </label>
+            <select
+              value={energyLevel}
+              onChange={(e) => setEnergyLevel(e.target.value)}
+              className="block w-full h-10 rounded-lg border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-[#C4785A] focus:ring-1 focus:ring-[#C4785A]/30 focus:outline-none cursor-pointer"
+            >
+              {ENERGY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.icon} {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sleep Quality */}
+          <div className="space-y-1.5">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
+              <Moon className="w-3 h-3 text-[#8FAF8A]" /> Sleep Quality
+            </label>
+            <select
+              value={sleepQuality}
+              onChange={(e) => setSleepQuality(e.target.value)}
+              className="block w-full h-10 rounded-lg border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-[#8FAF8A] focus:ring-1 focus:ring-[#8FAF8A]/30 focus:outline-none cursor-pointer"
+            >
+              {SLEEP_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.icon} {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Stress Level */}
+          <div className="space-y-1.5">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
+              <Activity className="w-3 h-3 text-[#A87C6A]" /> Stress Level
+            </label>
+            <select
+              value={stressLevel}
+              onChange={(e) => setStressLevel(e.target.value)}
+              className="block w-full h-10 rounded-lg border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-[#A87C6A] focus:ring-1 focus:ring-[#A87C6A]/30 focus:outline-none cursor-pointer"
+            >
+              {STRESS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.icon} {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Exercise activities */}
+        <div className="space-y-1.5 mt-4">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
+            <Dumbbell className="w-3 h-3 text-[#6B8E6B]" /> Exercise Activities
+          </label>
+          <input
+            type="text"
+            value={exerciseActivities}
+            onChange={(e) => setExerciseActivities(e.target.value)}
+            placeholder="e.g. Walking, yoga, cycling — list your activities"
+            className="block w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-xs font-semibold text-ink placeholder:text-muted/50 focus:border-[#6B8E6B] focus:ring-1 focus:ring-[#6B8E6B]/30 focus:outline-none"
+          />
         </div>
       </div>
 

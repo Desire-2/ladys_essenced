@@ -49,6 +49,11 @@ export function mapCycleLog(raw: Record<string, unknown>): CycleLog {
     symptoms: Array.isArray(raw.symptoms) ? (raw.symptoms as string[]) : [],
     notes: raw.notes ? String(raw.notes) : undefined,
     confidence_score: raw.confidence_score != null ? Number(raw.confidence_score) : undefined,
+    mood: raw.mood ? String(raw.mood) : null,
+    energy_level: raw.energy_level ? String(raw.energy_level) : null,
+    sleep_quality: raw.sleep_quality ? String(raw.sleep_quality) : null,
+    stress_level: raw.stress_level ? String(raw.stress_level) : null,
+    exercise_activities: raw.exercise_activities ? String(raw.exercise_activities) : null,
     created_at: String(raw.created_at ?? raw.start_date),
   };
 }
