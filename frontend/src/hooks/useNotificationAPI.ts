@@ -3,7 +3,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useNotificationStore, Notification } from '../stores/notificationStore';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+// Use Vite env in dev, fallback to Render backend for production/mobile builds
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ladys-essenced-hoil.onrender.com';
 
 interface FetchNotificationsParams {
   page?: number;

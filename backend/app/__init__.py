@@ -5,6 +5,7 @@ from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 import os
+import re
 import logging
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -165,9 +166,25 @@ def create_app():
     print(f"[CORS] Allowed origins: {allowed_origins}")
     print(f"[CORS] Environment: {app.config.get('ENV', 'unknown')}")
     
-    # Configure CORS with Flask-CORS extension
+    # Function to check if an origin is allowed.
+    # Handles Capacitor Android localhost (https://localhost:<random_port>)
+    # by matching any https://localhost or http://localhost origin exactly (with optional port).
+    def is_origin_allowed(origin):
+        if not origin:
+            return False
+        if origin in allowed_origins:
+            return True
+        # Capacitor Android serves from https://localhost:<random_port>
+        if re.match(r'^https?://localhost(:\d+)?$', origin):
+            return True
+        # Capacitor custom scheme
+        if re.match(r'^capacitor://localhost(:\d+)?$', origin):
+            return True
+        return False
+    
+    # Configure CORS with Flask-CORS extension using a callable origin check
     CORS(app, 
-         origins=allowed_origins,
+         origins=is_origin_allowed,
          methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
          allow_headers=['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
          supports_credentials=True,
@@ -185,7 +202,7 @@ def create_app():
         
         if request.method == 'OPTIONS':
             origin = request.headers.get('Origin')
-            if origin in allowed_origins:
+            if is_origin_allowed(origin):
                 response = app.make_response('')
                 response.headers['Access-Control-Allow-Origin'] = origin
                 response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
@@ -198,7 +215,7 @@ def create_app():
     def after_request(response):
         """Add CORS headers to all responses"""
         origin = request.headers.get('Origin')
-        if origin in allowed_origins:
+        if is_origin_allowed(origin):
             response.headers['Access-Control-Allow-Origin'] = origin
             response.headers['Access-Control-Allow-Credentials'] = 'true'
             response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'

@@ -1,7 +1,8 @@
 import type { User } from '../types';
 
 function apiOrigin(): string {
-  return import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
+  // For production/mobile builds, default to Render backend
+  return import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'https://ladys-essenced-hoil.onrender.com/api';
 }
 
 export async function refreshAccessToken(refreshToken: string, signal?: AbortSignal): Promise<string> {
