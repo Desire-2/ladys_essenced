@@ -18,6 +18,8 @@ export interface CycleLog {
   user_id: number;
   start_date: string;
   end_date?: string;
+  end_date_estimated?: string | null;
+  end_date_is_inferred?: boolean;
   flow_level: 'light' | 'medium' | 'heavy';
   symptoms: string[];
   notes?: string;

@@ -11,6 +11,7 @@ interface CalendarDayData {
   is_period_day: boolean;
   is_period_start: boolean;
   is_period_end: boolean;
+  is_period_end_inferred: boolean;
   is_ovulation_day: boolean;
   is_fertility_day: boolean;
   is_predicted: boolean;
@@ -39,6 +40,8 @@ interface CycleCalendarProps {
   lastPeriodStart: string;
   cycleLength?: number;
   periodLength?: number;
+  /** Optional user ID for parents viewing a child's calendar */
+  userId?: number;
 }
 
 const MONTH_NAMES = [
@@ -160,6 +163,7 @@ export const CycleCalendar: React.FC<CycleCalendarProps> = ({
   lastPeriodStart,
   cycleLength = 28,
   periodLength = 5,
+  userId,
 }) => {
   const today = new Date();
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
@@ -183,9 +187,11 @@ export const CycleCalendar: React.FC<CycleCalendarProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const { data } = await api.get('/cycle-logs/calendar', {
-        params: { year: currentYear, month: currentMonth + 1 },
-      });
+      const params: Record<string, unknown> = { year: currentYear, month: currentMonth + 1 };
+      if (userId !== undefined) {
+        params.user_id = userId;
+      }
+      const { data } = await api.get('/cycle-logs/calendar', { params });
       setDays(data.days || []);
       setStats(data.stats || null);
     } catch (err) {
@@ -194,13 +200,13 @@ export const CycleCalendar: React.FC<CycleCalendarProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [currentYear, currentMonth]);
+  }, [currentYear, currentMonth, userId]);
 
   useEffect(() => {
-    if (lastPeriodStart) {
+    if (lastPeriodStart || userId !== undefined) {
       fetchData();
     }
-  }, [lastPeriodStart, currentYear, currentMonth, fetchData]);
+  }, [lastPeriodStart, userId, currentYear, currentMonth, fetchData]);
 
   const navigateMonth = (direction: number) => {
     const newMonth = currentMonth + direction;
@@ -473,7 +479,12 @@ export const CycleCalendar: React.FC<CycleCalendarProps> = ({
                   <Droplets className="w-3 h-3" />
                   {hoveredDay.is_predicted ? 'Predicted Period' : 'Period Day'}
                   {hoveredDay.is_period_start && ' (Start)'}
-                  {hoveredDay.is_period_end && ' (End)'}
+                  {hoveredDay.is_period_end && (!hoveredDay.is_period_end_inferred ? ' (End)' : ' (Est. End)')}
+                  {hoveredDay.is_period_end_inferred && !hoveredDay.is_period_start && !hoveredDay.is_predicted && (
+                    <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                      Inferred
+                    </span>
+                  )}
                 </span>
               </div>
             )}
@@ -655,15 +666,19 @@ export const CycleCalendar: React.FC<CycleCalendarProps> = ({
                 </div>
               )}
 
-              {/* Period info */}
-              {selectedDay.is_period_day && (
-                <div className="p-3 bg-terracotta/5 border border-terracotta/15 rounded-xl text-center">
+              {/* Period info */}                {selectedDay.is_period_day && (
+                <div className="p-3 bg-terracotta/5 border border-terracotta/15 rounded-xl text-center relative">
                   <span className="text-[9px] font-bold text-muted uppercase tracking-wider block">
                     {selectedDay.is_predicted ? 'Predicted Period' : 'Period Day'}
                   </span>
                   <span className="text-xl font-extrabold text-terracotta font-heading">
                     {selectedDay.flow_intensity ? selectedDay.flow_intensity.charAt(0).toUpperCase() + selectedDay.flow_intensity.slice(1) : 'Active'}
                   </span>
+                  {selectedDay.is_period_end_inferred && !selectedDay.is_predicted && (
+                    <span className="absolute -top-1.5 -right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                      Inferred
+                    </span>
+                  )}
                 </div>
               )}
 

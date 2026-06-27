@@ -183,7 +183,7 @@ export const FamilyPhaseOverview: React.FC<FamilyPhaseOverviewProps> = ({
     // Fetch phase insights for all accessible children in parallel
     Promise.allSettled(
       accessibleChildren.map((child) =>
-        fetchPhaseInsights(undefined, child.adolescent_id)
+        fetchPhaseInsights(undefined, child.user_id)
           .then((res) => ({ adolescentId: child.adolescent_id, data: res }))
           .catch((err) => ({
             adolescentId: child.adolescent_id,

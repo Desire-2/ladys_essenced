@@ -1,26 +1,48 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { Spinner } from '../ui/Spinner';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { Card } from '../ui/Card';
 import { useAuthStore } from '../../stores/authStore';
 
 interface RoleRequiredProps {
   children: React.ReactNode;
   allowed: string[];
   navigate: (path: string) => void;
+  isAuthHydrating?: boolean;
 }
 
 /**
- * Gate component that enforces role-based access to sections.
- * Extracted as a standalone component to prevent React unmount/remount loops
- * caused by inline component definitions inside App.tsx.
+ * Gate component that enforces authentication + role-based access.
+ * Redirects to /login if not authenticated, and shows an unauthorized
+ * message with a link to the correct dashboard if the role is wrong.
  */
-export function RoleRequired({ children, allowed, navigate }: RoleRequiredProps) {
+export function RoleRequired({ children, allowed, navigate, isAuthHydrating = false }: RoleRequiredProps) {
   const { user, accessToken } = useAuthStore();
   const isAuthenticated = Boolean(user && accessToken);
 
+  useEffect(() => {
+    // Once hydration is complete and user is still not authenticated, redirect
+    if (!isAuthHydrating && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthHydrating, isAuthenticated, navigate]);
+
+  if (isAuthHydrating) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-cream text-center font-sans">
+        <Spinner className="mb-4" size="lg" />
+        <p className="text-sm text-muted">Restoring your session…</p>
+      </div>
+    );
+  }
+
   if (!isAuthenticated || !user) {
-    return null;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-cream text-center font-sans">
+        <Spinner className="mb-4" size="lg" />
+        <p className="text-sm text-muted">Redirecting to sign in…</p>
+      </div>
+    );
   }
 
   if (!allowed.includes(user.user_type)) {

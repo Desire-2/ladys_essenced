@@ -48,7 +48,7 @@ export function FamilyChildCard({ child, onView, currentPhase: propPhase }: Fami
     }
     if (access !== 'privacy_locked' && child.access_granted) {
       setPhaseLoading(true);
-      fetchPhaseInsights(undefined, child.adolescent_id)
+      fetchPhaseInsights(undefined, child.user_id)
         .then((res) => setLocalPhase(res.current_phase || null))
         .catch(() => {
           // Silently fail — phase indicator is decorative

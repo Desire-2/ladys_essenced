@@ -466,6 +466,12 @@ def get_child_cycle_logs(adolescent_id):
             'id': log.id,
             'start_date': log.start_date.isoformat(),
             'end_date': log.end_date.isoformat() if log.end_date else None,
+            'end_date_estimated': (
+                (log.start_date.date() + timedelta(days=log.period_length)).isoformat()
+                if log.end_date is None and log.period_length
+                else None
+            ),
+            'end_date_is_inferred': log.end_date is None and log.period_length is not None,
             'cycle_length': log.cycle_length,
             'period_length': log.period_length,
             'symptoms': log.symptoms,

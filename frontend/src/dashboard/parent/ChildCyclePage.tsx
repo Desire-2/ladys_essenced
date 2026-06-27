@@ -35,6 +35,8 @@ export function ChildCyclePage({ adolescentId, onNavigate }: ChildCyclePageProps
       id: Number(log.id),
       start_date: String(log.start_date ?? ''),
       end_date: log.end_date ? String(log.end_date) : null,
+      end_date_estimated: log.end_date_estimated ? String(log.end_date_estimated) : null,
+      end_date_is_inferred: Boolean(log.end_date_is_inferred),
       mood: log.mood ? String(log.mood) : null,
       energy_level: log.energy_level ? String(log.energy_level) : null,
       sleep_quality: log.sleep_quality ? String(log.sleep_quality) : null,
@@ -85,7 +87,7 @@ export function ChildCyclePage({ adolescentId, onNavigate }: ChildCyclePageProps
 
       {/* ── Cycle Phase Insights ── */}
       <div className="p-5 border border-border rounded-xl bg-surface">
-        <ParentCyclePhaseInsights adolescentId={adolescentId} childName={name} />
+        <ParentCyclePhaseInsights adolescentId={adolescentId} childName={name} childUserId={profile?.user_id} />
       </div>
 
       {/* ── Wellness Trends Widget ── */}
@@ -112,7 +114,19 @@ export function ChildCyclePage({ adolescentId, onNavigate }: ChildCyclePageProps
                   <div>
                     <p className="font-semibold text-ink">
                       {formatDate(String(log.start_date))}
-                      {log.end_date ? ` – ${formatDate(String(log.end_date))}` : ''}
+                      {log.end_date
+                        ? ` – ${formatDate(String(log.end_date))}`
+                        : log.end_date_estimated
+                          ? ` – ${formatDate(String(log.end_date_estimated))}`
+                          : ''}
+                      {log.end_date_is_inferred && (
+                        <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                          <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 1a6 6 0 1 0 0 12A6 6 0 0 0 8 1zM7.5 3.5a.5.5 0 0 1 1 0v4a.5.5 0 0 1-1 0v-4zm0 6a.5.5 0 1 1 1 0 .5.5 0 0 1-1 0z"/>
+                          </svg>
+                          Inferred
+                        </span>
+                      )}
                     </p>
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                       {log.flow_intensity && (

@@ -15,6 +15,8 @@ export interface CycleLogWellness {
   id?: number;
   start_date: string;
   end_date?: string | null;
+  end_date_estimated?: string | null;
+  end_date_is_inferred?: boolean;
   mood?: string | null;
   energy_level?: string | null;
   sleep_quality?: string | null;
@@ -65,6 +67,22 @@ const tooltipStyle: React.CSSProperties = {
   fontSize: '11px',
   padding: '10px 14px',
   boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+};
+
+/* ── Tooltip label helpers ── */
+const formatTooltipLabel = (
+  _label: string,
+  payload: Array<{ payload: Record<string, unknown> }> | undefined,
+): string => {
+  const entry = payload?.[0]?.payload as Record<string, unknown> | undefined;
+  if (!entry?.fullLabel) return _label;
+  const base = `${entry.fullLabel} — ${entry.label}`;
+  if (entry.end_date_is_inferred && entry.end_date_estimated) {
+    const d = new Date(String(entry.end_date_estimated));
+    const est = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return `${base} (Est. end: ${est})`;
+  }
+  return base;
 };
 
 /* ═══════════════════════════════════════════════
@@ -269,12 +287,7 @@ export const WellnessTrends: React.FC<WellnessTrendsProps> = ({ logs, isLoading 
                     const moodLabel = MOOD_LABEL[['very_low', 'low', 'neutral', 'good', 'very_good'][Math.round(value) - 1]] ?? `${value}`;
                     return [moodLabel, 'Mood'];
                   }}
-                  labelFormatter={(label, payload) => {
-                    const entry = payload?.[0]?.payload;
-                    return entry?.fullLabel
-                      ? `${entry.fullLabel} — ${entry.label}`
-                      : label;
-                  }}
+                  labelFormatter={formatTooltipLabel}
                 />
                 <Bar dataKey="mood" radius={[4, 4, 0, 0]} maxBarSize={28}>
                   {chartData.map((entry, idx) => (
@@ -333,10 +346,7 @@ export const WellnessTrends: React.FC<WellnessTrendsProps> = ({ logs, isLoading 
                     const label = STRESS_LABEL[['very_high', 'high', 'moderate', 'low'][Math.round(value) - 1]] ?? `${value}`;
                     return [label, 'Stress (inverted: high=relaxed)'];
                   }}
-                  labelFormatter={(label, payload) => {
-                    const entry = payload?.[0]?.payload;
-                    return entry?.fullLabel ? `${entry.fullLabel} — ${entry.label}` : label;
-                  }}
+                  labelFormatter={formatTooltipLabel}
                 />
                 <Legend
                   wrapperStyle={{ fontSize: '10px', fontWeight: 600, color: '#8B8278' }}
@@ -431,10 +441,7 @@ export const WellnessTrends: React.FC<WellnessTrendsProps> = ({ logs, isLoading 
                     }
                     return [value, name];
                   }}
-                  labelFormatter={(label, payload) => {
-                    const entry = payload?.[0]?.payload;
-                    return entry?.fullLabel ? `${entry.fullLabel} — ${entry.label}` : label;
-                  }}
+                  labelFormatter={formatTooltipLabel}
                 />
                 <Legend
                   wrapperStyle={{ fontSize: '10px', fontWeight: 600, color: '#8B8278' }}

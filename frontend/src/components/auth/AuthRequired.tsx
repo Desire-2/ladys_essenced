@@ -1,20 +1,27 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Spinner } from '../ui/Spinner';
 import { useAuthStore } from '../../stores/authStore';
 
 interface AuthRequiredProps {
   children: React.ReactNode;
   isAuthHydrating: boolean;
+  navigate: (path: string) => void;
 }
 
 /**
- * Gate component that shows a loading/redirect screen when the user isn't
- * authenticated. Extracted as a standalone component to prevent React
- * unmount/remount loops caused by inline component definitions.
+ * Gate component that shows a loading screen while hydrating and redirects
+ * unauthenticated users to /login via the provided navigate callback.
  */
-export function AuthRequired({ children, isAuthHydrating }: AuthRequiredProps) {
+export function AuthRequired({ children, isAuthHydrating, navigate }: AuthRequiredProps) {
   const { user, accessToken } = useAuthStore();
   const isAuthenticated = Boolean(user && accessToken);
+
+  useEffect(() => {
+    // Once hydration is complete and user is still not authenticated, redirect
+    if (!isAuthHydrating && !isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthHydrating, isAuthenticated, navigate]);
 
   if (isAuthHydrating) {
     return (

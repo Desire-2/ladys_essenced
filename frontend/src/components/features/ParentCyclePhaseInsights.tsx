@@ -134,21 +134,25 @@ function PhaseCard({ phaseKey, phase, isExpanded, onToggle, isCurrent }: {
 interface ParentCyclePhaseInsightsProps {
   adolescentId: number;
   childName: string;
+  childUserId?: number;
 }
 
 export const ParentCyclePhaseInsights: React.FC<ParentCyclePhaseInsightsProps> = ({
   adolescentId,
   childName,
+  childUserId,
 }) => {
   const [data, setData] = useState<PhaseInsightsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedPhase, setExpandedPhase] = useState<string | null>(null);
 
+  const targetUserId = childUserId ?? adolescentId;
+
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetchPhaseInsights(undefined, adolescentId)
+    fetchPhaseInsights(undefined, targetUserId)
       .then((res) => {
         setData(res);
         if (res.current_phase && !expandedPhase) {
@@ -160,7 +164,7 @@ export const ParentCyclePhaseInsights: React.FC<ParentCyclePhaseInsightsProps> =
         setError('Could not load phase insights');
       })
       .finally(() => setLoading(false));
-  }, [adolescentId]);
+  }, [targetUserId, adolescentId]);
 
   const handleToggle = (phaseKey: string) => {
     setExpandedPhase((prev) => (prev === phaseKey ? null : phaseKey));

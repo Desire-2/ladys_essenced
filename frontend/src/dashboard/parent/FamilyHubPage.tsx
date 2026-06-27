@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Bell, Plus } from 'lucide-react';
+import { Bell, Plus, CalendarDays } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useParentDashboard } from '@/hooks/parent/useParentDashboard';
 import { FamilyChildCard } from '@/components/parent/FamilyChildCard';
@@ -133,6 +133,35 @@ export function FamilyHubPage({ onNavigate }: FamilyHubPageProps) {
           children={data.children}
           onViewChild={(id) => onNavigate(`/dashboard/parent/children/${id}/cycle`)}
         />
+      )}
+
+      {/* Quick-access buttons to each child's cycle page */}
+      {data?.children && data.children.length > 0 && (
+        <div>
+          <h3 className="font-heading font-bold text-ink mb-3 flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-mauve" />
+            Cycle Calendars
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {data.children.map((child) => (
+              <button
+                key={child.adolescent_id}
+                type="button"
+                onClick={() => onNavigate(`/dashboard/parent/children/${child.adolescent_id}/cycle`)}
+                className="text-sm font-semibold px-4 py-2.5 rounded-xl bg-surface border border-border hover:border-terracotta hover:text-terracotta hover:bg-terracotta/5 transition-all cursor-pointer text-left"
+              >
+                <span className="block text-ink">{child.name}</span>
+                <span className="block text-[10px] text-muted mt-0.5">
+                  {child.access_granted
+                    ? (child.cycle_summary?.total_logs ?? 0) > 0
+                      ? `${child.cycle_summary?.total_logs ?? 0} logs`
+                      : 'No logs yet'
+                    : 'Access restricted'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {timeline.length > 0 && (

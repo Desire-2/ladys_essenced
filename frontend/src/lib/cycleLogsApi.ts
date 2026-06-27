@@ -90,6 +90,7 @@ export interface CalendarDay {
   is_period_day: boolean;
   is_period_start: boolean;
   is_period_end: boolean;
+  is_period_end_inferred: boolean;
   is_ovulation_day: boolean;
   is_fertility_day: boolean;
   is_predicted: boolean;

@@ -1189,6 +1189,17 @@ export default function App() {
                                 <span className="font-semibold text-zinc-700">
                                   {new Date(log.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                 </span>
+                              ) : log.end_date_estimated ? (
+                                <span className="font-semibold text-zinc-700">
+                                  {new Date(log.end_date_estimated).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  {' '}
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                    <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="currentColor">
+                                      <path d="M8 1a6 6 0 1 0 0 12A6 6 0 0 0 8 1zM7.5 3.5a.5.5 0 0 1 1 0v4a.5.5 0 0 1-1 0v-4zm0 6a.5.5 0 1 1 1 0 .5.5 0 0 1-1 0z"/>
+                                    </svg>
+                                    Inferred
+                                  </span>
+                                </span>
                               ) : (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#fcf5e9] border border-orange-150 text-[#C4785A]">
                                   Ongoing • Karacyakomeza
@@ -1520,7 +1531,7 @@ export default function App() {
   // ==========================================
   const ContentWriterDashboardPage = () => {
     return (
-      <RoleRequired allowed={['content_writer']}>
+      <RoleRequired allowed={['content_writer']} navigate={navigate}>
         <DashboardLayout currentPath="/dashboard/writer" onNavigate={navigate}>
           <div className="space-y-6 text-left animate-[fadeInUp_0.15s_ease-out]">
             
@@ -1800,37 +1811,38 @@ export default function App() {
       {isAuthenticated && (
         <>
       {/* Adolescent Router views */}
+      {/* Adolescent Router views */}
       {currentPath === '/dashboard' && (
-        <RoleRequired allowed={['adolescent']} navigate={navigate}>
+        <RoleRequired allowed={['adolescent']} navigate={navigate} isAuthHydrating={isAuthHydrating}>
           <AdolescentDashboard />
         </RoleRequired>
       )}
       {currentPath === '/dashboard/cycle' && (
-        <RoleRequired allowed={['adolescent']} navigate={navigate}>
+        <RoleRequired allowed={['adolescent']} navigate={navigate} isAuthHydrating={isAuthHydrating}>
           <CycleTrackerPage />
         </RoleRequired>
       )}
       {currentPath === '/dashboard/meals' && (
-        <RoleRequired allowed={['adolescent']} navigate={navigate}>
+        <RoleRequired allowed={['adolescent']} navigate={navigate} isAuthHydrating={isAuthHydrating}>
           <MealsLogPage />
         </RoleRequired>
       )}
       {currentPath === '/dashboard/appointments' && (
-        <RoleRequired allowed={['adolescent']} navigate={navigate}>
+        <RoleRequired allowed={['adolescent']} navigate={navigate} isAuthHydrating={isAuthHydrating}>
           <AppointmentsPage />
         </RoleRequired>
       )}
 
       {/* Role dashboard routes */}
       {currentPath.startsWith('/dashboard/parent') && (
-        <AuthRequired isAuthHydrating={isAuthHydrating}>
+        <AuthRequired isAuthHydrating={isAuthHydrating} navigate={navigate}>
           <ParentShell currentPath={currentPath} onNavigate={navigate} />
         </AuthRequired>
       )}
       {(currentPath === '/dashboard/provider' ||
         currentPath === '/providers' ||
         currentPath.startsWith('/providers/')) && (
-        <AuthRequired isAuthHydrating={isAuthHydrating}>
+        <AuthRequired isAuthHydrating={isAuthHydrating} navigate={navigate}>
           <ProviderShell
             currentPath={currentPath === '/dashboard/provider' ? '/providers' : currentPath}
             onNavigate={navigate}
@@ -1838,24 +1850,24 @@ export default function App() {
         </AuthRequired>
       )}
       {currentPath.startsWith('/dashboard/admin') && (
-        <AuthRequired isAuthHydrating={isAuthHydrating}>
+        <AuthRequired isAuthHydrating={isAuthHydrating} navigate={navigate}>
           <AdminShell currentPath={currentPath} onNavigate={navigate} />
         </AuthRequired>
       )}
       {currentPath === '/dashboard/writer' && (
-        <AuthRequired isAuthHydrating={isAuthHydrating}><ContentWriterDashboardPage /></AuthRequired>
+        <AuthRequired isAuthHydrating={isAuthHydrating} navigate={navigate}><ContentWriterDashboardPage /></AuthRequired>
       )}
 
       {/* Shared routes */}
       {currentPath === '/dashboard/notifications' && user?.user_type !== 'parent' && (
-        <AuthRequired isAuthHydrating={isAuthHydrating}><NotificationsCentricPage /></AuthRequired>
+        <AuthRequired isAuthHydrating={isAuthHydrating} navigate={navigate}><NotificationsCentricPage /></AuthRequired>
       )}
       {currentPath === '/settings' && (
-        <AuthRequired isAuthHydrating={isAuthHydrating}><SettingsPage onNavigate={navigate} /></AuthRequired>
+        <AuthRequired isAuthHydrating={isAuthHydrating} navigate={navigate}><SettingsPage onNavigate={navigate} /></AuthRequired>
       )}
       
       {currentPath === '/dashboard/umwari' && (
-        <AuthRequired isAuthHydrating={isAuthHydrating}>
+        <AuthRequired isAuthHydrating={isAuthHydrating} navigate={navigate}>
           <DashboardLayout currentPath="/dashboard/umwari" onNavigate={navigate}>
             <UmwariFullPage />
           </DashboardLayout>

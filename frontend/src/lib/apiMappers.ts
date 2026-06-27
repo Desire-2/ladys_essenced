@@ -45,6 +45,8 @@ export function mapCycleLog(raw: Record<string, unknown>): CycleLog {
     user_id: Number(raw.user_id ?? 0),
     start_date: String(raw.start_date),
     end_date: raw.end_date ? String(raw.end_date) : undefined,
+    end_date_estimated: raw.end_date_estimated ? String(raw.end_date_estimated) : undefined,
+    end_date_is_inferred: Boolean(raw.end_date_is_inferred),
     flow_level: FLOW_MAP[flow] ?? 'medium',
     symptoms: Array.isArray(raw.symptoms) ? (raw.symptoms as string[]) : [],
     notes: raw.notes ? String(raw.notes) : undefined,
